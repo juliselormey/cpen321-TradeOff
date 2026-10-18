@@ -1,0 +1,38 @@
+// use prisma-8
+enum Role {
+    TRADER
+    ADMIN
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  googleSub     String   @unique
+  email         String   @unique
+  displayName   String?
+  avatarUrl     String?
+  role          Role     @default(TRADER)
+  isBanned      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  account       Account?
+  refreshTokens RefreshToken[]
+}
+
+model Account {
+    userId          Int  @id
+    cashBalance     Numeric(18,4)
+    startingBalance Numeric(18,4)
+    user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+    id          String      @id @default(uuid())
+    userId      Int
+    tokenHash   String      @unique
+    expiresAt   DateTime
+    revokedAt   DateTime?
+    createdAt   DateTime    @default(now())
+    user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}

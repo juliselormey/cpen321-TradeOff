@@ -44,6 +44,8 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -463,14 +465,31 @@ class PixelGridState {
 
 suspend fun googleSignIn(context: Context): String { //check if right context was imported
     val credentialManager = CredentialManager.create(context)
+    val serverClientId = BuildConfig.GOOGLE_CLIENT_ID.ifEmpty {
+        "417938142085-ngdhrek8t9vggugpbcadcjbcrn7vb5r3.apps.googleusercontent.com"
+    }
+
     val googleIdOption = GetSignInWithGoogleOption.Builder(
-        serverClientId = "417938142085-ngdhrek8t9vggugpbcadcjbcrn7vb5r3.apps.googleusercontent.com"
+        serverClientId = serverClientId
     ).build()
 
     val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
 
     try {
-        val response = credentialManager.getCredential(request = request, context = context)
+        val response = try {
+            credentialManager.getCredential(request = request, context = context)
+        } catch (e: NoCredentialException) {
+            Log.d("GOOGLE_DEBUG", "No authorized credentials found, falling back to all accounts", e)
+            val fallbackOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(serverClientId)
+                .build()
+            val fallbackRequest = GetCredentialRequest.Builder()
+                .addCredentialOption(fallbackOption)
+                .build()
+            credentialManager.getCredential(request = fallbackRequest, context = context)
+        }
+
         val credential = response.credential
 
         Log.d("GOOGLE_DEBUG", "Credential type: ${credential.type}")
@@ -491,8 +510,6 @@ suspend fun googleSignIn(context: Context): String { //check if right context wa
         Log.e("CredentialManagerException", "Sign-In Failed", e)
         throw e
     }
-
-    return "unknown"
 }
 
 fun getClientTime(): String {

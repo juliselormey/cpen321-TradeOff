@@ -75,6 +75,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Button
+import com.example.cpen321application.ui.social.SocialScreen
 import com.example.cpen321application.ApiClient.createSocket
 
 
@@ -107,6 +108,10 @@ class MainActivity : ComponentActivity() {
                             PixelScreen(navController = navController)
                         }
 
+                        composable(Routes.Social) {
+                            SocialScreen(onBack = { navController.popBackStack() })
+                        }
+
                         composable(Routes.Timer) {
                             TimerScreen(navController = navController)
                         }
@@ -136,11 +141,14 @@ object Routes {
     const val Login = "Login"
     const val PixelScreen = "PixelScreen"
     const val Timer = "Timer"
+    const val Social = "Social"
 }
 
 @Composable
 fun HomeScreen(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        MyButton("Social", onClick = { navController.navigate(Routes.Social) })
+        Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Login", onClick = { navController.navigate(Routes.Login) })
         Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Pixel Screen", onClick = { navController.navigate(Routes.PixelScreen) })

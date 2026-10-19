@@ -77,6 +77,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.material3.Button
 import com.example.cpen321application.ApiClient.createSocket
 
+import com.example.cpen321application.ui.market.MarketScreen
+import com.example.cpen321application.ui.trade.TradeScreen
 
 class MainActivity : ComponentActivity() {
     private lateinit var apiService: ApiService
@@ -110,6 +112,19 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.Timer) {
                             TimerScreen(navController = navController)
                         }
+
+                        composable(Routes.Market) {
+                            MarketScreen(
+                                onStockSelected = { ticker ->
+                                    navController.navigate("Trade/$ticker")
+                                }
+                            )
+                        }
+
+                        composable(Routes.Trade) { backStackEntry ->
+                            val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
+                            TradeScreen(ticker = ticker)
+                        }
                     }
                 }
             }
@@ -136,6 +151,8 @@ object Routes {
     const val Login = "Login"
     const val PixelScreen = "PixelScreen"
     const val Timer = "Timer"
+    const val Market = "Market"
+    const val Trade = "Trade/{ticker}"
 }
 
 @Composable
@@ -146,6 +163,8 @@ fun HomeScreen(navController: NavController) {
         MyButton("Pixel Screen", onClick = { navController.navigate(Routes.PixelScreen) })
         Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Timer", onClick = { navController.navigate(Routes.Timer) })
+        Spacer(modifier = Modifier.padding(16.dp))
+        MyButton("Market", onClick = { navController.navigate(Routes.Market) })
     }
 
 }

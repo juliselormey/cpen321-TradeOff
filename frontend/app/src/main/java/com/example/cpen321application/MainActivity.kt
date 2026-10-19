@@ -77,7 +77,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.material3.Button
 import com.example.cpen321application.ui.social.SocialScreen
 import com.example.cpen321application.ApiClient.createSocket
+import com.example.cpen321application.ui.portfolio.PortfolioScreen
 
+import com.example.cpen321application.ui.market.MarketScreen
+import com.example.cpen321application.ui.trade.TradeScreen
 
 class MainActivity : ComponentActivity() {
     private lateinit var apiService: ApiService
@@ -115,6 +118,21 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.Timer) {
                             TimerScreen(navController = navController)
                         }
+
+                        composable(Routes.Portfolio) {
+                            PortfolioScreen(onBack = { navController.popBackStack() })
+                        composable(Routes.Market) {
+                            MarketScreen(
+                                onStockSelected = { ticker ->
+                                    navController.navigate("Trade/$ticker")
+                                }
+                            )
+                        }
+
+                        composable(Routes.Trade) { backStackEntry ->
+                            val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
+                            TradeScreen(ticker = ticker)
+                        }
                     }
                 }
             }
@@ -142,6 +160,9 @@ object Routes {
     const val PixelScreen = "PixelScreen"
     const val Timer = "Timer"
     const val Social = "Social"
+    const val Portfolio = "Portfolio"
+    const val Market = "Market"
+    const val Trade = "Trade/{ticker}"
 }
 
 @Composable
@@ -154,6 +175,9 @@ fun HomeScreen(navController: NavController) {
         MyButton("Pixel Screen", onClick = { navController.navigate(Routes.PixelScreen) })
         Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Timer", onClick = { navController.navigate(Routes.Timer) })
+        Spacer(modifier = Modifier.padding(16.dp))
+        MyButton("Portfolio", onClick = { navController.navigate(Routes.Portfolio) })
+        MyButton("Market", onClick = { navController.navigate(Routes.Market) })
     }
 
 }

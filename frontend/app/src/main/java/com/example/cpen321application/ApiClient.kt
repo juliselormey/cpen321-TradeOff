@@ -36,8 +36,11 @@ object ApiClient {
     }
 
     fun create(context: Context): ApiService {
+        val rawUrl = BuildConfig.API_BASE_URL.ifEmpty { "https://34.105.116.91:3000" }
+        val baseUrl = rawUrl.trimEnd('/') + "/"
+
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://34.105.116.91:3000")
+            .baseUrl(baseUrl)
             .client(createdTrustClient(context))
             .addConverterFactory(GsonConverterFactory.create())
             .build()

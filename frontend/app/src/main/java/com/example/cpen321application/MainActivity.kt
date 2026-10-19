@@ -76,6 +76,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Button
 import com.example.cpen321application.ApiClient.createSocket
+import com.example.cpen321application.ui.portfolio.PortfolioScreen
 
 import com.example.cpen321application.ui.market.MarketScreen
 import com.example.cpen321application.ui.trade.TradeScreen
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
                             TimerScreen(navController = navController)
                         }
 
+                        composable(Routes.Portfolio) {
+                            PortfolioScreen(onBack = { navController.popBackStack() })
                         composable(Routes.Market) {
                             MarketScreen(
                                 onStockSelected = { ticker ->
@@ -151,6 +154,7 @@ object Routes {
     const val Login = "Login"
     const val PixelScreen = "PixelScreen"
     const val Timer = "Timer"
+    const val Portfolio = "Portfolio"
     const val Market = "Market"
     const val Trade = "Trade/{ticker}"
 }
@@ -164,6 +168,7 @@ fun HomeScreen(navController: NavController) {
         Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Timer", onClick = { navController.navigate(Routes.Timer) })
         Spacer(modifier = Modifier.padding(16.dp))
+        MyButton("Portfolio", onClick = { navController.navigate(Routes.Portfolio) })
         MyButton("Market", onClick = { navController.navigate(Routes.Market) })
     }
 

@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import info from './routes/info'
 import cors from 'cors';
+import {usersRouter} from "./routes/users";
 
 export function createApp(): Express {
   const app = express();
@@ -13,6 +14,8 @@ export function createApp(): Express {
   });
 
   app.use("/api", info)
+  app.use(usersRouter);
+
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not Found' });

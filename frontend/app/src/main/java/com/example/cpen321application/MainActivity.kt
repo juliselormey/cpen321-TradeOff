@@ -76,6 +76,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Button
 import com.example.cpen321application.ApiClient.createSocket
+import com.example.cpen321application.ui.portfolio.PortfolioScreen
 
 
 class MainActivity : ComponentActivity() {
@@ -110,6 +111,10 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.Timer) {
                             TimerScreen(navController = navController)
                         }
+
+                        composable(Routes.Portfolio) {
+                            PortfolioScreen(onBack = { navController.popBackStack() })
+                        }
                     }
                 }
             }
@@ -136,6 +141,7 @@ object Routes {
     const val Login = "Login"
     const val PixelScreen = "PixelScreen"
     const val Timer = "Timer"
+    const val Portfolio = "Portfolio"
 }
 
 @Composable
@@ -146,6 +152,8 @@ fun HomeScreen(navController: NavController) {
         MyButton("Pixel Screen", onClick = { navController.navigate(Routes.PixelScreen) })
         Spacer(modifier = Modifier.padding(16.dp))
         MyButton("Timer", onClick = { navController.navigate(Routes.Timer) })
+        Spacer(modifier = Modifier.padding(16.dp))
+        MyButton("Portfolio", onClick = { navController.navigate(Routes.Portfolio) })
     }
 
 }

@@ -10,8 +10,6 @@ import retrofit2.http.POST
 interface ApiService {
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
-
-
 }
 
 data class ServerIpResponse(val ip: String, val clientIp: String)

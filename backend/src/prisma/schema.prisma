@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  TRADER
+  ADMIN
+}
+
+model User {
+  id            String   @id @default(uuid())
+  googleSub     String   @unique
+  email         String   @unique
+  displayName   String?
+  avatarUrl     String?
+  role          Role     @default(TRADER)
+  isBanned      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  account       Account?
+  refreshTokens RefreshToken[]
+}
+
+model Account {
+  userId          String  @id
+  cashBalance     Decimal @db.Decimal(18, 4)
+  startingBalance Decimal @db.Decimal(18, 4)
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

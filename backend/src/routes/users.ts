@@ -6,7 +6,7 @@ export const usersRouter = Router();
 
 
 usersRouter.post("/me", requireAuth, async(req, res) => {
-    const user = await db.orm.public.User.where({ id: req.userId!}).first();
-    const account = await db.orm.public.Account.where({ userId: req.userId!}).first();
+    const user = await db.user.findUnique({ where: { id: req.userId! } });
+    const account = await db.account.findUnique({ where: { userId: req.userId! } });
     res.json({user, account});
 })

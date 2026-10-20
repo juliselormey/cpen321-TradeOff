@@ -3,6 +3,10 @@ import { verifyGoogleToken, issueAccessToken, findOrCreateUser } from "../auth/s
 
 export const authRouter = Router();
 
+authRouter.use((req, res, next) => {
+    next();
+})
+
 authRouter.post("/google", async (req, res) => {
     const { idToken } = req.body;
     if(!idToken) return res.status(400).json({error: "idToken required"});

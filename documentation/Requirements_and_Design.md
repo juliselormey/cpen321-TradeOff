@@ -2,9 +2,9 @@
 
 ## 1. Change History
 
-| **Change Date** | **Modified Sections** | **Rationale** |
-| --- | --- | --- |
-| 2026-10-19 | Project description, documented features, actors, use cases, and high-level design | Populate the template using the project idea document and M2 presentation. |
+| **Change Date** | **Modified Sections**                                                              | **Rationale**                                  |
+| --------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
+| 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 
 ---
 
@@ -32,7 +32,6 @@ Users can invest individually or compete in private investment challenges with a
 
 ![Use-case diagram reproduced from M2](images/m2-use-case-diagram.png)
 
-
 ### **3.3. Actors Description**
 
 1. **Trader (Registered User) - Primary**: Uses TradeOff to practice virtual investing, manage a portfolio, and participate in social competition.
@@ -42,8 +41,6 @@ Users can invest individually or compete in private investment challenges with a
 5. **Market Data API - Secondary**: Connects TradeOff to stock-market data so virtual investing can reflect real market prices.
 
 ### **3.4. Use Case Description**
-
-The following descriptions summarize named capabilities in the supplied documents. Detailed permissions, interaction steps, validation rules, and errors are not specified.
 
 #### Authentication
 
@@ -82,12 +79,38 @@ The following descriptions summarize named capabilities in the supplied document
 
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
+| **Use Case**        | **Success Flow**                                                                                                                                                             | **Failure Scenarios**                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Buy Shares          | User selects a stock and quantity → app displays a quote → user confirms → backend validates and executes the virtual purchase → cash, holdings, and trade history update.   | Invalid quantity; insufficient cash; unavailable or stale quote; database failure. A failed purchase leaves the portfolio unchanged. |
+| Sell Shares         | User selects a holding and quantity → app displays a quote → user confirms → backend validates ownership and executes the sale → cash, holdings, and history update.         | Insufficient shares; invalid quantity; unavailable quote; database failure.                                                          |
+| View Live Portfolio | User searches for a stock → adds it → stock appears in their watchlist → user can later remove it.                                                                           | Unknown symbol; duplicate entry; save failure.                                                                                       |
+| Manage Watchlist    | User opens their portfolio → backend retrieves holdings and market prices → calculates values and profit/loss → app displays them and refreshes when new prices arrive.      | Market data unavailable; connection lost. Display the last available values with their timestamp and indicate that they are stale.   |
+| View Leaderboard    | d User opens a leaderboard → backend calculates portfolio values using a consistent price snapshot → ranks participants → app displays the rankings and the user’s position. | No participants; unavailable prices; request failure.                                                                                |
 
 ### **3.6. Screen Mock-ups**
 
+![Mockup used to produce social UI](images/Screen_Mockup.png)
+![Second Mockup for other UI](images/Mock_Design2.png)
 
 ### **3.7. Non-Functional Requirements**
 
+<a name="nfr1"></a>
+
+1. **Trade Consistency**
+   - **Description**: When 20 buy or sell requests execute concurrently against the same account, cash balances and share quantities must remain non-negative. Each trade must either update cash, holdings, and trade history completely or leave all three unchanged.
+   - **Justification**: Concurrent requests could otherwise spend the same virtual money or sell the same shares multiple times. Twenty concurrent requests provide a manageable stress-test target for conflicting operations on one account.
+
+<a name="nfr2"></a>
+
+2. **Portfolio Update Speed**
+   - **Description**: While the portfolio screen is open, updated holdings valuations must appear within 10 seconds after the backend receives a new market quote, under normal network connectivity.
+   - **Justification**: Timely updates help users understand how market movements affect their investments. The 10-second target supports responsive gameplay while allowing periodic refreshes; measuring from backend receipt excludes delays caused by the external market-data provider.
+
+<a name="nfr3"></a>
+
+3. **Account Privacy**
+   - **Description**: Every protected portfolio, watchlist, and trade-history API must reject unauthenticated requests and attempts to read or modify another user's private data, without disclosing that data or changing it.
+   - **Justification**: Users must only access and modify their own private investment information. This requirement applies to every protected interface because a single unprotected interface could bypass the application's account restrictions.
 
 ---
 
@@ -97,38 +120,77 @@ The following descriptions summarize named capabilities in the supplied document
 
 The following elements appear in the M2 high-level design. Their purposes below are limited to the labels, connections, and feature descriptions in the supplied documents. Component-selection rationales and interface names, parameters, return values, and error contracts are not specified.
 
-| **Component** | **Documented responsibility or connection** |
-| --- | --- |
-| **Auth** | Supports sign-in; connects to the database and Google. |
-| **Social** | Supports the social feature; connects to the frontend Social area and the database. |
+| **Component**    | **Documented responsibility or connection**                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**         | Supports sign-in; connects to the database and Google.                                                                                                                                |
+| **Social**       | Supports the social feature; connects to the frontend Social area and the database.                                                                                                   |
 | **Order Engine** | Supports virtual buying, selling, and trading; connects to the frontend Trade area and the database. Multiple order types are proposed in the project idea, subject to scope changes. |
-| **Portfolio** | Supports investment holdings and portfolio value; connects to the frontend Portfolio area and the database. |
-| **Market** | Supports real-market information; connects to the frontend Market area and the cache. |
-| **Cache** | Appears between Market and Poller in the design. Cache technology, contents, and expiration policy are not specified. |
-| **Poller** | Appears between the Market API and Cache. Polling interval and request behavior are not specified. |
-| **Workers** | Connects to the database and sends to Notifier in the diagram. Specific jobs and scheduling are not specified. |
-| **Notifier** | Connects to Firebase Cloud Messaging and receives from Workers. Specific notification rules and payloads are not specified. |
+| **Portfolio**    | Supports investment holdings and portfolio value; connects to the frontend Portfolio area and the database.                                                                           |
+| **Market**       | Supports real-market information; connects to the frontend Market area and the cache.                                                                                                 |
+| **Cache**        | Appears between Market and Poller in the design. Cache technology, contents, and expiration policy are not specified.                                                                 |
+| **Poller**       | Appears between the Market API and Cache. Polling interval and request behavior are not specified.                                                                                    |
+| **Workers**      | Connects to the database and sends to Notifier in the diagram. Specific jobs and scheduling are not specified.                                                                        |
+| **Notifier**     | Connects to Firebase Cloud Messaging and receives from Workers. Specific notification rules and payloads are not specified.                                                           |
 
 ### **4.2. Databases**
 
-1. **Database**
-   - **Purpose**: The high-level design shows a shared database connected to Auth, Social, Order Engine, Portfolio, and Workers.
-   - **Technology, schema, and selection rationale**: Not specified in the supplied documents.
+1. **MySQL**
+   - **Purpose**: Store user accounts, virtual cash balances, holdings, trade history, watchlists, and social relationships. The database will support the Auth, Social, Order Engine, Portfolio, and Workers components.
+   - **Rationale**: MySQL supports structured relationships and constraints between users, holdings, and trades. Its transactions allow cash balances, holdings, and trade history to be updated together, preventing partially completed trades.
+   - **Access**: Backend components will access MySQL. The frontend will retrieve and modify data through backend interfaces rather than connecting directly to the database.
 
 ### **4.3. External Modules**
 
-1. **Google**
-   - **Purpose**: External authentication provider connected to Auth in the high-level design.
-2. **Market API**
-   - **Purpose**: Supplies real stock-market data; shown connected to Poller in the high-level design. The provider is not named.
-3. **Firebase Cloud Messaging**
-   - **Purpose**: External messaging service connected to Notifier in the high-level design. No other Firebase functionality is specified.
+1. **Google Authentication**
+   - **Purpose**: Allow users to sign in using their Google accounts. The Auth component will verify Google authentication credentials and associate the verified identity with a user account stored in MySQL.
+   - **Rationale**: Provides external authentication without using Firebase Authentication.
 
-External API signatures, configuration, and reasons for selecting particular providers are not specified.
+2. **Market Data API**
+   - **Purpose**: Supply stock prices and market information for stock searches, virtual trading, and portfolio valuation. The Poller component will retrieve market data and update the cache.
+   - **Provider**: To be selected.
+   - **Rationale**: Real market data allows users to practice virtual investing using prices that reflect actual markets.
+
+3. **Firebase Cloud Messaging (FCM)**
+   - **Purpose**: Deliver push notifications, such as stock-price alerts, to users' Android devices through the Notifier component.
+   - **Rationale**: The course permits Firebase's push notification functionality. Firebase will not be used for authentication, database management, or other application operations.
 
 ### **4.4. Frameworks and Libraries**
 
-Not specified in the two supplied project documents. External services explicitly named in the architecture are listed in Section 4.3; no additional libraries or implementation technologies are assumed.
+1. **Jetpack Compose**
+   - **Purpose**: Build the Android application's user interface.
+   - **Reason**: Required by the course and supports screens that react to changes in application state.
+
+2. **Express.js**
+   - **Purpose**: Implement backend API routes and request handling.
+   - **Reason**: Provides a straightforward framework for organizing the Node.js/TypeScript backend.
+
+3. **Retrofit and OkHttp**
+   - **Purpose**: Handle HTTP communication between the Android application and backend.
+   - **Reason**: Provide structured API definitions and configurable network connections.
+
+4. **Android Credential Manager and Google ID**
+   - **Purpose**: Support Google account sign-in.
+   - **Reason**: Integrate external authentication with Android without using Firebase Authentication.
+
+5. **Socket.IO and ws**
+   - **Purpose**: Support real-time communication and WebSocket connections.
+   - **Reason**: Allow the system to exchange updates through persistent connections.
+
+6. **Prisma (Planned)**
+   - **Purpose**: Define database models, manage migrations, and access MySQL from the backend.
+   - **Reason**: Provides typed database queries and transactions for consistent updates.
+
+7. **Firebase Cloud Messaging SDK (Planned)**
+   - **Purpose**: Send and receive push notifications.
+   - **Reason**: Supports Android notifications and is the Firebase functionality permitted by the course.
+
+8. **Jest and Supertest**
+   - **Purpose**: Run automated backend tests and verify HTTP API behavior.
+   - **Reason**: Support repeatable testing and coverage measurement.
+
+9. **Compose Testing APIs**
+   - **Purpose**: Automate interactions with Android Compose screens.
+   - **Reason**: Support verification of user flows through the application.
 
 ### **4.5. Dependencies Diagram**
 
@@ -138,8 +200,33 @@ The original diagram groups the frontend into Sign In, Social, Trade, Portfolio,
 
 ### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
 
-Not provided in the supplied documents. Their high-level design does not specify the ordered calls or interface contracts needed to reproduce sequence diagrams without making additional decisions.
+#### 1. Buy Shares
+
+![Buy Shares sequence diagram](images/sequence-buy-shares.png)
+
+#### 2. Sell Shares
+
+![Sell Shares sequence diagram](images/sequence-sell-shares.png)
+
+#### 3. Manage Watchlist
+
+![Manage Watchlist sequence diagram](images/sequence-manage-watchlist.png)
+
+#### 4. View Live Portfolio
+
+![View Live Portfolio sequence diagram](images/sequence-view-live-portfolio.png)
+
+#### 5. View Leaderboard
+
+![View Leaderboard sequence diagram](images/sequence-view-leaderboard.png)
 
 ### **4.7. Design of Non-Functional Requirements**
 
-Not specified in the supplied documents. No implementation mechanisms or measurable non-functional acceptance criteria are supplied.
+1. **Trade Consistency**
+   - **Implementation**: The Order Engine will use Prisma transactions with MySQL to update cash balances, holdings, and trade history together. Conditional updates and transaction isolation will prevent concurrent orders from spending the same balance or selling the same shares. If any operation fails, the transaction will be rolled back.
+
+2. **Portfolio Update Speed**
+   - **Implementation**: When the backend receives new market quotes, it will recalculate affected portfolio valuations and send updates to connected clients through Socket.IO. The frontend will apply these updates while the portfolio screen is open, targeting display within 10 seconds of backend receipt. Quote timestamps will identify stale data when the connection is interrupted.
+
+3. **Account Privacy**
+   - **Implementation**: Authentication middleware will verify credentials before allowing access to protected APIs. Backend components will derive the requesting user's identity from verified credentials and enforce ownership checks before reading or modifying private portfolios, watchlists, or trade history. Unauthorized requests will be rejected without disclosing or changing private data.

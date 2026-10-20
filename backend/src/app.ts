@@ -16,7 +16,7 @@ export function createApp(): Express {
 
   app.use("/api", info)
   app.use("/api/auth",authRouter);
-  app.use(usersRouter);
+  app.use("/api/auth", usersRouter);
 
 
   app.use((_req, res) => {

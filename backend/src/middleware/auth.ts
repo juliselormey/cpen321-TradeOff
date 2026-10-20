@@ -25,7 +25,6 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
 
         if (typeof decoded === "string" || !decoded.sub) throw new Error("Bad payload");
         userId = decoded.sub as string;
-        if(!Number.isInteger(userId)) throw new Error("Bad sub");
     } catch {
         return res.status(401).json({error: "Invalid or expired token"});
     }

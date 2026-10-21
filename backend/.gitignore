@@ -8,3 +8,9 @@ coverage/
 
 *.log
 .DS_Store
+certs/
+*.pem
+*.key
+*.crt
+
+src/generated/

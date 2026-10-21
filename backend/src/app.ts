@@ -1,4 +1,4 @@
-import express, { type Express, Request, Response, RequestHandler } from 'express';
+import express, { type Express, Response, RequestHandler, Request, NextFunction } from 'express';
 import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";
@@ -24,11 +24,14 @@ export function createApp(): Express {
     res.status(404).json({ error: 'Not Found' });
   });
 
-  export const requireAuth: RequestHandler = (req, res, next) => {
-      authenticate(req, res, next).catch((err: unknown) => {
-          next(err);
-      });
-  };
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+      console.error(err);
+      if (res.headersSent) {
+        next(err);
+        return;
+      }
+      res.status(500).json({ error: "Server error" });
+    });
 
   return app;
 }

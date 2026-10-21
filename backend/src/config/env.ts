@@ -11,6 +11,12 @@ if (Number.isNaN(port) || port < 1 || port > 65535) {
   throw new Error(`Invalid PORT: ${rawPort}`);
 }
 
+export function requireEnv(name: string): string {
+  const value = new Map(Object.entries(process.env)).get(name);
+  if (!value) throw new Error(`${name} is not set`);
+  return value;
+}
+
 export const env = {
   port,
   sslKeyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '../../certs/key.pem'),

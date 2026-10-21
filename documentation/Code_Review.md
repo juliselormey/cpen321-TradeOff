@@ -2,9 +2,9 @@
 
 ## 1. Change History
 
-| **Change Date**   | **Modified Sections** | **Rationale** |
-| ----------------- | --------------------- | ------------- |
-| _Nothing to show_ |
+| **Change Date** | **Modified Sections** | **Rationale** |
+|-----------------| --------------------- | ------------- |
+| _October 20_    | Commit Hash where Codacy Ran| _..._ |
 
 ---
 
@@ -12,7 +12,7 @@
 
 ### 2.1. Commit Hash Where Codacy Ran
 
-`[Insert Commit SHA here]`
+`e606decfba06f9cc5e03b99ea210799f50084b73`
 
 ### 2.2. Unfixed Issues per Codacy Category
 

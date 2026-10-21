@@ -1,26 +1,37 @@
 import { Router } from "express";
 import { verifyGoogleToken, issueAccessToken, findOrCreateUser } from "../auth/service";
+import { asyncHandler } from "../utils/asyncHandler";
 
 export const authRouter = Router();
 
-authRouter.use((req, res, next) => {
-    next();
-})
+authRouter.post("/google", asyncHandler(async (req, res) => {
+        const body: unknown = req.body;
 
-authRouter.post("/google", async (req, res) => {
-    const { idToken } = req.body;
-    if(!idToken) return res.status(400).json({error: "idToken required"});
+        const idToken =
+            typeof body === "object" && body !== null && "idToken" in body
+                ? (body as { idToken: unknown }).idToken
+                : undefined;
 
-    let google;
-    try {
-        google = await verifyGoogleToken(idToken);
-    } catch {
-        return res.status(401).json({error: "Invalid Google Token"});
-    }
+        if (typeof idToken !== "string" || idToken.length === 0) {
+            res.status(400).json({ error: "idToken required" });
+            return;
+        }
 
-    const user = await findOrCreateUser(google);
-    if(user.isBanned) return res.status(403).json({error: "Account is banned"});
+        let google: Awaited<ReturnType<typeof verifyGoogleToken>>;
+        try {
+            google = await verifyGoogleToken(idToken);
+        } catch {
+            res.status(401).json({ error: "Invalid Google Token" });
+            return;
+        }
 
-    res.json({ accessToken: issueAccessToken(String(user.id))});
-})
+        const user = await findOrCreateUser(google);
+        if (user.isBanned) {
+            res.status(403).json({ error: "Account is banned" });
+            return;
+        }
 
+        res.json({ accessToken: issueAccessToken(user.id) });
+
+    }),
+);

@@ -280,10 +280,41 @@ fun ProtectedView(
 
 /*--------------------------Start Login-----------------------------*/
 
+private sealed interface LoginOutcome {
+    object Success : LoginOutcome
+    class Failure(val message: String) : LoginOutcome
+}
+
+private suspend fun attemptLogin(
+    context: Context,
+    apiService: ApiService,
+    signIn: suspend (Context) -> GoogleSignInResult,
+): LoginOutcome {
+    return try {
+        val signInResult = signIn(context)
+        val response = apiService.loginWithGoogle(GoogleAuthRequest(signInResult.idToken))
+        val body = response.body()
+
+        if (response.isSuccessful && body != null) {
+            SessionManager.saveToken(context, body.accessToken)
+            LoginOutcome.Success
+        } else {
+            val errorBody = response.errorBody()?.string()
+            Log.e("AUTH_ERROR", "Sign-in failed with HTTP ${response.code()}: $errorBody")
+            LoginOutcome.Failure("Sign-in failed: ${response.code()}")
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        LoginOutcome.Failure(e.message ?: "Sign-in cancelled or failed")
+    }
+}
+
 @Composable
 fun LoginView(
     apiService: ApiService,
-    onSuccess: () -> Unit = {}
+    onSuccess: () -> Unit = {},
+    signIn: suspend (Context) -> GoogleSignInResult = ::googleSignIn
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -298,61 +329,24 @@ fun LoginView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = "Welcome to TradeOff",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Please log in to view your portfolio and social leaderboards.",
-            color = Color.Gray,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(28.dp))
+        LoginHeader()
 
         if (isLoading) {
-            CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Signing in with Google...", color = Color.Gray, fontSize = 14.sp)
+            LoginProgress()
         } else {
-            Button(
+            GoogleSignInButton(
                 onClick = {
                     scope.launch {
                         isLoading = true
                         errorMsg = null
-                        try {
-                            val signInResult = googleSignIn(context)
-                            val authResponse = apiService.loginWithGoogle(GoogleAuthRequest(signInResult.idToken))
-
-                            if (authResponse.isSuccessful && authResponse.body() != null) {
-                                val token = authResponse.body()!!.accessToken
-                                SessionManager.saveToken(context, token)
-                                onSuccess()
-                            } else {
-                                val errorBody = authResponse.errorBody()?.string()
-                                Log.e("AUTH_ERROR", "Sign-in failed with HTTP ${authResponse.code()}: $errorBody")
-                                errorMsg = "Sign-in failed: ${authResponse.code()}"
-                            }
-                        } catch (e: Exception) {
-                            errorMsg = e.message ?: "Sign-in cancelled or failed"
-                        } finally {
-                            isLoading = false
+                        when (val outcome = attemptLogin(context, apiService, signIn)) {
+                            is LoginOutcome.Success -> onSuccess()
+                            is LoginOutcome.Failure -> errorMsg = outcome.message
                         }
+                        isLoading = false
                     }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF4285F4),
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text(text = "Sign in with Google", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+                }
+            )
         }
 
         errorMsg?.let { msg ->
@@ -362,6 +356,46 @@ fun LoginView(
     }
 }
 
+@Composable
+private fun LoginHeader() {
+    Text(
+        text = "Welcome to TradeOff",
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Bold
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "Please log in to view your portfolio and social leaderboards.",
+        color = Color.Gray,
+        fontSize = 14.sp,
+        textAlign = TextAlign.Center
+    )
+    Spacer(modifier = Modifier.height(28.dp))
+}
+
+@Composable
+private fun LoginProgress() {
+    CircularProgressIndicator()
+    Spacer(modifier = Modifier.height(16.dp))
+    Text("Signing in with Google...", color = Color.Gray, fontSize = 14.sp)
+}
+
+@Composable
+private fun GoogleSignInButton(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF4285F4),
+            contentColor = Color.White
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+    ) {
+        Text(text = "Sign in with Google", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
+}
 /*--------------------------End Login-----------------------------*/
 
 private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(Dispatchers.IO) {

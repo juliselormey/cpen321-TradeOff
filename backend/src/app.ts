@@ -1,4 +1,4 @@
-import express, { type Express } from 'express';
+import express, { type Express, NextFunction, Request, Response } from 'express';
 import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";
@@ -23,5 +23,12 @@ export function createApp(): Express {
     res.status(404).json({ error: 'Not Found' });
   });
 
+  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+});
+
   return app;
 }
+
+

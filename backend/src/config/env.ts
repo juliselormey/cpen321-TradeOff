@@ -12,7 +12,7 @@ if (Number.isNaN(port) || port < 1 || port > 65535) {
 }
 
 export function requireEnv(name: string): string {
-  const value = process.env[name];
+  const value = new Map(Object.entries(process.env)).get(name);
   if (!value) throw new Error(`${name} is not set`);
   return value;
 }

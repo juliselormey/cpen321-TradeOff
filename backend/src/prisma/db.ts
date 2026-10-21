@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../generated/prisma/client";
 
-const url = new URL(process.env.DATABASE_URL!);
+const url = new URL(requireEnv("DATABASE_URL"));
 
 const adapter = new PrismaMariaDb({
   host: url.hostname,

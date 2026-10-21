@@ -1,20 +1,19 @@
-import {RequestHandler} from "express";
+import { NextFunction, Request, RequestHandler, Response } from "express";
 import jwt from "jsonwebtoken";
-import {db} from "../prisma/db";
-import {requireEnv} from "../config/env";
+import { db } from "../prisma/db";
+import { requireEnv } from "../config/env";
 
-declare global {
-    namespace Express {
-        interface Request {
-            userId?: string ;
-        }
+declare module "express-serve-static-core" {
+    interface Request {
+        userId?: string;
     }
 }
 
-export const requireAuth: RequestHandler = async (req, res, next) => {
+async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
     const header = req.headers.authorization;
-    if(!header?.startsWith("Bearer ")) {
-        return res.status(400).json({ error: "Unauthorized"});
+    if (!header?.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
     }
 
     let userId: string;
@@ -22,16 +21,29 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         const decoded = jwt.verify(header.slice(7), requireEnv("JWT_SECRET"), {
             algorithms: ["HS256"],
         });
-
-        if (typeof decoded === "string" || !decoded.sub) throw new Error("Bad payload");
-        userId = decoded.sub as string;
+        if (typeof decoded === "string" || typeof decoded.sub !== "string") {
+            throw new Error("Bad payload");
+        }
+        userId = decoded.sub;
     } catch {
-        return res.status(401).json({error: "Invalid or expired token"});
+        res.status(401).json({ error: "Invalid or expired token" });
+        return;
     }
 
-    const user = await db.user.findUnique({ where: { id: userId } });    if (!user) return res.status(401).json({error: "User not found"});
-    if (user.isBanned) return res.status(403).json({error: "Account is banned"});
+    const user = await db.user.findUnique({ where: { id: userId } });
+    if (!user) {
+        res.status(401).json({ error: "User not found" });
+        return;
+    }
+    if (user.isBanned) {
+        res.status(403).json({ error: "Account is banned" });
+        return;
+    }
 
     req.userId = user.id;
     next();
+}
+
+export const requireAuth: RequestHandler = (req, res, next) => {
+    authenticate(req, res, next).catch(next);
 };

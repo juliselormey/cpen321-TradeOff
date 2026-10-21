@@ -1,8 +1,9 @@
-import express, { type Express, NextFunction, Request, Response } from 'express';
+import express, { type Express, Request, Response, RequestHandler } from 'express';
 import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";
 import { authRouter } from "./routes/auth";
+
 
 export function createApp(): Express {
   const app = express();

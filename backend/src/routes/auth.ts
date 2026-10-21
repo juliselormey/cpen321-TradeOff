@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { verifyGoogleToken, issueAccessToken, findOrCreateUser } from "../auth/service";
-import { asyncHandler } from "../utils/asyncHandler";
+import { asyncHandler } from "../util/asyncHandler";
 
 export const authRouter = Router();
 

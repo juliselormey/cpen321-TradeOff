@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../utils/asyncHandler";
+import { asyncHandler } from "../util/asyncHandler";
 
 export const usersRouter = Router();
 

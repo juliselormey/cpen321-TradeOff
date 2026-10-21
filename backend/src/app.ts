@@ -23,10 +23,11 @@ export function createApp(): Express {
     res.status(404).json({ error: 'Not Found' });
   });
 
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-      console.error(err);
-      res.status(500).json({ error: "Server error" });
-});
+  export const requireAuth: RequestHandler = (req, res, next) => {
+      authenticate(req, res, next).catch((err: unknown) => {
+          next(err);
+      });
+  };
 
   return app;
 }

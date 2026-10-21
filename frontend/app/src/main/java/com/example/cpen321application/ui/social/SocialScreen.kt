@@ -33,6 +33,19 @@ private data class SocialTrader(
     val isYou: Boolean = false,
 )
 
+private data class PanelState(
+    val isLeaderboard: Boolean,
+    val traders: List<SocialTrader>,
+    val showAll: Boolean,
+    val sortLabel: String,
+)
+
+private class PanelActions(
+    val onToggleShowAll: () -> Unit,
+    val onToggleSort: () -> Unit,
+    val onAddFriend: () -> Unit,
+)
+
 private val sampleTraders = listOf(
     SocialTrader("alex", "Alex Chen", 124532.0, 24.8),
     SocialTrader("daniel", "Daniel Kim", 118205.0, 18.1),
@@ -80,16 +93,15 @@ fun SocialScreen(onBack: () -> Unit) {
         TabSelector(selectedTab = selectedTab, onSelect = { selectedTab = it })
         Spacer(Modifier.height(20.dp))
         TraderPanel(
-            isLeaderboard = isLeaderboard,
-            traders = visibleTraders,
-            showAll = showAll,
-            sortLabel = sortLabel,
-            onToggleShowAll = { showAll = !showAll },
-            onToggleSort = {
-                if (isLeaderboard) sortByReturn = !sortByReturn
-                else friendsAscending = !friendsAscending
-            },
-            onAddFriend = { showAddFriend = true },
+            state = PanelState(isLeaderboard, visibleTraders, showAll, sortLabel),
+            actions = PanelActions(
+                onToggleShowAll = { showAll = !showAll },
+                onToggleSort = {
+                    if (isLeaderboard) sortByReturn = !sortByReturn
+                    else friendsAscending = !friendsAscending
+                },
+                onAddFriend = { showAddFriend = true },
+            ),
             modifier = Modifier.weight(1f),
         )
         Text(
@@ -151,24 +163,19 @@ private fun TabSelector(selectedTab: Int, onSelect: (Int) -> Unit) {
 
 @Composable
 private fun TraderPanel(
-    isLeaderboard: Boolean,
-    traders: List<SocialTrader>,
-    showAll: Boolean,
-    sortLabel: String,
-    onToggleShowAll: () -> Unit,
-    onToggleSort: () -> Unit,
-    onAddFriend: () -> Unit,
+    state: PanelState,
+    actions: PanelActions,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth()
             .background(Panel, RoundedCornerShape(20.dp)).padding(16.dp),
     ) {
-        PanelHeader(isLeaderboard, traders.size, showAll, onToggleShowAll, onAddFriend)
-        TextButton(onClick = onToggleSort) { Text(sortLabel, color = Green) }
+        PanelHeader(state, actions)
+        TextButton(onClick = actions.onToggleSort) { Text(state.sortLabel, color = Green) }
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            itemsIndexed(traders, key = { _, trader -> trader.id }) { index, trader ->
-                TraderRow(trader, if (isLeaderboard) index + 1 else null)
+            itemsIndexed(state.traders, key = { _, trader -> trader.id }) { index, trader ->
+                TraderRow(trader, if (state.isLeaderboard) index + 1 else null)
                 HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
             }
         }
@@ -176,30 +183,24 @@ private fun TraderPanel(
 }
 
 @Composable
-private fun PanelHeader(
-    isLeaderboard: Boolean,
-    friendCount: Int,
-    showAll: Boolean,
-    onToggleShowAll: () -> Unit,
-    onAddFriend: () -> Unit,
-) {
+private fun PanelHeader(state: PanelState, actions: PanelActions) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            if (isLeaderboard) "Leaderboard" else "Friends ($friendCount)",
+            if (state.isLeaderboard) "Leaderboard" else "Friends (${state.traders.size})",
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        if (isLeaderboard) {
-            TextButton(onClick = onToggleShowAll) {
-                Text(if (showAll) "Show top 5" else "See all", color = Green)
+        if (state.isLeaderboard) {
+            TextButton(onClick = actions.onToggleShowAll) {
+                Text(if (state.showAll) "Show top 5" else "See all", color = Green)
             }
         } else {
-            TextButton(onClick = onAddFriend) { Text("+ Add friend", color = Green) }
+            TextButton(onClick = actions.onAddFriend) { Text("+ Add friend", color = Green) }
         }
     }
 }

@@ -2,6 +2,7 @@ import { NextFunction, Request, RequestHandler, Response } from "express";
 import jwt from "jsonwebtoken";
 import { db } from "../prisma/db";
 import { requireEnv } from "../config/env";
+import { asyncHandler } from "../utils/asyncHandler";
 
 declare module "express-serve-static-core" {
     interface Request {
@@ -44,6 +45,4 @@ async function authenticate(req: Request, res: Response, next: NextFunction): Pr
     next();
 }
 
-export const requireAuth: RequestHandler = (req, res, next) => {
-    authenticate(req, res, next).catch(next);
-};
+export const requireAuth: RequestHandler = asyncHandler(authenticate);

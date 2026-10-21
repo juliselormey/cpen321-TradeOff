@@ -12,9 +12,9 @@ const sslOptions = {
 
 const server = https.createServer(sslOptions, app);
 
-const safePort = String(env.port).replace(/[\r\n]/g, "");
+
 server.listen(env.port, () => {
-    console.log(`Server listening on port ${safePort}`);
+    console.log("Server listening");
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

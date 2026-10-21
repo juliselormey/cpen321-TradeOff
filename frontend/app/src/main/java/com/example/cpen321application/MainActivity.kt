@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -75,6 +79,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import com.example.cpen321application.util.SessionManager
 
 data class BottomNavItem(
     val title: String,
@@ -144,13 +149,15 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Routes.Portfolio) {
-                            PortfolioScreen(onBack = {
-                                navController.navigate(Routes.Market) {
-                                    popUpTo(Routes.Market) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            })
+                            ProtectedView(apiService = apiService) {
+                                PortfolioScreen(onBack = {
+                                    navController.navigate(Routes.Market) {
+                                        popUpTo(Routes.Market) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                })
+                            }
                         }
 
                         composable(Routes.Market) {
@@ -162,13 +169,15 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Routes.Social) {
-                            SocialScreen(onBack = {
-                                navController.navigate(Routes.Market) {
-                                    popUpTo(Routes.Market) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            })
+                            ProtectedView(apiService = apiService) {
+                                SocialScreen(onBack = {
+                                    navController.navigate(Routes.Market) {
+                                        popUpTo(Routes.Market) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                })
+                            }
                         }
 
                         composable(Routes.Trade) { backStackEntry ->
@@ -177,7 +186,32 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Routes.Login) {
-                            LoginScreen(apiService = apiService, navController = navController)
+                            val context = LocalContext.current
+                            var loggedIn by remember { mutableStateOf(SessionManager.isLoggedIn(context)) }
+
+                            if (loggedIn) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text("You are signed in!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    MyButton("Sign Out") {
+                                        SessionManager.clearSession(context)
+                                        loggedIn = false
+                                    }
+                                }
+                            } else {
+                                LoginView(
+                                    apiService = apiService,
+                                    onSuccess = {
+                                        navController.navigate(Routes.Market) {
+                                            popUpTo(Routes.Market) { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
                         }
 
                         composable(Routes.home) {
@@ -222,89 +256,108 @@ fun HomeScreen(navController: NavController) {
 
 }
 
-/*--------------------------Start Login-----------------------------*/
+
+/*--------------------------Protected View-----------------------------*/
 @Composable
-fun LoginScreen(apiService: ApiService, navController: NavController, modifier: Modifier = Modifier) {
+fun ProtectedView(
+    apiService: ApiService,
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    var isUserLoggedIn by remember { mutableStateOf(SessionManager.isLoggedIn(context)) }
+
+    if (!isUserLoggedIn) {
+        LoginView(
+            apiService = apiService,
+            onSuccess = {
+                isUserLoggedIn = true
+            }
+        )
+    } else {
+        content()
+    }
+}
+
+/*--------------------------Start Login-----------------------------*/
+
+@Composable
+fun LoginView(
+    apiService: ApiService,
+    onSuccess: () -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var loginInfo by remember { mutableStateOf<LoginInfo?>(null) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(Unit) {
-        scope.launch {
-            isLoading = true
-            errorMsg = null
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Welcome to TradeOff",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Please log in to view your portfolio and social leaderboards.",
+            color = Color.Gray,
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(28.dp))
 
-            try {
-                val googleName = googleSignIn(context)
-                val clientTime = getClientTime()
-                val clientIp = getClientIp(context)
-
-                val nameResponse = apiService.getName().awaitResponse()
-                val ipResponse = apiService.getServerIp().awaitResponse()
-                val timeResponse = apiService.getServerTime().awaitResponse()
-
-                val nameBody = nameResponse.body()
-                val ipBody = ipResponse.body()
-                val backendFirstName = nameBody?.firstName ?: ""
-                val backendLastName = nameBody?.lastName ?: ""
-                val fullName = if (backendLastName.isNotEmpty()) "$backendFirstName $backendLastName" else backendFirstName
-
-                loginInfo = LoginInfo (
-                    serverIp = ipBody?.ip ?: "Unknown",
-                    clientIp = clientIp,
-                    serverTime = timeResponse.body()?.time ?: "Unknown",
-                    clientTime = clientTime,
-                    backendOwnerName = fullName.ifEmpty { "Unknown" },
-                    googleUserName = googleName
-                )
-            } catch (e: Exception) {
-                errorMsg = e.message ?: "Unknown error"
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    LaunchedEffect(loginInfo != null) {
-        if (loginInfo != null) {
-            while (true) {
-                delay(1000)
-                loginInfo = loginInfo?.let {
-                    it.copy(
-                        serverTime = incrementTimeString(it.serverTime),
-                        clientTime = incrementTimeString(it.clientTime)
-                    )
-                }
-            }
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         if (isLoading) {
             CircularProgressIndicator()
-        }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Signing in with Google...", color = Color.Gray, fontSize = 14.sp)
+        } else {
+            Button(
+                onClick = {
+                    scope.launch {
+                        isLoading = true
+                        errorMsg = null
+                        try {
+                            val signInResult = googleSignIn(context)
+                            val authResponse = apiService.loginWithGoogle(GoogleAuthRequest(signInResult.idToken))
 
-        errorMsg?.let { Text(text = it, color = Color.Red) }
-
-        loginInfo?.let { info ->
-            Column {
-                Text("Server IP: ${info.serverIp}")
-                Text("Client IP: ${info.clientIp}")
-                Text("Server Time: ${info.serverTime}")
-                Text("Client Time: ${info.clientTime}")
-                Text("Backend Owner: ${info.backendOwnerName}")
-                Text("Logged in as: ${info.googleUserName}")
+                            if (authResponse.isSuccessful && authResponse.body() != null) {
+                                val token = authResponse.body()!!.accessToken
+                                SessionManager.saveToken(context, token)
+                                onSuccess()
+                            } else {
+                                val errorBody = authResponse.errorBody()?.string()
+                                Log.e("AUTH_ERROR", "Sign-in failed with HTTP ${authResponse.code()}: $errorBody")
+                                errorMsg = "Sign-in failed: ${authResponse.code()}"
+                            }
+                        } catch (e: Exception) {
+                            errorMsg = e.message ?: "Sign-in cancelled or failed"
+                        } finally {
+                            isLoading = false
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4285F4),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Text(text = "Sign in with Google", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-        MyButton("Back to Market") {
-            navController.navigate(Routes.Market) {
-                popUpTo(Routes.Market) { inclusive = true }
-            }
+        errorMsg?.let { msg ->
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = msg, color = Color.Red, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
     }
 }
@@ -335,23 +388,11 @@ private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(
     }
 }
 
-@Composable
-fun MyButton(buttonText: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Gray,
-            contentColor = Color.White
-        ),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(text = buttonText)
-    }
-}
-
 // HELPERS
+/*-------------------------- Google Sign-In Helper -----------------------------*/
+data class GoogleSignInResult(val idToken: String, val displayName: String)
 
-suspend fun googleSignIn(context: Context): String {
+suspend fun googleSignIn(context: Context): GoogleSignInResult {
     val credentialManager = CredentialManager.create(context)
     val serverClientId = BuildConfig.GOOGLE_CLIENT_ID.ifEmpty {
         "417938142085-ngdhrek8t9vggugpbcadcjbcrn7vb5r3.apps.googleusercontent.com"
@@ -386,7 +427,9 @@ suspend fun googleSignIn(context: Context): String {
             val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
             val firstName = googleIdTokenCredential.givenName ?: ""
             val lastName = googleIdTokenCredential.familyName ?: ""
-            return if (lastName.isNotEmpty()) "$firstName $lastName" else firstName
+            val fullname = if(lastName.isNotEmpty()) "$firstName $lastName" else firstName
+
+            return GoogleSignInResult(idToken = googleIdTokenCredential.idToken, displayName = fullname)
         }
 
         throw Exception("Invalid credential type: ${credential.type}")
@@ -400,54 +443,17 @@ suspend fun googleSignIn(context: Context): String {
     }
 }
 
-fun getClientTime(): String {
-    val now = Calendar.getInstance()
-    val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
-    val timeStr = sdf.format(now.time)
-
-    val offsetms  = now.get(Calendar.ZONE_OFFSET) + now.get(Calendar.DST_OFFSET)
-    val offsetHours = offsetms / (1000 * 60 * 60)
-    val sign = if (offsetHours >= 0) "+" else "-"
-    val offsetStr = String.format("%02d", abs(offsetHours))
-
-    return "$timeStr GMT$sign$offsetStr:00"
-}
-
-fun getClientIp(context: Context): String {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val network = cm.activeNetwork ?: return "unknown"
-    val linkProperties = cm.getLinkProperties(network) ?: return "unknown"
-
-    for (linkAddress in linkProperties.linkAddresses) {
-        val address = linkAddress.address
-        if (address is Inet4Address && !address.isLoopbackAddress) {
-            return address.hostAddress ?: "unknown"
-        }
-    }
-    return "unknown"
-}
-
-fun incrementTimeString(timeStr: String): String {
-    try {
-        val parts = timeStr.split(" ")
-        val hms = parts[0].split(":")
-        var h = hms[0].toInt()
-        var m = hms[1].toInt()
-        var s = hms[2].toInt()
-
-        s += 1
-        if (s >= 60) {
-            s = 0
-            m += 1
-            if (m >= 60) {
-                m = 0
-                h += 1
-                if (h >= 24) h = 0
-            }
-        }
-        val newHms = String.format("%02d:%02d:%02d", h, m, s)
-        return timeStr.replaceFirst(parts[0], newHms)
-    } catch (e: Exception) {
-        return timeStr
+@Composable
+fun MyButton(buttonText: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Gray,
+            contentColor = Color.White
+        ),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Text(text = buttonText)
     }
 }
+

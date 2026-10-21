@@ -32,12 +32,15 @@ object ApiClient {
 
         val trustManager = tmf.trustManagers[0] as X509TrustManager
 
-        return OkHttpClient.Builder().sslSocketFactory(sslContext.socketFactory, trustManager).build()
+        return OkHttpClient.Builder().sslSocketFactory(sslContext.socketFactory, trustManager).hostnameVerifier {_, _ -> true}.build() //hostnameVerifier once finished testing locally
     }
 
     fun create(context: Context): ApiService {
+        val rawUrl = BuildConfig.API_BASE_URL.ifEmpty { "https://34.105.116.91:3000" }
+        val baseUrl = rawUrl.trimEnd('/') + "/"
+
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://34.105.116.91:3000")
+            .baseUrl(baseUrl)
             .client(createdTrustClient(context))
             .addConverterFactory(GsonConverterFactory.create())
             .build()

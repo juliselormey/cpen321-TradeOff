@@ -2,6 +2,7 @@ import express, { type Express } from 'express';
 import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";
+import { authRouter } from "./routes/auth";
 
 export function createApp(): Express {
   const app = express();
@@ -14,7 +15,8 @@ export function createApp(): Express {
   });
 
   app.use("/api", info)
-  app.use(usersRouter);
+  app.use("/api/auth",authRouter);
+  app.use("/api/auth", usersRouter);
 
 
   app.use((_req, res) => {

@@ -1,4 +1,4 @@
-import express, { type Express, Response, RequestHandler, Request, NextFunction } from 'express';
+import express, { type Express, Response, Request, NextFunction } from 'express';
 import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";

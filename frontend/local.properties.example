@@ -9,7 +9,8 @@ GOOGLE_CLIENT_ID=
 
 # Other API keys, secrets, and configurations
 
-# Optional local Market override: npm run dev:market + adb reverse tcp:3001 tcp:3001
-# MARKET_API_BASE_URL=http://127.0.0.1:3001/
+# Optional Android Emulator Market override: keep npm run dev:market running.
+# 10.0.2.2 reaches the host loopback directly; no adb reverse is needed.
+# MARKET_API_BASE_URL=http://10.0.2.2:3001/
 # Optional: install beside an existing app signed by another debug key.
 # DEBUG_APPLICATION_ID_SUFFIX=.marketdemo

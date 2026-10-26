@@ -13,6 +13,8 @@ export interface ProviderQuote {
 export interface QuoteProvider {
   fetchQuote(symbol: string): Promise<ProviderQuote>;
   fetchHistory(symbol: string): Promise<PricePoint[]>;
+  fetchQuotes?(symbols: readonly string[]): Promise<Record<string, ProviderQuote | MarketProviderError>>;
+  fetchHistories?(symbols: readonly string[]): Promise<Record<string, PricePoint[] | MarketProviderError>>;
 }
 
 export type MarketIssueCode =

@@ -19,9 +19,10 @@ class MarketChartTest {
             MarketSparkline(listOf(
                 MarketPricePoint("2026-10-21T04:00:00Z", 200.0),
                 MarketPricePoint("2026-10-23T04:00:00Z", 200.0),
-            ), Color.Green)
+            ), Color.Green, "MSFT")
         }
         compose.onNode(hasContentDescription("2 real price points", substring = true)).assertIsDisplayed()
+        compose.onNode(hasContentDescription("MSFT price history", substring = true)).assertExists()
         compose.onNodeWithText("Oct 21").assertExists()
         compose.onNodeWithText("Oct 23").assertExists()
     }

@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-internal fun MarketSparkline(points: List<MarketPricePoint>, color: Color) {
+internal fun MarketSparkline(points: List<MarketPricePoint>, color: Color, symbol: String = "AAPL") {
     val ordered = remember(points) {
         points.mapNotNull { point ->
             val epoch = runCatching { Instant.parse(point.timestamp).toEpochMilli() }.getOrNull()
@@ -32,7 +32,7 @@ internal fun MarketSparkline(points: List<MarketPricePoint>, color: Color) {
     val start = ordered.first().first
     val duration = (ordered.last().first - start).toDouble()
     Canvas(Modifier.fillMaxWidth().height(72.dp).padding(vertical = 8.dp).semantics {
-        contentDescription = "AAPL price history from Alpaca IEX, ${ordered.size} real price points"
+        contentDescription = "$symbol price history from Alpaca IEX, ${ordered.size} real price points"
     }) {
         fun point(index: Int): Offset {
             val (timestamp, price) = ordered[index]

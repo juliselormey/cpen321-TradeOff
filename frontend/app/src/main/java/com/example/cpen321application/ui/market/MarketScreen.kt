@@ -1,6 +1,6 @@
 package com.example.cpen321application.ui.market
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,7 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +24,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cpen321application.ApiClient
+import com.example.cpen321application.R
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
 import java.text.NumberFormat
@@ -109,7 +111,7 @@ private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Uni
                 StockCard(stock, onClick = { onStockSelected(stock.ticker) })
             }
             item {
-                Text("Virtual investing • Only AAPL uses provider data.\nOther prices and charts are fixed samples.", color = Muted, fontSize = 12.sp)
+                Text("Virtual investing • Prices and charts from Alpaca IEX.\nIEX is one exchange, not the full US market.", color = Muted, fontSize = 12.sp)
             }
         }
     }
@@ -117,20 +119,20 @@ private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Uni
 
 @Composable
 private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
-    val aapl = state.stocks.firstOrNull { it.ticker == "AAPL" }
-    val issue = state.error ?: aapl?.error?.message
-    val connected = issue == null && aapl?.fetchedAt != null
+    val available = state.stocks.count { it.status == "ok" && it.fetchedAt != null }
+    val issue = state.error ?: state.stocks.firstNotNullOfOrNull { it.error?.message }
+    val connected = issue == null && available == state.stocks.size && available > 0
     Card(colors = CardDefaults.cardColors(containerColor = if (issue == null) Color(0xFFE9F6EE) else Color(0xFFFFEEF0))) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (connected) "AAPL · Alpaca IEX connected" else if (issue != null) "Market connection needs attention" else "Connecting to market…",
+                    if (connected) "Alpaca IEX connected · $available stocks" else if (issue != null) "Market connection needs attention" else "Connecting to market…",
                     modifier = Modifier.weight(1f), color = if (issue == null) Green else Red,
                     fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                 )
                 if (state.refreshing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
-            Text("One provider stock · five samples", color = Muted, fontSize = 12.sp)
+            Text("$available/${state.stocks.size} quotes available · shared backend cache", color = Muted, fontSize = 12.sp)
             if (state.checkedAt != null) {
                 Text("Backend checked ${time(state.checkedAt)} · refresh every 8s", color = Muted, fontSize = 11.sp)
             }
@@ -154,8 +156,27 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(42.dp).background(Color(0xFFEEF5F0), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                    Text(stock.ticker.take(1), color = Green, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                Box(
+                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (stock.ticker == "AAPL") Color(0xFF111111) else Color.White),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val logo = when (stock.ticker) {
+                        "AAPL" -> R.drawable.ic_stock_apple
+                        "MSFT" -> R.drawable.ic_stock_microsoft
+                        "TSLA" -> R.drawable.ic_stock_tesla
+                        "NVDA" -> R.drawable.ic_stock_nvidia
+                        "GOOGL" -> R.drawable.ic_stock_google
+                        "AMZN" -> R.drawable.ic_stock_amazon
+                        else -> null
+                    }
+                    if (logo != null) Image(
+                        painterResource(logo), "${stock.companyName} logo",
+                        Modifier.fillMaxSize().padding(
+                            if (stock.ticker in listOf("TSLA", "NVDA", "AMZN")) 0.dp else 9.dp,
+                        ),
+                    )
+                    else Text(stock.ticker.take(1), color = Green, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
@@ -186,7 +207,7 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
                 stock.fetchedAt?.let { Text("Fetched: ${time(it)}", color = Muted, fontSize = 11.sp) }
                 val points = stock.history?.points.orEmpty()
                 if (points.size >= 2) {
-                    MarketSparkline(points, accent)
+                    MarketSparkline(points, accent, stock.ticker)
                     Text("Cached price history · IEX only", color = Muted, fontSize = 11.sp)
                 } else {
                     Text("Not enough historical data for a chart yet.", color = Muted, fontSize = 11.sp)
@@ -194,26 +215,12 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
                 if (stock.history?.status == "stale" || stock.history?.error != null) {
                     Text("Chart history may be incomplete or stale.", color = Red, fontSize = 11.sp)
                 }
+                stock.error?.let { Text(it.message, color = Red, fontSize = 11.sp) }
                 Text("Prices may stay unchanged outside trading hours.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
             } else {
-                SampleChart(stock.performancePoints, accent)
-                Text("Sample price and chart · not updated", color = Muted, fontSize = 11.sp)
+                Text("Market data unavailable", color = Muted, fontSize = 11.sp)
             }
         }
-    }
-}
-
-@Composable
-private fun SampleChart(points: List<Float>, color: Color) {
-    Canvas(Modifier.fillMaxWidth().height(34.dp).padding(vertical = 6.dp)) {
-        if (points.size < 2) return@Canvas
-        val minimum = points.minOrNull() ?: 0f
-        val range = (points.maxOrNull() ?: 0f) - minimum
-        fun point(index: Int) = Offset(
-            size.width * index / (points.size - 1),
-            if (range == 0f) size.height / 2 else size.height * (1 - (points[index] - minimum) / range),
-        )
-        for (index in 0 until points.lastIndex) drawLine(color, point(index), point(index + 1), strokeWidth = 2.dp.toPx())
     }
 }
 

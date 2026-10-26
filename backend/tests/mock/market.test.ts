@@ -4,7 +4,7 @@ import axios from 'axios';
 import { createMarketRouter } from '../../src/market/routes';
 import { MarketService } from '../../src/market/service';
 import { AlpacaProvider, parseAlpacaSnapshot, parseAlpacaBars } from '../../src/market/alpaca';
-import { HISTORY_TTL_MS, MAX_DAILY_POINTS, MAX_ROLLING_POINTS } from '../../src/market/catalog';
+import { HISTORY_TTL_MS, LIVE_SYMBOLS, MAX_DAILY_POINTS, MAX_ROLLING_POINTS } from '../../src/market/catalog';
 import { MarketProviderError, PricePoint, ProviderQuote } from '../../src/market/types';
 
 const START = Date.parse('2026-10-23T15:00:00Z');
@@ -34,7 +34,7 @@ function fixture() {
 // Market HTTP interfaces, with the external Alpaca component mocked.
 // No credentials, network quota, database, or trade operations are used.
 describe('Mocked: market endpoints and caches', () => {
-  test('list combines one real-source quote/history with five original samples', async () => {
+  test('list supplies provider quotes and history for all six catalog stocks', async () => {
     const { app, fetchQuote, fetchHistory } = fixture();
     const response = await request(app).get('/api/market/stocks').expect(200);
     expect(response.body.refreshIntervalMs).toBe(8_000);
@@ -44,12 +44,13 @@ describe('Mocked: market endpoints and caches', () => {
       change: '2.25', historySource: 'alpaca', quoteAgeSeconds: 0,
     });
     expect(response.body.stocks[0].history.points).toHaveLength(3);
-    expect(response.body.stocks.slice(1).every((s: { source: string }) => s.source === 'mock')).toBe(true);
+    expect(response.body.liveSymbols).toEqual(LIVE_SYMBOLS);
+    expect(response.body.stocks.every((s: { source: string }) => s.source === 'alpaca')).toBe(true);
     expect(response.body.stocks[1]).toMatchObject({
-      ticker: 'MSFT', currentPrice: '415.26', performancePoints: [407, 410, 409, 413, 415], history: null,
+      ticker: 'MSFT', currentPrice: '200.25', history: { symbol: 'MSFT', status: 'ok' },
     });
-    expect(fetchQuote).toHaveBeenCalledTimes(1);
-    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    expect(fetchQuote).toHaveBeenCalledTimes(6);
+    expect(fetchHistory).toHaveBeenCalledTimes(6);
     expect(fetchQuote).toHaveBeenCalledWith('AAPL');
     expect(fetchHistory).toHaveBeenCalledWith('AAPL');
   });
@@ -68,9 +69,11 @@ describe('Mocked: market endpoints and caches', () => {
     resolveQuote?.(QUOTE);
     resolveHistory?.(HISTORY);
     await Promise.all([first, second, chart]);
+    fetchQuote.mockResolvedValue(QUOTE);
+    fetchHistory.mockResolvedValue(HISTORY);
     await Promise.all(Array.from({ length: 10 }, () => request(app).get('/api/market/stocks').expect(200)));
-    expect(fetchQuote).toHaveBeenCalledTimes(1);
-    expect(fetchHistory).toHaveBeenCalledTimes(1);
+    expect(fetchQuote).toHaveBeenCalledTimes(6);
+    expect(fetchHistory).toHaveBeenCalledTimes(6);
   });
 
   test('price expires at eight seconds while daily history stays cached independently', async () => {
@@ -97,14 +100,16 @@ describe('Mocked: market endpoints and caches', () => {
     expect(fetchHistory).toHaveBeenCalledTimes(1);
   });
 
-  test('mock, unknown, and non-AAPL history requests consume no provider calls', async () => {
+  test('unknown symbols consume no provider calls; MSFT supports quote and history', async () => {
     const { app, fetchQuote, fetchHistory } = fixture();
-    const mock = await request(app).get('/api/market/stocks/MSFT').expect(200);
-    expect(mock.body).toMatchObject({ source: 'mock', status: 'mock', fetchedAt: null });
     await request(app).get('/api/market/stocks/INVALID').expect(404);
-    await request(app).get('/api/market/stocks/MSFT/history').expect(404);
+    await request(app).get('/api/market/stocks/INVALID/history').expect(404);
     expect(fetchQuote).not.toHaveBeenCalled();
     expect(fetchHistory).not.toHaveBeenCalled();
+    const stock = await request(app).get('/api/market/stocks/msft').expect(200);
+    expect(stock.body).toMatchObject({ source: 'alpaca', status: 'ok', ticker: 'MSFT' });
+    await request(app).get('/api/market/stocks/MSFT/history').expect(200);
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
   });
 
   test('unconfigured provider returns explicit 503 without replacing AAPL by a sample', async () => {
@@ -118,7 +123,7 @@ describe('Mocked: market endpoints and caches', () => {
       error: { code: 'MARKET_NOT_CONFIGURED' }, history: { points: [] },
     });
     const list = await request(app).get('/api/market/stocks').expect(200);
-    expect(list.body.stocks.filter((s: { status: string }) => s.status === 'mock')).toHaveLength(5);
+    expect(list.body.stocks.every((s: { status: string; currentPrice: unknown }) => s.status === 'unavailable' && s.currentPrice === null)).toBe(true);
     await request(app).get('/api/market/stocks/AAPL/history').expect(503);
     expect(fetchQuote).toHaveBeenCalledTimes(1);
     expect(fetchHistory).toHaveBeenCalledTimes(1);

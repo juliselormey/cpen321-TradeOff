@@ -35,17 +35,14 @@ data class MarketStock(
     val history: MarketHistory? = null,
 )
 
-// Offline samples preserve the original values. AAPL never has a fake quote.
+// Metadata keeps the list usable while loading. Never invent an offline price.
 internal fun initialMarketStocks(): List<MarketStock> = listOf(
-    MarketStock("AAPL", "Apple Inc.", null, null, emptyList(), true, "alpaca", "unavailable"),
-    MarketStock("MSFT", "Microsoft Corporation", "415.26", 0.82,
-        listOf(407f, 410f, 409f, 413f, 415f), false, "mock", "mock"),
-    MarketStock("TSLA", "Tesla Inc.", "242.84", -2.14,
-        listOf(251f, 248f, 250f, 245f, 243f), true, "mock", "mock"),
-    MarketStock("NVDA", "NVIDIA Corporation", "138.07", 1.91,
-        listOf(132f, 134f, 133f, 136f, 138f), true, "mock", "mock"),
-    MarketStock("GOOGL", "Alphabet Inc.", "242.84", -1.03,
-        listOf(248f, 247f, 245f, 244f, 243f), false, "mock", "mock"),
-    MarketStock("AMZN", "Amazon.com, Inc.", "178.29", 2.19,
-        listOf(169f, 171f, 173f, 177f, 178f), false, "mock", "mock"),
-)
+    Triple("AAPL", "Apple Inc.", true),
+    Triple("MSFT", "Microsoft Corporation", false),
+    Triple("TSLA", "Tesla, Inc.", true),
+    Triple("NVDA", "NVIDIA Corporation", true),
+    Triple("GOOGL", "Alphabet Inc.", false),
+    Triple("AMZN", "Amazon.com, Inc.", false),
+).map { (symbol, company, favorite) ->
+    MarketStock(symbol, company, null, null, emptyList(), favorite, "alpaca", "unavailable")
+}

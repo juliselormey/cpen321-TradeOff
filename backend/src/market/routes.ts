@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../util/asyncHandler';
-import { LIVE_SYMBOL, REFRESH_INTERVAL_MS, STOCK_CATALOG } from './catalog';
+import { LIVE_SYMBOLS, REFRESH_INTERVAL_MS, STOCK_CATALOG } from './catalog';
 import { MarketService, marketService } from './service';
 
 export function createMarketRouter(service: MarketService = marketService): Router {
@@ -12,7 +12,7 @@ export function createMarketRouter(service: MarketService = marketService): Rout
 
   router.get('/stocks', asyncHandler(async (_req, res) => {
     res.json({
-      liveSymbol: LIVE_SYMBOL,
+      liveSymbols: LIVE_SYMBOLS,
       refreshIntervalMs: REFRESH_INTERVAL_MS,
       stocks: await service.getStocks(),
     });
@@ -29,11 +29,12 @@ export function createMarketRouter(service: MarketService = marketService): Rout
   }));
 
   router.get('/stocks/:symbol/history', asyncHandler(async (req, res) => {
-    if (String(req.params.symbol).toUpperCase() !== LIVE_SYMBOL) {
-      res.status(404).json({ error: { code: 'UNKNOWN_SYMBOL', message: 'History is available only for AAPL.' } });
+    const symbol = String(req.params.symbol).toUpperCase();
+    if (!LIVE_SYMBOLS.includes(symbol)) {
+      res.status(404).json({ error: { code: 'UNKNOWN_SYMBOL', message: 'Unsupported market symbol.' } });
       return;
     }
-    const history = await service.getHistory(LIVE_SYMBOL);
+    const history = await service.getHistory(symbol);
     res.status(history.status === 'unavailable' && history.error ? 503 : 200).json(history);
   }));
   return router;

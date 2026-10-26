@@ -1,5 +1,5 @@
 import {
-  HISTORY_TTL_MS, LIVE_SYMBOL, MAX_DAILY_POINTS, MAX_ROLLING_POINTS,
+  HISTORY_TTL_MS, LIVE_SYMBOLS, MAX_DAILY_POINTS, MAX_ROLLING_POINTS,
   REFRESH_INTERVAL_MS, STOCK_CATALOG,
 } from './catalog';
 import { AlpacaProvider } from './alpaca';
@@ -43,14 +43,6 @@ export class MarketService {
       ticker: stock.ticker, companyName: stock.companyName,
       currency: 'USD' as const, isFavorite: stock.isFavorite,
     };
-    if (ticker !== LIVE_SYMBOL) {
-      return {
-        ...base, currentPrice: stock.currentPrice, change: null, percentageChange: stock.percentageChange,
-        performancePoints: [...stock.performancePoints], historySource: 'mock', history: null,
-        source: 'mock', feed: null, status: 'mock', quoteAsOf: null, fetchedAt: null,
-        quoteAgeSeconds: null, retryAt: null, error: null,
-      };
-    }
     await Promise.all([this.ensurePrice(ticker), this.ensureHistory(ticker)]);
     const cached = this.prices.get(ticker);
     const quote = cached?.value;
@@ -72,12 +64,22 @@ export class MarketService {
   }
 
   async getHistory(ticker: string): Promise<MarketHistory> {
-    if (ticker !== LIVE_SYMBOL) throw new Error('No provider history for this symbol');
+    if (!LIVE_SYMBOLS.includes(ticker)) throw new Error('Unsupported market symbol');
     await this.ensureHistory(ticker);
     return this.historyResult(ticker);
   }
 
   private async ensurePrice(symbol: string): Promise<void> {
+    if (this.provider.fetchQuotes) {
+      return this.refreshBatch('prices', this.prices, REFRESH_INTERVAL_MS,
+        symbols => this.provider.fetchQuotes!(symbols), (ticker, quote, cached) => {
+          if (cached && Date.parse(quote.quoteAsOf) < Date.parse(cached.quoteAsOf)) {
+            throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an older snapshot.');
+          }
+          this.appendSample(ticker, { timestamp: quote.quoteAsOf, price: quote.price });
+          return quote;
+        });
+    }
     let entry = this.prices.get(symbol);
     if (!entry) { entry = emptyEntry<ProviderQuote>(); this.prices.set(symbol, entry); }
     const cached = entry;
@@ -92,12 +94,57 @@ export class MarketService {
   }
 
   private async ensureHistory(symbol: string): Promise<void> {
+    if (this.provider.fetchHistories) {
+      return this.refreshBatch('histories', this.histories, HISTORY_TTL_MS,
+        symbols => this.provider.fetchHistories!(symbols), (_ticker, points) =>
+          [...points].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-MAX_DAILY_POINTS));
+    }
     let entry = this.histories.get(symbol);
     if (!entry) { entry = emptyEntry<PricePoint[]>(); this.histories.set(symbol, entry); }
     await this.refresh(`history:${symbol}`, entry, HISTORY_TTL_MS, async () => {
       const points = await this.provider.fetchHistory(symbol);
       return [...points].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-MAX_DAILY_POINTS);
     });
+  }
+
+  // One batch warms every due catalog entry. Individual-stock and list routes
+  // share both the in-flight promise and per-symbol caches.
+  private async refreshBatch<T>(
+    key: string, cache: Map<string, CacheEntry<T>>, ttl: number,
+    fetch: (symbols: readonly string[]) => Promise<Record<string, T | MarketProviderError>>,
+    accept: (symbol: string, value: T, previous: T | null) => T,
+  ): Promise<void> {
+    const pending = this.inFlight.get(key);
+    if (pending) return pending;
+    const due: string[] = [];
+    for (const symbol of LIVE_SYMBOLS) {
+      let entry = cache.get(symbol);
+      if (!entry) { entry = emptyEntry<T>(); cache.set(symbol, entry); }
+      if (this.now() < entry.nextAttemptAt) continue;
+      if (this.now() < this.blockedUntil) {
+        entry.issue = this.providerIssue;
+        entry.nextAttemptAt = this.blockedUntil;
+      } else due.push(symbol);
+    }
+    if (!due.length) return;
+    const work = (async () => {
+      let results: Record<string, T | MarketProviderError>;
+      try { results = await fetch(due); } catch (error: unknown) {
+        await Promise.all(due.map(symbol => this.load(cache.get(symbol)!, ttl, async () => { throw error; })));
+        return;
+      }
+      await Promise.all(due.map(symbol => {
+        const entry = cache.get(symbol)!;
+        return this.load(entry, ttl, async () => {
+          const value = results[symbol];
+          if (value === undefined) throw new MarketProviderError('PROVIDER_INVALID_DATA', `No Alpaca data for ${symbol}.`);
+          if (value instanceof MarketProviderError) throw value;
+          return accept(symbol, value, entry.value);
+        });
+      }));
+    })();
+    this.inFlight.set(key, work);
+    try { await work; } finally { this.inFlight.delete(key); }
   }
 
   private async refresh<T>(key: string, entry: CacheEntry<T>, ttl: number, load: () => Promise<T>): Promise<void> {

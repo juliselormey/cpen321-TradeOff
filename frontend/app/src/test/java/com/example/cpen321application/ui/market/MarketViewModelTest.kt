@@ -34,14 +34,14 @@ class MarketViewModelTest {
     }
 
     @Test
-    fun unavailableBackendNeverFabricatesAnApplePrice() = runBlocking {
+    fun unavailableBackendNeverFabricatesAnyStockPrice() = runBlocking {
         val model = MarketViewModel(MarketRepository(object : MarketApiService {
             override suspend fun getStocks(): MarketResponse = throw IOException("offline")
         }))
         model.refresh()
         val state = model.state.value
         assertNull(state.stocks.first().currentPrice)
-        assertEquals(5, state.stocks.count { it.source == "mock" })
+        assertEquals(6, state.stocks.count { it.source == "alpaca" && it.currentPrice == null })
         assertNotNull(state.error)
         assertFalse(state.refreshing)
     }

@@ -33,6 +33,19 @@ private data class SocialTrader(
     val isYou: Boolean = false,
 )
 
+private data class PanelState(
+    val isLeaderboard: Boolean,
+    val traders: List<SocialTrader>,
+    val showAll: Boolean,
+    val sortLabel: String,
+)
+
+private class PanelActions(
+    val onToggleShowAll: () -> Unit,
+    val onToggleSort: () -> Unit,
+    val onAddFriend: () -> Unit,
+)
+
 private val sampleTraders = listOf(
     SocialTrader("alex", "Alex Chen", 124532.0, 24.8),
     SocialTrader("daniel", "Daniel Kim", 118205.0, 18.1),
@@ -43,6 +56,19 @@ private val sampleTraders = listOf(
     SocialTrader("ryan", "Ryan Tran", 91305.0, -2.1),
 )
 
+/*-------------------------- Sorting helpers -----------------------------*/
+
+private fun leaderboardTraders(sortByReturn: Boolean): List<SocialTrader> =
+    if (sortByReturn) sampleTraders.sortedByDescending { it.returnPercent }
+    else sampleTraders.sortedByDescending { it.totalValue }
+
+private fun friendsTraders(ascending: Boolean): List<SocialTrader> {
+    val friends = sampleTraders.filterNot { it.isYou }
+    return if (ascending) friends.sortedBy { it.name } else friends.sortedByDescending { it.name }
+}
+
+/*-------------------------- Social screen -----------------------------*/
+
 @Composable
 fun SocialScreen(onBack: () -> Unit) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -50,93 +76,34 @@ fun SocialScreen(onBack: () -> Unit) {
     var showAddFriend by rememberSaveable { mutableStateOf(false) }
     var showAll by rememberSaveable { mutableStateOf(false) }
     var friendsAscending by rememberSaveable { mutableStateOf(true) }
-    val traders = if (selectedTab == 0) {
-        if (sortByReturn) sampleTraders.sortedByDescending { it.returnPercent }
-        else sampleTraders.sortedByDescending { it.totalValue }
-    } else {
-        sampleTraders.filterNot { it.isYou }.let { friends ->
-            if (friendsAscending) friends.sortedBy { it.name }
-            else friends.sortedByDescending { it.name }
-        }
+
+    val isLeaderboard = selectedTab == 0
+    val traders = if (isLeaderboard) leaderboardTraders(sortByReturn) else friendsTraders(friendsAscending)
+    val visibleTraders = if (isLeaderboard && !showAll) traders.take(5) else traders
+    val sortLabel = when {
+        isLeaderboard -> "Sort: ${if (sortByReturn) "Return %" else "Total value"}"
+        else -> "Sort: ${if (friendsAscending) "Name A-Z" else "Name Z-A"}"
     }
-    val visibleTraders = if (selectedTab == 0 && !showAll) traders.take(5) else traders
 
     Column(
         modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onBack) { Text("Back to home", color = Green) }
-            Text("Sample data", color = Muted, fontSize = 12.sp)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Social", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            listOf("Leaderboard", "Friends").forEachIndexed { index, title ->
-                Button(
-                    onClick = { selectedTab = index },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == index) Green else Panel,
-                        contentColor = if (selectedTab == index) Background else Muted,
-                    ),
-                ) { Text(title) }
-            }
-        }
+        SocialTopBar(onBack)
+        SocialTitle()
+        TabSelector(selectedTab = selectedTab, onSelect = { selectedTab = it })
         Spacer(Modifier.height(20.dp))
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth()
-                .background(Panel, RoundedCornerShape(20.dp)).padding(16.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (selectedTab == 0) "Leaderboard" else "Friends (${traders.size})",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (selectedTab == 0) {
-                    TextButton(onClick = { showAll = !showAll }) {
-                        Text(if (showAll) "Show top 5" else "See all", color = Green)
-                    }
-                } else {
-                    TextButton(onClick = { showAddFriend = true }) {
-                        Text("+ Add friend", color = Green)
-                    }
-                }
-            }
-            if (selectedTab == 0) {
-                TextButton(onClick = { sortByReturn = !sortByReturn }) {
-                    Text("Sort: ${if (sortByReturn) "Return %" else "Total value"}", color = Green)
-                }
-            } else {
-                TextButton(onClick = { friendsAscending = !friendsAscending }) {
-                    Text("Sort: ${if (friendsAscending) "Name A-Z" else "Name Z-A"}", color = Green)
-                }
-            }
-            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                itemsIndexed(visibleTraders, key = { _, trader -> trader.id }) { index, trader ->
-                    TraderRow(trader, if (selectedTab == 0) index + 1 else null)
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
-                }
-            }
-        }
+        TraderPanel(
+            state = PanelState(isLeaderboard, visibleTraders, showAll, sortLabel),
+            actions = PanelActions(
+                onToggleShowAll = { showAll = !showAll },
+                onToggleSort = {
+                    if (isLeaderboard) sortByReturn = !sortByReturn
+                    else friendsAscending = !friendsAscending
+                },
+                onAddFriend = { showAddFriend = true },
+            ),
+            modifier = Modifier.weight(1f),
+        )
         Text(
             "Demo portfolios - amounts in USD",
             color = Muted,
@@ -151,6 +118,96 @@ fun SocialScreen(onBack: () -> Unit) {
 }
 
 @Composable
+private fun SocialTopBar(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onBack) { Text("Back to home", color = Green) }
+        Text("Sample data", color = Muted, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun SocialTitle() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Social", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TabSelector(selectedTab: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf("Leaderboard", "Friends").forEachIndexed { index, title ->
+            val selected = selectedTab == index
+            Button(
+                onClick = { onSelect(index) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (selected) Green else Panel,
+                    contentColor = if (selected) Background else Muted,
+                ),
+            ) { Text(title) }
+        }
+    }
+}
+
+@Composable
+private fun TraderPanel(
+    state: PanelState,
+    actions: PanelActions,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .background(Panel, RoundedCornerShape(20.dp)).padding(16.dp),
+    ) {
+        PanelHeader(state, actions)
+        TextButton(onClick = actions.onToggleSort) { Text(state.sortLabel, color = Green) }
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            itemsIndexed(state.traders, key = { _, trader -> trader.id }) { index, trader ->
+                TraderRow(trader, if (state.isLeaderboard) index + 1 else null)
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelHeader(state: PanelState, actions: PanelActions) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (state.isLeaderboard) "Leaderboard" else "Friends (${state.traders.size})",
+            color = Color.White,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (state.isLeaderboard) {
+            TextButton(onClick = actions.onToggleShowAll) {
+                Text(if (state.showAll) "Show top 5" else "See all", color = Green)
+            }
+        } else {
+            TextButton(onClick = actions.onAddFriend) { Text("+ Add friend", color = Green) }
+        }
+    }
+}
+
+/*-------------------------- Add friend dialog -----------------------------*/
+
+@Composable
 private fun AddFriendDialog(onDismiss: () -> Unit) {
     var friendInput by rememberSaveable { mutableStateOf("") }
     var showPreviewMessage by rememberSaveable { mutableStateOf(false) }
@@ -158,48 +215,16 @@ private fun AddFriendDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Panel,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Add friend", color = Color.White)
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.semantics { contentDescription = "Close add friend dialog" },
-                ) { Text("X", color = Muted) }
-            }
-        },
+        title = { AddFriendTitle(onDismiss) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Your username: @demo_trader", color = Green)
-                Text("Your ID: demo-001 (sample account)", color = Muted)
-                OutlinedTextField(
-                    value = friendInput,
-                    onValueChange = {
-                        friendInput = it
-                        showPreviewMessage = false
-                    },
-                    label = { Text("Friend ID or username") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Green,
-                        unfocusedLabelColor = Muted,
-                        focusedBorderColor = Green,
-                        unfocusedBorderColor = Muted,
-                        cursorColor = Green,
-                    ),
-                )
-                Text(
-                    if (showPreviewMessage) "Preview only: no request was sent. Friend requests will work once the backend is connected."
-                    else "Enter a friend's ID or username. This screen currently uses sample data.",
-                    color = Muted,
-                )
-            }
+            AddFriendBody(
+                friendInput = friendInput,
+                showPreviewMessage = showPreviewMessage,
+                onInputChange = {
+                    friendInput = it
+                    showPreviewMessage = false
+                },
+            )
         },
         confirmButton = {
             Button(
@@ -213,6 +238,59 @@ private fun AddFriendDialog(onDismiss: () -> Unit) {
         },
     )
 }
+
+@Composable
+private fun AddFriendTitle(onDismiss: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Add friend", color = Color.White)
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.semantics { contentDescription = "Close add friend dialog" },
+        ) { Text("X", color = Muted) }
+    }
+}
+
+@Composable
+private fun AddFriendBody(
+    friendInput: String,
+    showPreviewMessage: Boolean,
+    onInputChange: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Your username: @demo_trader", color = Green)
+        Text("Your ID: demo-001 (sample account)", color = Muted)
+        OutlinedTextField(
+            value = friendInput,
+            onValueChange = onInputChange,
+            label = { Text("Friend ID or username") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = friendFieldColors(),
+        )
+        Text(
+            if (showPreviewMessage) "Preview only: no request was sent. Friend requests will work once the backend is connected."
+            else "Enter a friend's ID or username. This screen currently uses sample data.",
+            color = Muted,
+        )
+    }
+}
+
+@Composable
+private fun friendFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedLabelColor = Green,
+    unfocusedLabelColor = Muted,
+    focusedBorderColor = Green,
+    unfocusedBorderColor = Muted,
+    cursorColor = Green,
+)
+
+/*-------------------------- Trader row -----------------------------*/
 
 @Composable
 private fun TraderRow(trader: SocialTrader, rank: Int?) {

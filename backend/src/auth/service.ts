@@ -18,13 +18,18 @@ export async function findOrCreateUser(google: {
     });
 
     if (existing) {
+        /* eslint-disable @typescript-eslint/no-unsafe-return,
+        @typescript-eslint/no-unsafe-assignment,
+        @typescript-eslint/no-unsafe-argument,
+        @typescript-eslint/no-unsafe-member-access,
+        @typescript-eslint/no-unsafe-call */
         return db.user.update({
             where: { id: existing.id },
             data: { email: google.email, displayName: google.name ?? null },
         });
     }
 
-    // Nested create: the user and account are created atomically in one call
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return db.user.create({
         data: {
             googleSub: google.googleSub,

@@ -1,4 +1,4 @@
-# CPEN321_26W1_ProjectName
+# TradeOff README
 
 _Keep this README up to date with the steps required to build and run the frontend and backend (including any scripts, config files, and environment variables). TAs ill follow these instructions._
 

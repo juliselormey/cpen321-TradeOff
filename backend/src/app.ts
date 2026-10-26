@@ -3,6 +3,7 @@ import info from './routes/info'
 import cors from 'cors';
 import {usersRouter} from "./routes/users";
 import { authRouter } from "./routes/auth";
+import { createMarketRouter } from './market/routes';
 
 
 export function createApp(): Express {
@@ -16,6 +17,7 @@ export function createApp(): Express {
   });
 
   app.use("/api", info)
+  app.use('/api/market', createMarketRouter());
   app.use("/api/auth",authRouter);
   app.use("/api/auth", usersRouter);
 

@@ -1,9 +1,6 @@
 package com.example.cpen321application
 
 import android.content.Context
-import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -17,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Person
@@ -28,11 +24,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,19 +60,8 @@ import com.example.cpen321application.ui.theme.CPEN321ApplicationTheme
 import com.example.cpen321application.ui.trade.TradeScreen
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import retrofit2.awaitResponse
-import java.net.HttpURLConnection
-import java.net.Inet4Address
-import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-import kotlin.math.abs
 import com.example.cpen321application.util.SessionManager
 
 data class BottomNavItem(
@@ -225,14 +207,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-data class LoginInfo (
-    val serverIp: String = "",
-    val clientIp: String = "",
-    val serverTime: String = "",
-    val clientTime: String = "",
-    val backendOwnerName: String = "",
-    val googleUserName: String = "",
-)
 
 object Routes {
     const val home = "home"
@@ -398,30 +372,6 @@ private fun GoogleSignInButton(onClick: () -> Unit) {
     }
 }
 /*--------------------------End Login-----------------------------*/
-
-private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(Dispatchers.IO) {
-    val healthUrl = "${apiBaseUrl.trimEnd('/')}/health"
-    try {
-        val connection = (URL(healthUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 5_000
-            readTimeout = 5_000
-        }
-
-        when (val code = connection.responseCode) {
-            HttpURLConnection.HTTP_OK -> {
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
-                "Backend healthy ($healthUrl): $body"
-            }
-            else -> {
-                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                "Backend error ($healthUrl): HTTP $code${errorBody?.let { " — $it" } ?: ""}"
-            }
-        }
-    } catch (e: Exception) {
-        "Backend unreachable ($healthUrl): ${e.message ?: e.javaClass.simpleName}"
-    }
-}
 
 // HELPERS
 /*-------------------------- Google Sign-In Helper -----------------------------*/

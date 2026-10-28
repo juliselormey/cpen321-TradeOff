@@ -12,5 +12,6 @@ certs/
 *.pem
 *.key
 *.crt
+*.env
 
 src/generated/

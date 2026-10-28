@@ -34,7 +34,7 @@ object ApiClient {
 
         val trustManager = tmf.trustManagers[0] as X509TrustManager
 
-        return OkHttpClient.Builder().sslSocketFactory(sslContext.socketFactory, trustManager).hostnameVerifier {_, _ -> true}.build() //hostnameVerifier once finished testing locally
+        return OkHttpClient.Builder().sslSocketFactory(sslContext.socketFactory, trustManager).build()
     }
 
     fun create(context: Context): ApiService {
@@ -49,6 +49,15 @@ object ApiClient {
         return retrofit.create(ApiService::class.java)
     }
 
+    fun createFriends(context: Context): com.example.cpen321application.ui.social.FriendsApi {
+        val url = BuildConfig.API_BASE_URL.ifBlank { "https://34.169.187.216/" }
+        return Retrofit.Builder()
+            .baseUrl(url.trimEnd('/') + "/")
+            .client(createdTrustClient(context).newBuilder().callTimeout(15, TimeUnit.SECONDS).build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(com.example.cpen321application.ui.social.FriendsApi::class.java)
+    }
     fun createMarket(context: Context): MarketApiService {
         val rawUrl = BuildConfig.MARKET_API_BASE_URL.ifBlank {
             BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }

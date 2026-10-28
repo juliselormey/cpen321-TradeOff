@@ -24,6 +24,28 @@ model User {
 
   account       Account?
   refreshTokens RefreshToken[]
+  sentFriendships Friendship[] @relation("FriendshipSender")
+  receivedFriendships Friendship[] @relation("FriendshipRecipient")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+model Friendship {
+  id          String @id @default(uuid())
+  // Sorted user IDs ensure one relationship per pair, in either direction.
+  pairKey     String @unique @db.VarChar(73)
+  senderId    String
+  recipientId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  sender      User @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User @relation("FriendshipRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, status])
+  @@index([recipientId, status])
 }
 
 model Account {

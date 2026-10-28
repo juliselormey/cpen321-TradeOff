@@ -68,6 +68,7 @@ import com.example.cpen321application.ui.trade.TradeScreen
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -182,7 +183,12 @@ class MainActivity : ComponentActivity() {
 
                         composable(Routes.Trade) { backStackEntry ->
                             val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
-                            TradeScreen(ticker = ticker)
+                            TradeScreen(
+                                ticker = ticker,
+                                onBack = {
+                                    navController.popBackStack()
+                                }
+                            )
                         }
 
                         composable(Routes.Login) {

@@ -12,18 +12,25 @@ enum Role {
   ADMIN
 }
 
+enum TradeType {
+  BUY
+  SELL
+}
+
 model User {
-  id            String   @id @default(uuid())
-  googleSub     String   @unique
-  email         String   @unique
-  displayName   String?
-  avatarUrl     String?
-  role          Role     @default(TRADER)
-  isBanned      Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  id          String   @id @default(uuid())
+  googleSub   String   @unique
+  email       String   @unique
+  displayName String?
+  avatarUrl   String?
+  role        Role     @default(TRADER)
+  isBanned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   account       Account?
   refreshTokens RefreshToken[]
+  positions     Position[]
+  trades        Trade[]
 }
 
 model Account {
@@ -34,13 +41,43 @@ model Account {
 }
 
 model RefreshToken {
-  id          String    @id @default(uuid())
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Position {
+  id          String   @id @default(uuid())
   userId      String
-  tokenHash   String    @unique
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker      String
+  quantity    Decimal  @db.Decimal(18, 4)
+  averageCost Decimal  @db.Decimal(18, 4)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ticker])
+  @@index([userId])
+}
+
+model Trade {
+  id            String    @id @default(uuid())
+  userId        String
+  ticker        String
+  type          TradeType
+  quantity      Decimal   @db.Decimal(18, 4)
+  pricePerShare Decimal   @db.Decimal(18, 4)
+  totalAmount   Decimal   @db.Decimal(18, 4)
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }

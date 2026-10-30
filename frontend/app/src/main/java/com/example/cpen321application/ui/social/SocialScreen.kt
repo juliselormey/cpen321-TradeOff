@@ -4,19 +4,25 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.cpen321application.ApiClient
+import com.example.cpen321application.util.SessionManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -25,49 +31,10 @@ private val Panel = Color(0xFF141A1E)
 private val Green = Color(0xFF87CB70)
 private val Muted = Color(0xFFA4ADB3)
 
-private data class SocialTrader(
-    val id: String,
-    val name: String,
-    val totalValue: Double,
-    val returnPercent: Double,
-    val isYou: Boolean = false,
-)
-
-private data class PanelState(
-    val isLeaderboard: Boolean,
-    val traders: List<SocialTrader>,
-    val showAll: Boolean,
-    val sortLabel: String,
-)
-
-private class PanelActions(
-    val onToggleShowAll: () -> Unit,
-    val onToggleSort: () -> Unit,
-    val onAddFriend: () -> Unit,
-)
-
-private val sampleTraders = listOf(
-    SocialTrader("alex", "Alex Chen", 124532.0, 24.8),
-    SocialTrader("daniel", "Daniel Kim", 118205.0, 18.1),
-    SocialTrader("sophia", "Sophia Lee", 112408.0, 16.3),
-    SocialTrader("you", "You", 106234.0, 12.7, isYou = true),
-    SocialTrader("ethan", "Ethan Park", 104872.0, 11.9),
-    SocialTrader("maya", "Maya Singh", 98421.0, 9.4),
-    SocialTrader("ryan", "Ryan Tran", 91305.0, -2.1),
-)
-
-/*-------------------------- Sorting helpers -----------------------------*/
-
-private fun leaderboardTraders(sortByReturn: Boolean): List<SocialTrader> =
-    if (sortByReturn) sampleTraders.sortedByDescending { it.returnPercent }
-    else sampleTraders.sortedByDescending { it.totalValue }
-
-private fun friendsTraders(ascending: Boolean): List<SocialTrader> {
-    val friends = sampleTraders.filterNot { it.isYou }
-    return if (ascending) friends.sortedBy { it.name } else friends.sortedByDescending { it.name }
-}
-
-/*-------------------------- Social screen -----------------------------*/
+internal fun rankFriends(entries: List<LeaderboardEntry>, byReturn: Boolean): List<LeaderboardEntry> =
+    entries.sortedWith(compareByDescending<LeaderboardEntry> {
+        if (byReturn) it.returnPercent?.let(BigDecimal::valueOf) else it.cashBalance?.toBigDecimalOrNull()
+    }.thenBy { it.user.id })
 
 @Composable
 fun SocialScreen(
@@ -185,156 +152,75 @@ private fun TraderPanel(
                 HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
             }
         }
+        Spacer(Modifier.height(16.dp))
+        if (selectedTab == 1) FriendsPanel(Modifier.weight(1f))
+        else FriendsLeaderboard(Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun PanelHeader(state: PanelState, actions: PanelActions) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            if (state.isLeaderboard) "Leaderboard" else "Friends (${state.traders.size})",
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        if (state.isLeaderboard) {
-            TextButton(onClick = actions.onToggleShowAll) {
-                Text(if (state.showAll) "Show top 5" else "See all", color = Green)
+internal fun FriendsLeaderboard(modifier: Modifier, suppliedLoader: LeaderboardLoader? = null) {
+    val context = LocalContext.current.applicationContext
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val scope = rememberCoroutineScope()
+    val defaultLoader = remember(context) { LeaderboardLoader(ApiClient.createFriends(context), { SessionManager.getToken(context) }) }
+    val loader = suppliedLoader ?: defaultLoader
+    val state by loader.state.collectAsState()
+    val entries = state.entries
+    val busy = state.loading
+    val loaded = state.loaded
+    val error = state.error
+
+
+
+    var byReturn by rememberSaveable { mutableStateOf(false) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(loader, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            loader.refresh()
+            while (isActive) {
+                delay(15_000)
+                // Failed requests wait for an explicit retry; avoid an endless
+                // spinner/retry cycle when the session or connection is broken.
+                if (loader.state.value.error == null) loader.refresh()
             }
-        } else {
-            TextButton(onClick = actions.onAddFriend) { Text("+ Add friend", color = Green) }
         }
     }
-}
-
-/*-------------------------- Add friend dialog -----------------------------*/
-
-@Composable
-private fun AddFriendDialog(onDismiss: () -> Unit) {
-    var friendInput by rememberSaveable { mutableStateOf("") }
-    var showPreviewMessage by rememberSaveable { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Panel,
-        title = { AddFriendTitle(onDismiss) },
-        text = {
-            AddFriendBody(
-                friendInput = friendInput,
-                showPreviewMessage = showPreviewMessage,
-                onInputChange = {
-                    friendInput = it
-                    showPreviewMessage = false
-                },
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { showPreviewMessage = true },
-                enabled = friendInput.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Background),
-            ) { Text("Add friend") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = Green) }
-        },
-    )
-}
-
-@Composable
-private fun AddFriendTitle(onDismiss: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Add friend", color = Color.White)
-        IconButton(
-            onClick = onDismiss,
-            modifier = Modifier.semantics { contentDescription = "Close add friend dialog" },
-        ) { Text("X", color = Muted) }
-    }
-}
-
-@Composable
-private fun AddFriendBody(
-    friendInput: String,
-    showPreviewMessage: Boolean,
-    onInputChange: (String) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Your username: @demo_trader", color = Green)
-        Text("Your ID: demo-001 (sample account)", color = Muted)
-        OutlinedTextField(
-            value = friendInput,
-            onValueChange = onInputChange,
-            label = { Text("Friend ID or username") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = friendFieldColors(),
-        )
-        Text(
-            if (showPreviewMessage) "Preview only: no request was sent. Friend requests will work once the backend is connected."
-            else "Enter a friend's ID or username. This screen currently uses sample data.",
-            color = Muted,
-        )
-    }
-}
-
-@Composable
-private fun friendFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = Color.White,
-    unfocusedTextColor = Color.White,
-    focusedLabelColor = Green,
-    unfocusedLabelColor = Muted,
-    focusedBorderColor = Green,
-    unfocusedBorderColor = Muted,
-    cursorColor = Green,
-)
-
-/*-------------------------- Trader row -----------------------------*/
-
-@Composable
-private fun TraderRow(trader: SocialTrader, rank: Int?) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .background(if (trader.isYou) Green.copy(alpha = 0.10f) else Color.Transparent)
-            .padding(horizontal = 4.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (rank != null) {
-            Text(
-                rank.toString(),
-                color = if (rank <= 3) Color(0xFFE3BE68) else Muted,
-                modifier = Modifier.width(20.dp),
-                fontWeight = FontWeight.Bold,
-            )
+    val ranked = rankFriends(entries, byReturn)
+    Column(modifier.fillMaxWidth()) {
+        Text("Friends leaderboard", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("You and your accepted friends • USD cash balances", color = Muted)
+        Text("Cash change is measured against starting cash; stock holdings are not included.",
+            color = Muted, style = MaterialTheme.typography.bodySmall)
+        Row {
+            TextButton(onClick = { byReturn = !byReturn }) { Text(if (byReturn) "Cash change %" else "Cash balance", color = Green) }
+            TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Top 5" else "See all", color = Green) }
+            TextButton(enabled = !busy, onClick = { scope.launch { loader.refresh() } }) { Text("Refresh", color = Green) }
         }
-        Box(
-            modifier = Modifier.size(40.dp).background(Green.copy(alpha = 0.18f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(trader.name.split(" ").map { it.first() }.joinToString(""), color = Green)
+        if (busy && !loaded) {
+            Text("Loading leaderboard…", color = Muted)
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = Green)
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(trader.name, color = Color.White, fontWeight = FontWeight.Medium)
-            Text(
-                String.format(Locale.US, "%+.1f%%", trader.returnPercent),
-                color = if (trader.returnPercent >= 0) Green else Color(0xFFF08070),
-                fontSize = 13.sp,
-            )
+        error?.let { Text(it, color = Color(0xFFFFB4AB)) }
+        if (loaded && entries.none { !it.isYou }) Text("Accept a friend request to compare with friends.", color = Muted)
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(if (showAll) ranked else ranked.take(5), key = { _, entry -> entry.user.id }) { index, entry ->
+                Row(Modifier.fillMaxWidth().background(if (entry.isYou) Green.copy(alpha = 0.12f) else Panel,
+                    RoundedCornerShape(12.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(if (entry.cashBalance == null && !byReturn || byReturn && entry.returnPercent == null) "—" else "${index + 1}", color = Green)
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.user.label + if (entry.isYou) " (You)" else "", color = Color.White,
+                            fontWeight = FontWeight.SemiBold)
+                        Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% cash change", it) }
+                            ?: "Cash change unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(entry.cashBalance?.toBigDecimalOrNull()?.let {
+                        NumberFormat.getCurrencyInstance(Locale.US).format(it)
+                    } ?: "Unavailable", color = Color.White)
+                }
+            }
         }
-        Text(
-            NumberFormat.getCurrencyInstance(Locale.US).apply {
-                maximumFractionDigits = 0
-            }.format(trader.totalValue),
-            color = Color.White,
-            fontSize = 14.sp,
-        )
     }
 }

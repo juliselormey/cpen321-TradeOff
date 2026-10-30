@@ -10,6 +10,8 @@ import java.security.cert.CertificateFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
+import com.example.cpen321application.ui.market.data.MarketApiService
+import java.util.concurrent.TimeUnit
 
 object ApiClient {
     private fun createdTrustClient(context: Context): OkHttpClient {
@@ -61,5 +63,26 @@ object ApiClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         return retrofit.create(ApiService::class.java)
+    }
+
+    fun createFriends(context: Context): com.example.cpen321application.ui.social.FriendsApi {
+        val url = BuildConfig.API_BASE_URL.ifBlank { "https://34.169.187.216/" }
+        return Retrofit.Builder()
+            .baseUrl(url.trimEnd('/') + "/")
+            .client(createdTrustClient(context).newBuilder().callTimeout(15, TimeUnit.SECONDS).build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(com.example.cpen321application.ui.social.FriendsApi::class.java)
+    }
+    fun createMarket(context: Context): MarketApiService {
+        val rawUrl = BuildConfig.MARKET_API_BASE_URL.ifBlank {
+            BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }
+        }
+        return Retrofit.Builder()
+            .baseUrl(rawUrl.trimEnd('/') + "/")
+            .client(createdTrustClient(context).newBuilder().callTimeout(12, TimeUnit.SECONDS).build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MarketApiService::class.java)
     }
 }

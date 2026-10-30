@@ -37,7 +37,7 @@ private val AllocationColors = listOf(
 )
 
 @Composable
-fun PortfolioScreen(onBack: () -> Unit) {
+fun PortfolioScreen(onBack: () -> Unit, onSignOut: () -> Unit = {}) {
     // Local Material theme keeps the reference's light styling legible in device dark mode
     // without changing the app theme or other feature screens.
     MaterialTheme(
@@ -56,8 +56,17 @@ fun PortfolioScreen(onBack: () -> Unit) {
         ) {
             item {
                 Column {
-                    TextButton(onClick = onBack, contentPadding = PaddingValues(vertical = 8.dp)) {
-                        Text("‹ Back to home")
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+                            Text("‹ Back to Market", color = PortfolioGreen, fontWeight = FontWeight.SemiBold)
+                        }
+                        TextButton(onClick = onSignOut, contentPadding = PaddingValues(0.dp)) {
+                            Text("Sign Out", color = PortfolioRed, fontWeight = FontWeight.Bold)
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Trade", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)

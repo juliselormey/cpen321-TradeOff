@@ -1,6 +1,7 @@
 package com.example.cpen321application
 
 import android.content.Context
+import com.example.cpen321application.util.SessionManager
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -28,13 +29,28 @@ object ApiClient {
             init(keyStore)
         }
 
-        val sslContext =  SSLContext.getInstance("TLS").apply {
+        val sslContext = SSLContext.getInstance("TLS").apply {
             init(null, tmf.trustManagers, null)
         }
 
         val trustManager = tmf.trustManagers[0] as X509TrustManager
 
-        return OkHttpClient.Builder().sslSocketFactory(sslContext.socketFactory, trustManager).build()
+        return OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.socketFactory, trustManager)
+            .hostnameVerifier { _, _ -> true }
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val token = SessionManager.getToken(context)
+                val request = if (!token.isNullOrEmpty()) {
+                    original.newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
+                } else {
+                    original
+                }
+                chain.proceed(request)
+            }
+            .build()
     }
 
     fun create(context: Context): ApiService {

@@ -37,18 +37,119 @@ internal fun rankFriends(entries: List<LeaderboardEntry>, byReturn: Boolean): Li
     }.thenBy { it.user.id })
 
 @Composable
-fun SocialScreen(onBack: () -> Unit) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(1) }
-    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
-        TextButton(onClick = onBack) { Text("Back to home", color = Green) }
-        Text("Social", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 20.dp))
-        Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp)) {
-            listOf("Leaderboard", "Friends").forEachIndexed { index, label ->
-                Button(onClick = { selectedTab = index }, modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == index) Green else Panel,
-                        contentColor = if (selectedTab == index) Background else Muted)) { Text(label) }
+fun SocialScreen(
+    onBack: () -> Unit,
+    onSignOut: () -> Unit = {}
+) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var sortByReturn by rememberSaveable { mutableStateOf(false) }
+    var showAddFriend by rememberSaveable { mutableStateOf(false) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    var friendsAscending by rememberSaveable { mutableStateOf(true) }
+
+    val isLeaderboard = selectedTab == 0
+    val traders = if (isLeaderboard) leaderboardTraders(sortByReturn) else friendsTraders(friendsAscending)
+    val visibleTraders = if (isLeaderboard && !showAll) traders.take(5) else traders
+    val sortLabel = when {
+        isLeaderboard -> "Sort: ${if (sortByReturn) "Return %" else "Total value"}"
+        else -> "Sort: ${if (friendsAscending) "Name A-Z" else "Name Z-A"}"
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp),
+    ) {
+        SocialTopBar(onBack = onBack, onSignOut = onSignOut)
+        SocialTitle()
+        TabSelector(selectedTab = selectedTab, onSelect = { selectedTab = it })
+        Spacer(Modifier.height(20.dp))
+        TraderPanel(
+            state = PanelState(isLeaderboard, visibleTraders, showAll, sortLabel),
+            actions = PanelActions(
+                onToggleShowAll = { showAll = !showAll },
+                onToggleSort = {
+                    if (isLeaderboard) sortByReturn = !sortByReturn
+                    else friendsAscending = !friendsAscending
+                },
+                onAddFriend = { showAddFriend = true },
+            ),
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Demo portfolios - amounts in USD",
+            color = Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(vertical = 16.dp),
+        )
+    }
+
+    if (showAddFriend) {
+        AddFriendDialog(onDismiss = { showAddFriend = false })
+    }
+}
+
+@Composable
+private fun SocialTopBar(
+    onBack: () -> Unit,
+    onSignOut: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onBack) { Text("Back to Market", color = Green) }
+        TextButton(onClick = onSignOut) { Text("Sign Out", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun SocialTitle() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Social", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TabSelector(selectedTab: Int, onSelect: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf("Leaderboard", "Friends").forEachIndexed { index, title ->
+            val selected = selectedTab == index
+            Button(
+                onClick = { onSelect(index) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (selected) Green else Panel,
+                    contentColor = if (selected) Background else Muted,
+                ),
+            ) { Text(title) }
+        }
+    }
+}
+
+@Composable
+private fun TraderPanel(
+    state: PanelState,
+    actions: PanelActions,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .background(Panel, RoundedCornerShape(20.dp)).padding(16.dp),
+    ) {
+        PanelHeader(state, actions)
+        TextButton(onClick = actions.onToggleSort) { Text(state.sortLabel, color = Green) }
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            itemsIndexed(state.traders, key = { _, trader -> trader.id }) { index, trader ->
+                TraderRow(trader, if (state.isLeaderboard) index + 1 else null)
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
             }
         }
         Spacer(Modifier.height(16.dp))

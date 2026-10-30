@@ -60,9 +60,14 @@ import com.example.cpen321application.ui.theme.CPEN321ApplicationTheme
 import com.example.cpen321application.ui.trade.TradeScreen
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import com.example.cpen321application.util.SessionManager
+
 
 data class BottomNavItem(
     val title: String,
@@ -132,14 +137,23 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Routes.Portfolio) {
+                            val context = LocalContext.current
                             ProtectedView(apiService = apiService) {
-                                PortfolioScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                PortfolioScreen(
+                                    onBack = {
+                                        navController.navigate(Routes.Market) {
+                                            popUpTo(Routes.Market) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onSignOut = {
+                                        SessionManager.clearSession(context)
+                                        navController.navigate(Routes.Login) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
                                     }
-                                })
+                                )
                             }
                         }
 
@@ -152,20 +166,37 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Routes.Social) {
+                            val context = LocalContext.current
                             ProtectedView(apiService = apiService) {
-                                SocialScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                SocialScreen(
+                                    onBack = {
+                                        navController.navigate(Routes.Market) {
+                                            popUpTo(Routes.Market) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onSignOut = {
+                                        SessionManager.clearSession(context)
+                                        navController.navigate(Routes.Login) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
                                     }
-                                })
+                                )
                             }
                         }
 
                         composable(Routes.Trade) { backStackEntry ->
                             val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
-                            TradeScreen(ticker = ticker)
+                            ProtectedView(apiService = apiService) {
+                                TradeScreen(
+                                    ticker = ticker,
+                                    apiService = apiService,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            }
                         }
 
                         composable(Routes.Login) {
@@ -420,10 +451,10 @@ suspend fun googleSignIn(context: Context): GoogleSignInResult {
         throw Exception("Invalid credential type: ${credential.type}")
 
     } catch (e: GetCredentialCancellationException) {
-        Log.i("CredentialManagerException", "User Cancelled Sign-In", e)
+        Log.i("CredentialManagerExc", "User Cancelled Sign-In", e)
         throw e
     } catch (e: GetCredentialException) {
-        Log.e("CredentialManagerException", "Sign-In Failed", e)
+        Log.e("CredentialManagerExc", "Sign-In Failed", e)
         throw e
     }
 }

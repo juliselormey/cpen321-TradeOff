@@ -1,9 +1,6 @@
 package com.example.cpen321application
 
 import android.content.Context
-import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -17,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Person
@@ -28,11 +24,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,18 +62,12 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import retrofit2.awaitResponse
 import java.net.HttpURLConnection
-import java.net.Inet4Address
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-import kotlin.math.abs
 import com.example.cpen321application.util.SessionManager
+
 
 data class BottomNavItem(
     val title: String,
@@ -150,14 +137,23 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Routes.Portfolio) {
+                            val context = LocalContext.current
                             ProtectedView(apiService = apiService) {
-                                PortfolioScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                PortfolioScreen(
+                                    onBack = {
+                                        navController.navigate(Routes.Market) {
+                                            popUpTo(Routes.Market) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onSignOut = {
+                                        SessionManager.clearSession(context)
+                                        navController.navigate(Routes.Login) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
                                     }
-                                })
+                                )
                             }
                         }
 
@@ -170,25 +166,37 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Routes.Social) {
+                            val context = LocalContext.current
                             ProtectedView(apiService = apiService) {
-                                SocialScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                SocialScreen(
+                                    onBack = {
+                                        navController.navigate(Routes.Market) {
+                                            popUpTo(Routes.Market) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    },
+                                    onSignOut = {
+                                        SessionManager.clearSession(context)
+                                        navController.navigate(Routes.Login) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
                                     }
-                                })
+                                )
                             }
                         }
 
                         composable(Routes.Trade) { backStackEntry ->
                             val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
-                            TradeScreen(
-                                ticker = ticker,
-                                onBack = {
-                                    navController.popBackStack()
-                                }
-                            )
+                            ProtectedView(apiService = apiService) {
+                                TradeScreen(
+                                    ticker = ticker,
+                                    apiService = apiService,
+                                    onBack = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            }
                         }
 
                         composable(Routes.Login) {
@@ -475,10 +483,10 @@ suspend fun googleSignIn(context: Context): GoogleSignInResult {
         throw Exception("Invalid credential type: ${credential.type}")
 
     } catch (e: GetCredentialCancellationException) {
-        Log.i("CredentialManagerException", "User Cancelled Sign-In", e)
+        Log.i("CredentialManagerExc", "User Cancelled Sign-In", e)
         throw e
     } catch (e: GetCredentialException) {
-        Log.e("CredentialManagerException", "Sign-In Failed", e)
+        Log.e("CredentialManagerExc", "Sign-In Failed", e)
         throw e
     }
 }

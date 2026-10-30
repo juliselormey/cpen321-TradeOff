@@ -1,5 +1,6 @@
 package com.example.cpen321application.ui.trade
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,18 +27,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cpen321application.ApiService
+import com.example.cpen321application.ExecuteTradeRequest
+import com.example.cpen321application.util.SessionManager
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 data class TradeStockInfo(
@@ -68,9 +76,12 @@ fun getStockInfo(ticker: String): TradeStockInfo {
 @Composable
 fun TradeScreen(
     ticker: String,
+    apiService: ApiService? = null,
     onBack: () -> Unit = {}
 ) {
     val stock = getStockInfo(ticker)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Account & position state
     var availableCash by remember { mutableDoubleStateOf(10000.00) }
@@ -79,9 +90,28 @@ fun TradeScreen(
     // Order form state
     var quantityText by remember { mutableStateOf("") }
     var successMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val quantity = quantityText.toDoubleOrNull() ?: 0.0
     val totalAmount = quantity * stock.price
+
+    // Load initial position and cash balance from backend API
+    LaunchedEffect(stock.ticker) {
+        if (apiService != null && SessionManager.isLoggedIn(context)) {
+            try {
+                val response = apiService.getPosition(stock.ticker)
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+                    availableCash = body.cashBalance
+                    ownedShares = body.ownedQuantity
+                } else {
+                    Log.e("TradeScreen", "Failed to fetch position: ${response.code()}")
+                }
+            } catch (e: Exception) {
+                Log.e("TradeScreen", "Error fetching position", e)
+            }
+        }
+    }
 
     // Validation conditions
     val isQuantityValid = quantity > 0
@@ -90,6 +120,82 @@ fun TradeScreen(
 
     val hasEnoughShares = ownedShares >= quantity
     val isSellEnabled = isQuantityValid && hasEnoughShares
+
+    val handleBuy = {
+        if (isBuyEnabled) {
+            if (apiService != null && SessionManager.isLoggedIn(context)) {
+                scope.launch {
+                    try {
+                        val response = apiService.executeTrade(
+                            ExecuteTradeRequest(
+                                ticker = stock.ticker,
+                                type = "BUY",
+                                quantity = quantity,
+                                pricePerShare = stock.price
+                            )
+                        )
+                        if (response.isSuccessful && response.body() != null) {
+                            val body = response.body()!!
+                            availableCash = body.cashBalance
+                            ownedShares = body.ownedQuantity
+                            successMessage = body.message
+                            errorMessage = null
+                            quantityText = ""
+                        } else {
+                            errorMessage = response.errorBody()?.string() ?: "Failed to execute buy order"
+                        }
+                    } catch (e: Exception) {
+                        Log.e("TradeScreen", "Buy execution error", e)
+                        errorMessage = "Network error executing trade"
+                    }
+                }
+            } else {
+                availableCash -= totalAmount
+                ownedShares += quantity
+                successMessage = "Successfully bought ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
+                errorMessage = null
+                quantityText = ""
+            }
+        }
+    }
+
+    val handleSell = {
+        if (isSellEnabled) {
+            if (apiService != null && SessionManager.isLoggedIn(context)) {
+                scope.launch {
+                    try {
+                        val response = apiService.executeTrade(
+                            ExecuteTradeRequest(
+                                ticker = stock.ticker,
+                                type = "SELL",
+                                quantity = quantity,
+                                pricePerShare = stock.price
+                            )
+                        )
+                        if (response.isSuccessful && response.body() != null) {
+                            val body = response.body()!!
+                            availableCash = body.cashBalance
+                            ownedShares = body.ownedQuantity
+                            successMessage = body.message
+                            errorMessage = null
+                            quantityText = ""
+                        } else {
+                            errorMessage = response.errorBody()?.string() ?: "Failed to execute sell order"
+                        }
+                    } catch (e: Exception) {
+                        Log.e("TradeScreen", "Sell execution error", e)
+                        errorMessage = "Network error executing trade"
+                    }
+                }
+            } else {
+                availableCash += totalAmount
+                ownedShares -= quantity
+                successMessage = "Successfully sold ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
+                errorMessage = null
+                quantityText = ""
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -118,6 +224,7 @@ fun TradeScreen(
             onQuantityChange = { newValue ->
                 quantityText = newValue
                 successMessage = null
+                errorMessage = null
             },
             stockPrice = stock.price,
             ticker = stock.ticker,
@@ -126,19 +233,39 @@ fun TradeScreen(
             ownedShares = ownedShares,
             isBuyEnabled = isBuyEnabled,
             isSellEnabled = isSellEnabled,
-            onBuy = {
-                availableCash -= totalAmount
-                ownedShares += quantity
-                successMessage = "Successfully bought ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
-                quantityText = ""
-            },
-            onSell = {
-                availableCash += totalAmount
-                ownedShares -= quantity
-                successMessage = "Successfully sold ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
-                quantityText = ""
-            }
+            onBuy = handleBuy,
+            onSell = handleSell
         )
+
+        // Error Notification Banner
+        errorMessage?.let { msg ->
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = msg,
+                        color = Color(0xFFC62828),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { errorMessage = null }) {
+                        Text("Dismiss", color = Color(0xFFC62828))
+                    }
+                }
+            }
+        }
 
         // Success Notification Banner
         successMessage?.let { msg ->

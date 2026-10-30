@@ -70,7 +70,10 @@ private fun friendsTraders(ascending: Boolean): List<SocialTrader> {
 /*-------------------------- Social screen -----------------------------*/
 
 @Composable
-fun SocialScreen(onBack: () -> Unit) {
+fun SocialScreen(
+    onBack: () -> Unit,
+    onSignOut: () -> Unit = {}
+) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var sortByReturn by rememberSaveable { mutableStateOf(false) }
     var showAddFriend by rememberSaveable { mutableStateOf(false) }
@@ -88,7 +91,7 @@ fun SocialScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp),
     ) {
-        SocialTopBar(onBack)
+        SocialTopBar(onBack = onBack, onSignOut = onSignOut)
         SocialTitle()
         TabSelector(selectedTab = selectedTab, onSelect = { selectedTab = it })
         Spacer(Modifier.height(20.dp))
@@ -118,14 +121,17 @@ fun SocialScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun SocialTopBar(onBack: () -> Unit) {
+private fun SocialTopBar(
+    onBack: () -> Unit,
+    onSignOut: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack) { Text("Back to home", color = Green) }
-        Text("Sample data", color = Muted, fontSize = 12.sp)
+        TextButton(onClick = onBack) { Text("Back to Market", color = Green) }
+        TextButton(onClick = onSignOut) { Text("Sign Out", color = Color(0xFFEF5350), fontWeight = FontWeight.Bold) }
     }
 }
 

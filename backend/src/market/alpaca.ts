@@ -106,9 +106,9 @@ export class AlpacaProvider implements QuoteProvider {
   }
 
   async fetchQuotes(symbols: readonly string[]): Promise<Record<string, ProviderQuote | MarketProviderError>> {
-    const snapshots = object(await this.request('snapshots', { symbols: symbols.join(',') }));
-    return Object.fromEntries(symbols.map(symbol => {
-      try { return [symbol, parseAlpacaSnapshot(snapshots[symbol])]; }
+    const snapshots = new Map(Object.entries(object(await this.request('snapshots', { symbols: symbols.join(',') }))));
+    return Object.fromEntries(symbols.map((symbol): [string, ProviderQuote | MarketProviderError] => {
+      try { return [symbol, parseAlpacaSnapshot(snapshots.get(symbol))]; }
       catch { return [symbol, new MarketProviderError('PROVIDER_INVALID_DATA', `No valid Alpaca quote for ${symbol}.`)]; }
     }));
   }
@@ -119,7 +119,7 @@ export class AlpacaProvider implements QuoteProvider {
     }).format(this.now());
     const end = new Date(`${date}T00:00:00Z`);
     const start = new Date(end.getTime() - HISTORY_LOOKBACK_DAYS * 86_400_000);
-    const collected: Record<string, PricePoint[] | MarketProviderError> = Object.fromEntries(symbols.map(s => [s, []]));
+    const collected = new Map<string, PricePoint[] | MarketProviderError>(symbols.map(s => [s, []]));
     let pageToken: string | undefined;
     const seenTokens = new Set<string>();
     // The page limit is TOTAL, not per symbol. Follow pagination so later
@@ -134,23 +134,23 @@ export class AlpacaProvider implements QuoteProvider {
       if (response.bars !== null && (typeof response.bars !== 'object' || Array.isArray(response.bars))) {
         throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned invalid batch history.');
       }
-      const bars = object(response.bars);
+      const bars = new Map(Object.entries(object(response.bars)));
       for (const symbol of symbols) {
-        const previous = collected[symbol];
-        const pageBars = bars[symbol];
+        const previous = collected.get(symbol);
+        const pageBars = bars.get(symbol);
         if (previous instanceof MarketProviderError || pageBars == null) continue;
         try {
           if (!Array.isArray(pageBars)) throw new Error('Invalid bar array');
-          collected[symbol] = parseAlpacaBars({ bars: [
+          collected.set(symbol, parseAlpacaBars({ bars: [
             ...(previous ?? []).map(p => ({ t: p.timestamp, c: p.price })),
             ...pageBars,
-          ] });
+          ] }));
         } catch {
-          collected[symbol] = new MarketProviderError('PROVIDER_INVALID_DATA', `Invalid Alpaca history for ${symbol}.`);
+          collected.set(symbol, new MarketProviderError('PROVIDER_INVALID_DATA', `Invalid Alpaca history for ${symbol}.`));
         }
       }
       const next = response.next_page_token;
-      if (next == null) return collected;
+      if (next == null) return Object.fromEntries(collected);
       if (typeof next !== 'string' || !next || seenTokens.has(next)) break;
       seenTokens.add(next);
       pageToken = next;

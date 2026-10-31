@@ -1,19 +1,22 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["node", "jest"],
-
+    "types": [
+      "node",
+      "jest"
+    ],
     "strict": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
-
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
@@ -23,11 +26,11 @@
     "skipLibCheck": true,
     "allowJs": true
   },
-
   "include": [
     "src/**/*.ts",
     "tests/**/*.ts",
     "prisma.config.ts",
-    "jest.config.js"
+    "jest.config.js",
+    "scripts/**/*.ts"
   ]
 }

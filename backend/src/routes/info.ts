@@ -1,5 +1,4 @@
 import {Router, type Request, type Response} from 'express';
-import os from 'os';
 import axios from 'axios';
 import { env } from '../config/env';
 
@@ -10,7 +9,7 @@ router.get('/server-ip', async (_req: Request, res: Response) => {
 
     if (serverIp === 'unknown') {
         try {
-            const response = await axios.get(
+            const response = await axios.get<string>(
               'http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip',
               {
                 headers: { 'Metadata-Flavor': 'Google' },
@@ -19,16 +18,16 @@ router.get('/server-ip', async (_req: Request, res: Response) => {
               }
             );
             serverIp = response.data;
-          } catch (error) {
+          } catch {
             // Silently fail metadata check
           }
     }
 
-    const clientIp = _req.ip || 'unknown';
+    const clientIp = _req.ip ?? 'unknown';
 
     res.json({
         ip: serverIp,
-        clientIp: clientIp
+        clientIp
     });
 })
 

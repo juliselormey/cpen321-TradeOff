@@ -36,10 +36,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-private val Green = Color(0xFF008D50)
-private val Ink = Color(0xFF14251E)
-private val Muted = Color(0xFF64716C)
-private val Red = Color(0xFFBE3345)
+private val Green: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val Red: Color @Composable get() = MaterialTheme.colorScheme.error
 
 @Composable
 fun MarketScreen(onStockSelected: (String) -> Unit) {
@@ -69,12 +69,9 @@ private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Uni
         it.ticker.contains(query, true) || it.companyName.contains(query, true)
     }
     val favorites = stocks.filter { it.isFavorite }
-    MaterialTheme(colorScheme = lightColorScheme(
-        primary = Green, onSurface = Ink, surface = Color.White,
-        secondaryContainer = Color(0xFFE0F2E7), onSecondaryContainer = Green,
-    )) {
+    MaterialTheme {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().background(Color(0xFFF6FAF8)),
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -122,7 +119,7 @@ private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
     val available = state.stocks.count { it.status == "ok" && it.fetchedAt != null }
     val issue = state.error ?: state.stocks.firstNotNullOfOrNull { it.error?.message }
     val connected = issue == null && available == state.stocks.size && available > 0
-    Card(colors = CardDefaults.cardColors(containerColor = if (issue == null) Color(0xFFE9F6EE) else Color(0xFFFFEEF0))) {
+    Card(colors = CardDefaults.cardColors(containerColor = if (issue == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -152,32 +149,11 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(
-                    Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-                        .background(if (stock.ticker == "AAPL") Color(0xFF111111) else Color.White),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    val logo = when (stock.ticker) {
-                        "AAPL" -> R.drawable.ic_stock_apple
-                        "MSFT" -> R.drawable.ic_stock_microsoft
-                        "TSLA" -> R.drawable.ic_stock_tesla
-                        "NVDA" -> R.drawable.ic_stock_nvidia
-                        "GOOGL" -> R.drawable.ic_stock_google
-                        "AMZN" -> R.drawable.ic_stock_amazon
-                        else -> null
-                    }
-                    if (logo != null) Image(
-                        painterResource(logo), "${stock.companyName} logo",
-                        Modifier.fillMaxSize().padding(
-                            if (stock.ticker in listOf("TSLA", "NVDA", "AMZN")) 0.dp else 9.dp,
-                        ),
-                    )
-                    else Text(stock.ticker.take(1), color = Green, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                }
+                StockLogo(stock)
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
                     Text(stock.companyName, color = Muted, fontSize = 12.sp)
@@ -203,20 +179,7 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
                     },
                     color = if (stock.status == "ok") Green else Red, fontSize = 12.sp,
                 )
-                stock.quoteAsOf?.let { Text("Quote: ${time(it, date = true)}", color = Muted, fontSize = 11.sp) }
-                stock.fetchedAt?.let { Text("Fetched: ${time(it)}", color = Muted, fontSize = 11.sp) }
-                val points = stock.history?.points.orEmpty()
-                if (points.size >= 2) {
-                    MarketSparkline(points, accent, stock.ticker)
-                    Text("Cached price history · IEX only", color = Muted, fontSize = 11.sp)
-                } else {
-                    Text("Not enough historical data for a chart yet.", color = Muted, fontSize = 11.sp)
-                }
-                if (stock.history?.status == "stale" || stock.history?.error != null) {
-                    Text("Chart history may be incomplete or stale.", color = Red, fontSize = 11.sp)
-                }
-                stock.error?.let { Text(it.message, color = Red, fontSize = 11.sp) }
-                Text("Prices may stay unchanged outside trading hours.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                StockHistory(stock, accent)
             } else {
                 Text("Market data unavailable", color = Muted, fontSize = 11.sp)
             }
@@ -232,3 +195,48 @@ private fun time(value: String, date: Boolean = false): String = runCatching {
     DateTimeFormatter.ofPattern(if (date) "MMM d, HH:mm:ss 'UTC'" else "HH:mm:ss 'UTC'", Locale.US)
         .withZone(ZoneOffset.UTC).format(Instant.parse(value))
 }.getOrDefault("Unknown time")
+
+@Composable
+private fun StockHistory(stock: MarketStock, accent: Color) {
+    stock.quoteAsOf?.let { Text("Quote: ${time(it, date = true)}", color = Muted, fontSize = 11.sp) }
+    stock.fetchedAt?.let { Text("Fetched: ${time(it)}", color = Muted, fontSize = 11.sp) }
+    val points = stock.history?.points.orEmpty()
+    if (points.size >= 2) {
+        MarketSparkline(points, accent, stock.ticker)
+        Text("Cached price history · IEX only", color = Muted, fontSize = 11.sp)
+    } else {
+        Text("Not enough historical data for a chart yet.", color = Muted, fontSize = 11.sp)
+    }
+    if (stock.history?.status == "stale" || stock.history?.error != null) {
+        Text("Chart history may be incomplete or stale.", color = Red, fontSize = 11.sp)
+    }
+    stock.error?.let { Text(it.message, color = Red, fontSize = 11.sp) }
+    Text("Prices may stay unchanged outside trading hours.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+
+}
+
+@Composable
+private fun StockLogo(stock: MarketStock) {
+    Box(
+        Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
+            .background(if (stock.ticker == "AAPL") Color(0xFF111111) else Color.White),
+        contentAlignment = Alignment.Center,
+    ) {
+        val logo = when (stock.ticker) {
+            "AAPL" -> R.drawable.ic_stock_apple
+            "MSFT" -> R.drawable.ic_stock_microsoft
+            "TSLA" -> R.drawable.ic_stock_tesla
+            "NVDA" -> R.drawable.ic_stock_nvidia
+            "GOOGL" -> R.drawable.ic_stock_google
+            "AMZN" -> R.drawable.ic_stock_amazon
+            else -> null
+        }
+        if (logo != null) Image(
+            painterResource(logo), "${stock.companyName} logo",
+            Modifier.fillMaxSize().padding(
+                if (stock.ticker in listOf("TSLA", "NVDA", "AMZN")) 0.dp else 9.dp,
+            ),
+        )
+        else Text(stock.ticker.take(1), color = Green, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+    }
+}

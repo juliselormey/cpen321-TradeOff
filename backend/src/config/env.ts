@@ -17,9 +17,14 @@ export function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string, fallback: string): string {
+  const value = new Map(Object.entries(process.env)).get(name);
+  return value === undefined || value === '' ? fallback : value;
+}
+
 export const env = {
   port,
-  sslKeyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '../../certs/key.pem'),
-  sslCertPath: process.env.SSL_CERT_PATH || path.join(__dirname, '../../certs/cert.pem'),
-  serverPublicIp: process.env.SERVER_PUBLIC_IP || 'unknown',
+  sslKeyPath: optionalEnv('SSL_KEY_PATH', path.join(__dirname, '../../certs/key.pem')),
+  sslCertPath: optionalEnv('SSL_CERT_PATH', path.join(__dirname, '../../certs/cert.pem')),
+  serverPublicIp: optionalEnv('SERVER_PUBLIC_IP', 'unknown'),
 } as const;

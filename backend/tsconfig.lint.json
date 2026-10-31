@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "scripts",
+    "outDir": ".lint-tools"
+  },
+  "include": ["scripts/**/*.ts"]
+}

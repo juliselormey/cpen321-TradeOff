@@ -30,6 +30,7 @@ test.each([
     ["get", "/"], ["get", "/requests"], ["post", "/requests"],
     ["post", "/requests/one/accept"], ["delete", "/requests/one"], ["delete", "/one"],
 ] as const)("%s %s requires authentication", async (method, path) => {
+    // eslint-disable-next-line security/detect-object-injection -- Method is restricted to the literal test cases above.
     await request(app)[method](`/api/friends${path}`).expect(401);
     expect(friendships.create).not.toHaveBeenCalled();
 });

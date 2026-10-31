@@ -12,7 +12,8 @@ const legacyUserId = /^[1-9][0-9]{0,9}$/;
 friendsRouter.use(requireAuth);
 
 friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
-    const userId = req.userId!;
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     // Query relationships in the same statement as profiles, so only currently
     // accepted friends (in either direction) and the caller are returned.
     const users = await db.user.findMany({
@@ -29,14 +30,16 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
         user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
         isYou: user.id === userId,
         cashBalance: user.account?.cashBalance.toString() ?? null,
-        returnPercent: user.account && user.account.startingBalance.greaterThan(0)
+        returnPercent: user.account?.startingBalance.greaterThan(0)
             ? user.account.cashBalance.minus(user.account.startingBalance)
-                .dividedBy(user.account.startingBalance).times(100).toNumber() : null,
+                .dividedBy(user.account.startingBalance).times(100).toNumber()
+            : null,
     })) });
 }));
 
 friendsRouter.get("/", asyncHandler(async (req, res) => {
-    const userId = req.userId!;
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const rows = await db.friendship.findMany({
         where: { status: "ACCEPTED", OR: [{ senderId: userId }, { recipientId: userId }] },
         include: profiles,
@@ -49,7 +52,8 @@ friendsRouter.get("/", asyncHandler(async (req, res) => {
 }));
 
 friendsRouter.get("/requests", asyncHandler(async (req, res) => {
-    const userId = req.userId!;
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const rows = await db.friendship.findMany({
         where: { status: "PENDING", OR: [{ senderId: userId }, { recipientId: userId }] },
         include: profiles,
@@ -60,7 +64,8 @@ friendsRouter.get("/requests", asyncHandler(async (req, res) => {
 }));
 
 friendsRouter.post("/requests", asyncHandler(async (req, res) => {
-    const userId = req.userId!;
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const target: unknown = req.body?.userId;
     if (typeof target !== "string" || (!uuid.test(target) && !legacyUserId.test(target))) {
         res.status(400).json({ error: "userId must be a UUID or a legacy numeric ID string" });
@@ -94,9 +99,11 @@ friendsRouter.post("/requests", asyncHandler(async (req, res) => {
 }));
 
 friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     // Conditional writes prevent outsiders, senders, and stale requests from changing state.
     const result = await db.friendship.updateMany({
-        where: { id: String(req.params.id), recipientId: req.userId!, status: "PENDING" },
+        where: { id: String(req.params.id), recipientId: userId, status: "PENDING" },
         data: { status: "ACCEPTED" },
     });
     if (!result.count) {
@@ -107,9 +114,11 @@ friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
 }));
 
 friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const result = await db.friendship.deleteMany({ where: {
         id: String(req.params.id), status: "PENDING",
-        OR: [{ senderId: req.userId! }, { recipientId: req.userId! }],
+        OR: [{ senderId: userId }, { recipientId: userId }],
     } });
     if (!result.count) {
         res.status(404).json({ error: "Request not found" });
@@ -119,9 +128,11 @@ friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
 }));
 
 friendsRouter.delete("/:id", asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const result = await db.friendship.deleteMany({ where: {
         id: String(req.params.id), status: "ACCEPTED",
-        OR: [{ senderId: req.userId! }, { recipientId: req.userId! }],
+        OR: [{ senderId: userId }, { recipientId: userId }],
     } });
     if (!result.count) {
         res.status(404).json({ error: "Friendship not found" });

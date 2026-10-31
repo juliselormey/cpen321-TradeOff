@@ -26,10 +26,10 @@ import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
 
-private val Background = Color(0xFF090D10)
-private val Panel = Color(0xFF141A1E)
-private val Green = Color(0xFF87CB70)
-private val Muted = Color(0xFFA4ADB3)
+private val Background: Color @Composable get() = MaterialTheme.colorScheme.background
+private val Panel: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val Green: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 
 internal fun rankFriends(entries: List<LeaderboardEntry>, byReturn: Boolean): List<LeaderboardEntry> =
     entries.sortedWith(compareByDescending<LeaderboardEntry> {
@@ -39,21 +39,23 @@ internal fun rankFriends(entries: List<LeaderboardEntry>, byReturn: Boolean): Li
 @Composable
 fun SocialScreen(onBack: () -> Unit) {
     var selectedTab by rememberSaveable { mutableIntStateOf(1) }
-    Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
-        TextButton(onClick = onBack) { Text("Back to home", color = Green) }
-        Text("Social", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 20.dp))
-        Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp)) {
-            listOf("Leaderboard", "Friends").forEachIndexed { index, label ->
-                Button(onClick = { selectedTab = index }, modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTab == index) Green else Panel,
-                        contentColor = if (selectedTab == index) Background else Muted)) { Text(label) }
+    MaterialTheme {
+        Column(Modifier.fillMaxSize().background(Background).padding(horizontal = 20.dp)) {
+            TextButton(onClick = onBack) { Text("Back to home", color = Green) }
+            Text("Social", color = MaterialTheme.colorScheme.onSurface, fontSize = 32.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 20.dp))
+            Row(Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(16.dp)).padding(4.dp)) {
+                listOf("Leaderboard", "Friends").forEachIndexed { index, label ->
+                    Button(onClick = { selectedTab = index }, modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedTab == index) Green else Panel,
+                            contentColor = if (selectedTab == index) MaterialTheme.colorScheme.onPrimary else Muted)) { Text(label) }
+                }
             }
+            Spacer(Modifier.height(16.dp))
+            if (selectedTab == 1) FriendsPanel(Modifier.weight(1f))
+            else FriendsLeaderboard(Modifier.weight(1f))
         }
-        Spacer(Modifier.height(16.dp))
-        if (selectedTab == 1) FriendsPanel(Modifier.weight(1f))
-        else FriendsLeaderboard(Modifier.weight(1f))
     }
 }
 
@@ -89,7 +91,7 @@ internal fun FriendsLeaderboard(modifier: Modifier, suppliedLoader: LeaderboardL
     }
     val ranked = rankFriends(entries, byReturn)
     Column(modifier.fillMaxWidth()) {
-        Text("Friends leaderboard", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Friends leaderboard", color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text("You and your accepted friends • USD cash balances", color = Muted)
         Text("Cash change is measured against starting cash; stock holdings are not included.",
             color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -102,22 +104,23 @@ internal fun FriendsLeaderboard(modifier: Modifier, suppliedLoader: LeaderboardL
             Text("Loading leaderboard…", color = Muted)
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = Green)
         }
-        error?.let { Text(it, color = Color(0xFFFFB4AB)) }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (loaded && entries.none { !it.isYou }) Text("Accept a friend request to compare with friends.", color = Muted)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(if (showAll) ranked else ranked.take(5), key = { _, entry -> entry.user.id }) { index, entry ->
                 Row(Modifier.fillMaxWidth().background(if (entry.isYou) Green.copy(alpha = 0.12f) else Panel,
                     RoundedCornerShape(12.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (entry.cashBalance == null && !byReturn || byReturn && entry.returnPercent == null) "—" else "${index + 1}", color = Green)
+                    val hasRankingValue = if (byReturn) entry.returnPercent != null else entry.cashBalance != null
+                    Text(if (!hasRankingValue) "—" else "${index + 1}", color = Green)
                     Column(Modifier.weight(1f)) {
-                        Text(entry.user.label + if (entry.isYou) " (You)" else "", color = Color.White,
+                        Text(entry.user.label + if (entry.isYou) " (You)" else "", color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold)
                         Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% cash change", it) }
                             ?: "Cash change unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
                     }
                     Text(entry.cashBalance?.toBigDecimalOrNull()?.let {
                         NumberFormat.getCurrencyInstance(Locale.US).format(it)
-                    } ?: "Unavailable", color = Color.White)
+                    } ?: "Unavailable", color = MaterialTheme.colorScheme.onSurface)
                 }
             }
         }

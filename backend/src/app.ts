@@ -21,6 +21,7 @@ export function createApp(): Express {
   app.use('/api/market', createMarketRouter());
   app.use("/api/auth",authRouter);
   app.use("/api/auth", usersRouter);
+  app.use("/api/users", usersRouter);
   app.use("/api/friends", friendsRouter);
 
 

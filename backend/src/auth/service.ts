@@ -25,7 +25,7 @@ export async function findOrCreateUser(google: {
         @typescript-eslint/no-unsafe-call */
         return db.user.update({
             where: { id: existing.id },
-            data: { email: google.email, displayName: google.name ?? null },
+            data: { email: google.email },
         });
     }
 

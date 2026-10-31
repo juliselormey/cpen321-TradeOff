@@ -31,6 +31,9 @@ model User {
   refreshTokens RefreshToken[]
   sentFriendships Friendship[] @relation("FriendshipSender")
   receivedFriendships Friendship[] @relation("FriendshipRecipient")
+
+  positions     Position[]
+  trades        Trade[]
 }
 
 enum FriendshipStatus {
@@ -51,8 +54,6 @@ model Friendship {
 
   @@index([senderId, status])
   @@index([recipientId, status])
-  positions     Position[]
-  trades        Trade[]
 }
 
 model Account {

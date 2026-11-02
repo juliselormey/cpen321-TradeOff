@@ -1,6 +1,9 @@
-# TradeOff README
+# README: TradeOff installation guide
 
-_Keep this README up to date with the steps required to build and run the frontend and backend (including any scripts, config files, and environment variables). TAs ill follow these instructions._
+> [!CAUTION]
+> _Keep this README up to date with the steps required to build and run the frontend and backend (including any scripts, config files, and environment variables). TAs ill follow these instructions._
+> 
+> (we should probably complete enough of this section to help our peer reviewers)
 
 ## Requirements
 

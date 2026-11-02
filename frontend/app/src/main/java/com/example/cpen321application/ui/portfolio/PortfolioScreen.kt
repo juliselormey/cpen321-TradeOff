@@ -34,11 +34,12 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
 
-private val PortfolioGreen = Color(0xFF008D50)
-private val PortfolioRed = Color(0xFFBE3345)
-private val PortfolioInk = Color(0xFF14251E)
-private val PortfolioMuted = Color(0xFF64716C)
-private val PortfolioBorder = Color(0xFFE1EBE5)
+// Scoped to this feature until a shared product palette is agreed upon.
+private val PortfolioGreen: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val PortfolioRed: Color @Composable get() = MaterialTheme.colorScheme.error
+private val PortfolioInk: Color @Composable get() = MaterialTheme.colorScheme.onSurface
+private val PortfolioMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val PortfolioBorder: Color @Composable get() = MaterialTheme.colorScheme.outlineVariant
 private val AllocationColors = listOf(
     Color(0xFF00AD69), Color(0xFF82D687), Color(0xFF3984FF),
     Color(0xFFFFCE45), Color(0xFF9BA5B2), Color(0xFFE040FB),
@@ -128,15 +129,7 @@ fun PortfolioScreen(
     val totalCostBasis = evaluatedHoldings.sumOf { it.costBasis }
     val totalReturnPercent = if (totalCostBasis > 0) (totalProfitLoss / totalCostBasis) * 100 else 0.0
 
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = PortfolioGreen,
-            background = Color(0xFFF6FAF8),
-            surface = Color.White,
-            onSurface = PortfolioInk,
-            onBackground = PortfolioInk,
-        ),
-    ) {
+    MaterialTheme {
         LazyColumn(
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
@@ -255,7 +248,7 @@ private fun PortfolioSummaryCard(
     totalProfitLoss: Double,
     totalReturnPercent: Double
 ) {
-    PortfolioPanel(tint = Color(0xFFEDFAF2)) {
+    PortfolioPanel(tint = MaterialTheme.colorScheme.primaryContainer) {
         Text("Total Portfolio Value", color = PortfolioMuted, fontSize = 16.sp)
         Text(money(totalValue), fontSize = 36.sp, fontWeight = FontWeight.Bold)
         Text("Holdings + available virtual cash", color = PortfolioMuted, fontSize = 12.sp)
@@ -326,7 +319,7 @@ private fun HoldingCard(holding: EvaluatedHolding) {
     PortfolioPanel {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(
-                modifier = Modifier.size(42.dp).background(Color(0xFFEEF5F0), RoundedCornerShape(12.dp)),
+                modifier = Modifier.size(42.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(holding.ticker.take(2), color = PortfolioGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -378,7 +371,7 @@ private fun TransactionCard(trade: TradeHistoryItemResponse) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 modifier = Modifier.size(36.dp).background(
-                    if (isBuy) Color(0xFFE0F5E9) else Color(0xFFFFE9EC), CircleShape,
+                    if (isBuy) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer, CircleShape,
                 ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -407,7 +400,7 @@ private fun SectionTitle(title: String, detail: String) {
 }
 
 @Composable
-private fun PortfolioPanel(tint: Color = Color.White, content: @Composable ColumnScope.() -> Unit) {
+private fun PortfolioPanel(tint: Color = MaterialTheme.colorScheme.surface, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .background(tint, RoundedCornerShape(20.dp))

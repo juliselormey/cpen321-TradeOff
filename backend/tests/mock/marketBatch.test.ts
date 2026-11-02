@@ -18,8 +18,8 @@ function fixture() {
     price: 200 + i, change: i, percentageChange: i / 2, quoteAsOf: new Date(START).toISOString(),
   }]));
   const histories = Object.fromEntries(LIVE_SYMBOLS.map(s => [s, history]));
-  const fetchQuotes = jest.fn(async (_symbols: readonly string[]) => quotes);
-  const fetchHistories = jest.fn(async (_symbols: readonly string[]) => histories);
+  const fetchQuotes = jest.fn<Promise<typeof quotes>, [readonly string[]]>().mockResolvedValue(quotes);
+  const fetchHistories = jest.fn<Promise<typeof histories>, [readonly string[]]>().mockResolvedValue(histories);
   const fetchQuote = jest.fn();
   const fetchHistory = jest.fn();
   const service = new MarketService({ fetchQuotes, fetchHistories, fetchQuote, fetchHistory }, () => clock);

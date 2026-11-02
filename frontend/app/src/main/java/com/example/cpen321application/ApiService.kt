@@ -5,6 +5,8 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.PATCH
+import retrofit2.http.Header
 
 data class GoogleAuthRequest(val idToken: String)
 data class GoogleAuthResponse(val accessToken: String)
@@ -94,6 +96,12 @@ data class PortfolioSummaryResponse(
 )
 
 interface ApiService {
+    @GET("/api/users/me")
+    suspend fun profile(@Header("Authorization") authorization: String): Response<ProfileResponse>
+    @PATCH("/api/users/me")
+    suspend fun updateProfile(@Header("Authorization") authorization: String,
+        @Body profile: ProfileUpdate): Response<ProfileResponse>
+
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
 
@@ -118,3 +126,8 @@ interface ApiService {
     @GET("/api/portfolio")
     suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
 }
+
+
+data class UserProfile(val id: String, val email: String, val displayName: String?, val username: String?)
+data class ProfileResponse(val user: UserProfile)
+data class ProfileUpdate(val displayName: String, val username: String)

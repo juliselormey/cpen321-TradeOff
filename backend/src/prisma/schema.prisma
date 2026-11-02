@@ -17,6 +17,17 @@ enum TradeType {
   SELL
 }
 
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  PENDING
+  FILLED
+  CANCELLED
+}
+
 model User {
   id          String   @id @default(uuid())
   googleSub   String   @unique
@@ -27,13 +38,14 @@ model User {
   isBanned    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  account       Account?
-  refreshTokens RefreshToken[]
-  sentFriendships Friendship[] @relation("FriendshipSender")
+  account             Account?
+  refreshTokens       RefreshToken[]
+  sentFriendships     Friendship[] @relation("FriendshipSender")
   receivedFriendships Friendship[] @relation("FriendshipRecipient")
 
-  positions     Position[]
-  trades        Trade[]
+  positions Position[]
+  trades    Trade[]
+  orders    Order[]
 }
 
 enum FriendshipStatus {
@@ -42,15 +54,14 @@ enum FriendshipStatus {
 }
 
 model Friendship {
-  id          String @id @default(uuid())
-  // Sorted user IDs ensure one relationship per pair, in either direction.
-  pairKey     String @unique @db.VarChar(73)
+  id          String           @id @default(uuid())
+  pairKey     String           @unique @db.VarChar(73)
   senderId    String
   recipientId String
   status      FriendshipStatus @default(PENDING)
-  createdAt   DateTime @default(now())
-  sender      User @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
-  recipient   User @relation("FriendshipRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
+  sender      User             @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User             @relation("FriendshipRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([senderId, status])
   @@index([recipientId, status])
@@ -103,4 +114,23 @@ model Trade {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  userId        String
+  ticker        String
+  side          TradeType
+  type          OrderType
+  status        OrderStatus @default(PENDING)
+  quantity      Decimal     @db.Decimal(18, 4)
+  limitPrice    Decimal?    @db.Decimal(18, 4)
+  executedPrice Decimal?    @db.Decimal(18, 4)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, ticker])
 }

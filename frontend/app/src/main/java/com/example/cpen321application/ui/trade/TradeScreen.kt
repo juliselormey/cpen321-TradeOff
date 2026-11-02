@@ -1,6 +1,7 @@
 package com.example.cpen321application.ui.trade
 
 import android.util.Log
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,7 +45,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cpen321application.ApiService
-import com.example.cpen321application.ExecuteTradeRequest
+import com.example.cpen321application.ExecuteOrderRequest
+import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -88,38 +91,50 @@ fun TradeScreen(
     var ownedShares by remember { mutableDoubleStateOf(0.0) }
 
     // Order form state
+    var selectedOrderType by remember { mutableStateOf("MARKET") } // "MARKET" or "LIMIT"
     var quantityText by remember { mutableStateOf("") }
+    var limitPriceText by remember { mutableStateOf("") }
+    var pendingOrders by remember { mutableStateOf(emptyList<PendingOrderItem>()) }
+
     var successMessage by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val quantity = quantityText.toDoubleOrNull() ?: 0.0
-    val totalAmount = quantity * stock.price
+    val limitPrice = limitPriceText.toDoubleOrNull()
+    val effectivePrice = if (selectedOrderType == "LIMIT" && limitPrice != null) limitPrice else stock.price
+    val totalAmount = quantity * effectivePrice
 
-    // Load initial position and cash balance from backend API
-    LaunchedEffect(stock.ticker) {
+    suspend fun refreshData() {
         if (apiService != null && SessionManager.isLoggedIn(context)) {
             try {
-                val response = apiService.getPosition(stock.ticker)
-                if (response.isSuccessful && response.body() != null) {
-                    val body = response.body()!!
-                    availableCash = body.cashBalance
-                    ownedShares = body.ownedQuantity
-                } else {
-                    Log.e("TradeScreen", "Failed to fetch position: ${response.code()}")
+                val posRes = apiService.getPosition(stock.ticker)
+                if (posRes.isSuccessful && posRes.body() != null) {
+                    availableCash = posRes.body()!!.cashBalance
+                    ownedShares = posRes.body()!!.ownedQuantity
+                }
+
+                val ordersRes = apiService.getPendingOrders()
+                if (ordersRes.isSuccessful && ordersRes.body() != null) {
+                    pendingOrders = ordersRes.body()!!.orders.filter { it.ticker.equals(stock.ticker, ignoreCase = true) }
                 }
             } catch (e: Exception) {
-                Log.e("TradeScreen", "Error fetching position", e)
+                Log.e("TradeScreen", "Error refreshing data", e)
             }
         }
     }
 
+    LaunchedEffect(stock.ticker) {
+        refreshData()
+    }
+
     // Validation conditions
     val isQuantityValid = quantity > 0
+    val isLimitPriceValid = selectedOrderType != "LIMIT" || (limitPrice != null && limitPrice > 0)
     val hasEnoughCash = availableCash >= totalAmount
-    val isBuyEnabled = isQuantityValid && hasEnoughCash
+    val isBuyEnabled = isQuantityValid && isLimitPriceValid && hasEnoughCash
 
     val hasEnoughShares = ownedShares >= quantity
-    val isSellEnabled = isQuantityValid && hasEnoughShares
+    val isSellEnabled = isQuantityValid && isLimitPriceValid && hasEnoughShares
 
     val handleBuy = {
         if (isBuyEnabled) {
@@ -127,11 +142,13 @@ fun TradeScreen(
                 scope.launch {
                     try {
                         val response = apiService.executeTrade(
-                            ExecuteTradeRequest(
+                            ExecuteOrderRequest(
                                 ticker = stock.ticker,
-                                type = "BUY",
+                                side = "BUY",
+                                type = selectedOrderType,
                                 quantity = quantity,
-                                pricePerShare = stock.price
+                                pricePerShare = stock.price,
+                                limitPrice = if (selectedOrderType == "LIMIT") limitPrice else null
                             )
                         )
                         if (response.isSuccessful && response.body() != null) {
@@ -141,20 +158,23 @@ fun TradeScreen(
                             successMessage = body.message
                             errorMessage = null
                             quantityText = ""
+                            limitPriceText = ""
+                            refreshData()
                         } else {
                             errorMessage = response.errorBody()?.string() ?: "Failed to execute buy order"
                         }
                     } catch (e: Exception) {
                         Log.e("TradeScreen", "Buy execution error", e)
-                        errorMessage = "Network error executing trade"
+                        errorMessage = "Network error executing order"
                     }
                 }
             } else {
                 availableCash -= totalAmount
-                ownedShares += quantity
-                successMessage = "Successfully bought ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
+                if (selectedOrderType == "MARKET") ownedShares += quantity
+                successMessage = "Order submitted successfully!"
                 errorMessage = null
                 quantityText = ""
+                limitPriceText = ""
             }
         }
     }
@@ -165,11 +185,13 @@ fun TradeScreen(
                 scope.launch {
                     try {
                         val response = apiService.executeTrade(
-                            ExecuteTradeRequest(
+                            ExecuteOrderRequest(
                                 ticker = stock.ticker,
-                                type = "SELL",
+                                side = "SELL",
+                                type = selectedOrderType,
                                 quantity = quantity,
-                                pricePerShare = stock.price
+                                pricePerShare = stock.price,
+                                limitPrice = if (selectedOrderType == "LIMIT") limitPrice else null
                             )
                         )
                         if (response.isSuccessful && response.body() != null) {
@@ -179,20 +201,23 @@ fun TradeScreen(
                             successMessage = body.message
                             errorMessage = null
                             quantityText = ""
+                            limitPriceText = ""
+                            refreshData()
                         } else {
                             errorMessage = response.errorBody()?.string() ?: "Failed to execute sell order"
                         }
                     } catch (e: Exception) {
                         Log.e("TradeScreen", "Sell execution error", e)
-                        errorMessage = "Network error executing trade"
+                        errorMessage = "Network error executing order"
                     }
                 }
             } else {
                 availableCash += totalAmount
-                ownedShares -= quantity
-                successMessage = "Successfully sold ${String.format(Locale.US, "%.2f", quantity)} shares of ${stock.ticker} for $${String.format(Locale.US, "%.2f", totalAmount)}!"
+                if (selectedOrderType == "MARKET") ownedShares -= quantity
+                successMessage = "Order submitted successfully!"
                 errorMessage = null
                 quantityText = ""
+                limitPriceText = ""
             }
         }
     }
@@ -203,32 +228,38 @@ fun TradeScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        // Navigation Header
         TradeTopBar(ticker = stock.ticker, onBack = onBack)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stock Header Card
         StockHeaderCard(stock = stock)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Account & Position Card
         AccountPositionCard(availableCash = availableCash, ownedShares = ownedShares)
 
         Spacer(modifier = Modifier.height(20.dp))
 
         // Order Entry Card
         OrderEntryCard(
+            selectedOrderType = selectedOrderType,
+            onOrderTypeChange = { selectedOrderType = it },
             quantityText = quantityText,
-            onQuantityChange = { newValue ->
-                quantityText = newValue
+            onQuantityChange = {
+                quantityText = it
+                successMessage = null
+                errorMessage = null
+            },
+            limitPriceText = limitPriceText,
+            onLimitPriceChange = {
+                limitPriceText = it
                 successMessage = null
                 errorMessage = null
             },
             stockPrice = stock.price,
             ticker = stock.ticker,
             quantity = quantity,
+            limitPrice = limitPrice,
             availableCash = availableCash,
             ownedShares = ownedShares,
             isBuyEnabled = isBuyEnabled,
@@ -237,7 +268,30 @@ fun TradeScreen(
             onSell = handleSell
         )
 
-        // Error Notification Banner
+        // Pending Limit Orders Section
+        if (pendingOrders.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(20.dp))
+            PendingOrdersCard(
+                orders = pendingOrders,
+                onCancelOrder = { orderId ->
+                    if (apiService != null) {
+                        scope.launch {
+                            try {
+                                val cancelRes = apiService.cancelOrder(orderId)
+                                if (cancelRes.isSuccessful) {
+                                    successMessage = "Pending order cancelled successfully"
+                                    refreshData()
+                                }
+                            } catch (e: Exception) {
+                                errorMessage = "Failed to cancel order"
+                            }
+                        }
+                    }
+                }
+            )
+        }
+
+        // Error Banner
         errorMessage?.let { msg ->
             Spacer(modifier = Modifier.height(16.dp))
             Card(
@@ -267,7 +321,7 @@ fun TradeScreen(
             }
         }
 
-        // Success Notification Banner
+        // Success Banner
         successMessage?.let { msg ->
             Spacer(modifier = Modifier.height(16.dp))
             SuccessNotificationBanner(message = msg, onDismiss = { successMessage = null })
@@ -381,11 +435,16 @@ fun AccountPositionCard(
 
 @Composable
 fun OrderEntryCard(
+    selectedOrderType: String,
+    onOrderTypeChange: (String) -> Unit,
     quantityText: String,
     onQuantityChange: (String) -> Unit,
+    limitPriceText: String,
+    onLimitPriceChange: (String) -> Unit,
     stockPrice: Double,
     ticker: String,
     quantity: Double,
+    limitPrice: Double?,
     availableCash: Double,
     ownedShares: Double,
     isBuyEnabled: Boolean,
@@ -393,7 +452,8 @@ fun OrderEntryCard(
     onBuy: () -> Unit,
     onSell: () -> Unit
 ) {
-    val totalAmount = quantity * stockPrice
+    val effectivePrice = if (selectedOrderType == "LIMIT" && limitPrice != null) limitPrice else stockPrice
+    val totalAmount = quantity * effectivePrice
     val isQuantityValid = quantity > 0
     val hasEnoughCash = availableCash >= totalAmount
     val hasEnoughShares = ownedShares >= quantity
@@ -410,6 +470,33 @@ fun OrderEntryCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Order Type Selector Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { onOrderTypeChange("MARKET") },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedOrderType == "MARKET") MaterialTheme.colorScheme.primary else Color.LightGray
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Market Order")
+                }
+                Button(
+                    onClick = { onOrderTypeChange("LIMIT") },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedOrderType == "LIMIT") MaterialTheme.colorScheme.primary else Color.LightGray
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Limit Order")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             OutlinedTextField(
                 value = quantityText,
                 onValueChange = { newValue ->
@@ -423,6 +510,24 @@ fun OrderEntryCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
+
+            // Limit Price Field (Visible only when Limit Order is selected)
+            if (selectedOrderType == "LIMIT") {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = limitPriceText,
+                    onValueChange = { newValue ->
+                        if (newValue.isEmpty() || newValue.matches(Regex("^\\d*\\.?\\d*$"))) {
+                            onLimitPriceChange(newValue)
+                        }
+                    },
+                    label = { Text("Limit Price ($)") },
+                    placeholder = { Text("e.g. ${String.format(Locale.US, "%.2f", stockPrice)}") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -444,6 +549,12 @@ fun OrderEntryCard(
             if (quantityText.isNotEmpty() && !isQuantityValid) {
                 Text(
                     text = "Please enter a valid quantity greater than 0.",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp
+                )
+            } else if (selectedOrderType == "LIMIT" && limitPriceText.isNotEmpty() && (limitPrice == null || limitPrice <= 0)) {
+                Text(
+                    text = "Please enter a valid limit price greater than 0.",
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 13.sp
                 )
@@ -470,13 +581,64 @@ fun OrderEntryCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Separate Action Buttons Container
             TradeActionButtons(
                 onBuy = onBuy,
                 onSell = onSell,
                 isBuyEnabled = isBuyEnabled,
                 isSellEnabled = isSellEnabled
             )
+        }
+    }
+}
+
+@Composable
+fun PendingOrdersCard(
+    orders: List<PendingOrderItem>,
+    onCancelOrder: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Active Pending Orders",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            orders.forEach { order ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        val sideColor = if (order.side == "BUY") Color(0xFF2E7D32) else Color(0xFFC62828)
+                        Text(
+                            text = "${order.side} ${order.quantity} ${order.ticker} @ $${String.format(Locale.US, "%.2f", order.limitPrice ?: 0.0)}",
+                            fontWeight = FontWeight.Bold,
+                            color = sideColor,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = "Limit Order • ${order.status}",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { onCancelOrder(order.id) },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Cancel", fontSize = 12.sp, color = Color(0xFFC62828))
+                    }
+                }
+            }
         }
     }
 }

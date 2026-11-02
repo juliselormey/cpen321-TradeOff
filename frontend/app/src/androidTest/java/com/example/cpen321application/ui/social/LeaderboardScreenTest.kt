@@ -28,8 +28,8 @@ class LeaderboardScreenTest {
             override suspend fun leaderboard(auth: String): Response<LeaderboardResponse> {
                 if (hang) delay(10_000)
                 return Response.success(LeaderboardResponse(listOf(
-                LeaderboardEntry(FriendProfile("me", "Test Me", null), true, "10000", 0.0),
-                LeaderboardEntry(FriendProfile("friend", "Test Friend", null), false, "11000", 10.0),
+                LeaderboardEntry(FriendProfile("me", "Test Me", null), true, "10000", 0.0, "10000"),
+                LeaderboardEntry(FriendProfile("friend", "Test Friend", null), false, "0", 10.0, "11000"),
             )))
             }
         }
@@ -40,6 +40,8 @@ class LeaderboardScreenTest {
         compose.setContent { FriendsLeaderboard(Modifier.fillMaxSize(), loader) }
         compose.waitUntil(5_000) { loader.state.value.loaded }
         compose.onNodeWithText("Test Friend").assertIsDisplayed()
+        compose.onNodeWithText("$11,000.00").assertIsDisplayed()
+        compose.onNodeWithText("Portfolio value").assertIsDisplayed()
         compose.onNodeWithText("Test Me (You)").assertIsDisplayed()
         compose.onNodeWithText("Loading leaderboard…").assertDoesNotExist()
     }

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { db } from "../prisma/db";
 import { asyncHandler } from "../util/asyncHandler";
+import { Prisma } from "../generated/prisma/client";
+import { marketService } from "../market/service";
 
 export const friendsRouter = Router();
 const publicProfile = { id: true, displayName: true, avatarUrl: true } as const;
@@ -22,19 +24,49 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
             { sentFriendships: { some: { recipientId: userId, status: "ACCEPTED" } } },
             { receivedFriendships: { some: { senderId: userId, status: "ACCEPTED" } } },
         ] },
-        select: { ...publicProfile, account: { select: { cashBalance: true, startingBalance: true } } },
+        select: { ...publicProfile, account: { select: { cashBalance: true, startingBalance: true } },
+            positions: { select: { ticker: true, quantity: true } },
+            orders: { where: { status: "PENDING", side: "BUY", type: "LIMIT" },
+                select: { quantity: true, limitPrice: true } },
+        },
         orderBy: { id: "asc" },
     });
+    // Reuse the shared market cache once per distinct symbol, not once per friend.
+    const symbols = [...new Set(users.flatMap(user => user.positions
+        .filter(position => position.quantity.greaterThan(0)).map(position => position.ticker)))];
+    const prices = new Map(await Promise.all(symbols.map(async ticker => {
+        try {
+            const stock = await marketService.getStock(ticker);
+            const price = stock.currentPrice == null ? null : new Prisma.Decimal(stock.currentPrice);
+            return [ticker, price?.isFinite() && price.greaterThan(0) ? price : null] as const;
+        } catch {
+            return [ticker, null] as const;
+        }
+    })));
     res.setHeader("Cache-Control", "no-store");
-    res.json({ entries: users.map(user => ({
-        user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
-        isYou: user.id === userId,
-        cashBalance: user.account?.cashBalance.toString() ?? null,
-        returnPercent: user.account?.startingBalance.greaterThan(0)
-            ? user.account.cashBalance.minus(user.account.startingBalance)
-                .dividedBy(user.account.startingBalance).times(100).toNumber()
-            : null,
-    })) });
+    res.json({ entries: users.map(user => {
+        let total = user.account?.cashBalance ?? null;
+        for (const order of user.orders) {
+            // Pending buys reserve cash at placement; it still belongs to the user.
+            if (total && order.limitPrice) total = total.plus(order.quantity.times(order.limitPrice));
+        }
+        for (const position of user.positions) {
+            if (!position.quantity.greaterThan(0)) continue;
+            const price = prices.get(position.ticker);
+            if (!price) { total = null; break; }
+            if (total) total = total.plus(position.quantity.times(price));
+        }
+        return {
+            user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
+            isYou: user.id === userId,
+            cashBalance: user.account?.cashBalance.toString() ?? null,
+            totalPortfolioValue: total?.toString() ?? null,
+            returnPercent: total && user.account?.startingBalance.greaterThan(0)
+                ? total.minus(user.account.startingBalance)
+                    .dividedBy(user.account.startingBalance).times(100).toNumber()
+                : null,
+        };
+    }) });
 }));
 
 friendsRouter.get("/", asyncHandler(async (req, res) => {

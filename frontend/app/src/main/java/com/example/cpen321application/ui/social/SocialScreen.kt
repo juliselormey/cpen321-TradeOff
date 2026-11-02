@@ -54,7 +54,7 @@ private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 
 internal fun rankFriends(entries: List<LeaderboardEntry>, byReturn: Boolean): List<LeaderboardEntry> =
     entries.sortedWith(compareByDescending<LeaderboardEntry> {
-        if (byReturn) it.returnPercent?.let(BigDecimal::valueOf) else it.cashBalance?.toBigDecimalOrNull()
+        if (byReturn) it.returnPercent?.let(BigDecimal::valueOf) else it.totalPortfolioValue?.toBigDecimalOrNull()
     }.thenBy { it.user.id })
 
 @Composable
@@ -163,12 +163,12 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
     val ranked = rankFriends(entries, byReturn)
     Column(modifier.fillMaxWidth()) {
         Text("Friends leaderboard", color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("You and your accepted friends • USD cash balances", color = Muted)
-        Text("Cash change is measured against starting cash; stock holdings are not included.",
+        Text("You and your accepted friends • USD total portfolio values", color = Muted)
+        Text("Portfolio value includes cash, reserved cash and stock holdings at the latest available prices.",
             color = Muted, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { byReturn = !byReturn }) { Text(if (byReturn) "Cash change %" else "Cash balance", color = Green) }
+            TextButton(onClick = { byReturn = !byReturn }) { Text(if (byReturn) "Return %" else "Portfolio value", color = Green) }
             TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Top 5" else "See all", color = Green) }
             TextButton(enabled = !busy, onClick = { scope.launch { loader.refresh() } }) { Text("Refresh", color = Green) }
         }
@@ -183,15 +183,15 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
             itemsIndexed(if (showAll) ranked else ranked.take(5), key = { _, entry -> entry.user.id }) { index, entry ->
                 Row(Modifier.fillMaxWidth().background(if (entry.isYou) Green.copy(alpha = 0.12f) else Panel,
                     RoundedCornerShape(12.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val hasRankingValue = if (byReturn) entry.returnPercent != null else entry.cashBalance != null
+                    val hasRankingValue = if (byReturn) entry.returnPercent != null else entry.totalPortfolioValue != null
                     Text(if (!hasRankingValue) "—" else "${index + 1}", color = Green)
                     Column(Modifier.weight(1f)) {
                         Text(entry.user.label + if (entry.isYou) " (You)" else "", color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold)
-                        Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% cash change", it) }
-                            ?: "Cash change unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
+                        Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% total return", it) }
+                            ?: "Return unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
                     }
-                    Text(entry.cashBalance?.toBigDecimalOrNull()?.let {
+                    Text(entry.totalPortfolioValue?.toBigDecimalOrNull()?.let {
                         NumberFormat.getCurrencyInstance(Locale.US).format(it)
                     } ?: "Unavailable", color = MaterialTheme.colorScheme.onSurface)
                 }

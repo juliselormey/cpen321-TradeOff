@@ -51,4 +51,11 @@ class LeaderboardLoaderTest {
         assertFalse(loader.state.value.loading)
         assertTrue(loader.state.value.error!!.contains("session expired"))
     }
+    @Test fun rankingUsesPortfolioValueInsteadOfCashAndKeepsUnavailableLast() {
+        val invested = LeaderboardEntry(FriendProfile("invested", "Investor", null), false, "0", 20.0, "12000")
+        val cash = LeaderboardEntry(FriendProfile("cash", "Cash", null), false, "10000", 0.0, "10000")
+        val unavailable = LeaderboardEntry(FriendProfile("unknown", "Unknown", null), false, "50000", null)
+        assertEquals(listOf(invested, cash, unavailable), rankFriends(listOf(cash, unavailable, invested), false))
+        assertEquals(listOf(invested, cash, unavailable), rankFriends(listOf(cash, unavailable, invested), true))
+    }
 }

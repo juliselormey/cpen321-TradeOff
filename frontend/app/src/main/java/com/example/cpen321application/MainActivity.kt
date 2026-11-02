@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
                             val context = LocalContext.current
                             ProtectedView(apiService = apiService) {
                                 PortfolioScreen(
+                                    apiService = apiService,
                                     onBack = {
                                         navController.navigate(Routes.Market) {
                                             popUpTo(Routes.Market) { saveState = true }

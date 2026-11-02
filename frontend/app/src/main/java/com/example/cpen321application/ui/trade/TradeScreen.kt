@@ -44,8 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cpen321application.ApiClient
 import com.example.cpen321application.ApiService
-import com.example.cpen321application.ExecuteOrderRequest
+import com.example.cpen321application.ExecuteLimitOrderRequest
+import com.example.cpen321application.ExecuteMarketOrderRequest
 import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.launch
@@ -86,6 +88,8 @@ fun TradeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var currentMarketPrice by remember { mutableDoubleStateOf(stock.price) }
+
     // Account & position state
     var availableCash by remember { mutableDoubleStateOf(10000.00) }
     var ownedShares by remember { mutableDoubleStateOf(0.0) }
@@ -101,10 +105,22 @@ fun TradeScreen(
 
     val quantity = quantityText.toDoubleOrNull() ?: 0.0
     val limitPrice = limitPriceText.toDoubleOrNull()
-    val effectivePrice = if (selectedOrderType == "LIMIT" && limitPrice != null) limitPrice else stock.price
+    val effectivePrice = if (selectedOrderType == "LIMIT" && limitPrice != null) limitPrice else currentMarketPrice
     val totalAmount = quantity * effectivePrice
 
     suspend fun refreshData() {
+        try {
+            val marketApi = ApiClient.createMarket(context)
+            val marketRes = marketApi.getStocks()
+            val matchedStock = marketRes.stocks.find { it.ticker.equals(stock.ticker, ignoreCase = true) }
+            val livePrice = matchedStock?.currentPrice?.toDoubleOrNull()
+            if (livePrice != null) {
+                currentMarketPrice = livePrice
+            }
+        } catch (e: Exception) {
+            Log.e("TradeScreen", "Failed to fetch live market price", e)
+        }
+
         if (apiService != null && SessionManager.isLoggedIn(context)) {
             try {
                 val posRes = apiService.getPosition(stock.ticker)
@@ -136,21 +152,33 @@ fun TradeScreen(
     val hasEnoughShares = ownedShares >= quantity
     val isSellEnabled = isQuantityValid && isLimitPriceValid && hasEnoughShares
 
+    val activeStockInfo = stock.copy(price = currentMarketPrice)
+
     val handleBuy = {
         if (isBuyEnabled) {
             if (apiService != null && SessionManager.isLoggedIn(context)) {
                 scope.launch {
                     try {
-                        val response = apiService.executeTrade(
-                            ExecuteOrderRequest(
-                                ticker = stock.ticker,
-                                side = "BUY",
-                                type = selectedOrderType,
-                                quantity = quantity,
-                                pricePerShare = stock.price,
-                                limitPrice = if (selectedOrderType == "LIMIT") limitPrice else null
+                        val response = if (selectedOrderType == "LIMIT") {
+                            apiService.executeLimitOrder(
+                                ExecuteLimitOrderRequest(
+                                    ticker = stock.ticker,
+                                    side = "BUY",
+                                    quantity = quantity,
+                                    pricePerShare = currentMarketPrice,
+                                    limitPrice = limitPrice ?: currentMarketPrice
+                                )
                             )
-                        )
+                        } else {
+                            apiService.executeMarketOrder(
+                                ExecuteMarketOrderRequest(
+                                    ticker = stock.ticker,
+                                    side = "BUY",
+                                    quantity = quantity,
+                                    pricePerShare = currentMarketPrice
+                                )
+                            )
+                        }
                         if (response.isSuccessful && response.body() != null) {
                             val body = response.body()!!
                             availableCash = body.cashBalance
@@ -184,16 +212,26 @@ fun TradeScreen(
             if (apiService != null && SessionManager.isLoggedIn(context)) {
                 scope.launch {
                     try {
-                        val response = apiService.executeTrade(
-                            ExecuteOrderRequest(
-                                ticker = stock.ticker,
-                                side = "SELL",
-                                type = selectedOrderType,
-                                quantity = quantity,
-                                pricePerShare = stock.price,
-                                limitPrice = if (selectedOrderType == "LIMIT") limitPrice else null
+                        val response = if (selectedOrderType == "LIMIT") {
+                            apiService.executeLimitOrder(
+                                ExecuteLimitOrderRequest(
+                                    ticker = stock.ticker,
+                                    side = "SELL",
+                                    quantity = quantity,
+                                    pricePerShare = currentMarketPrice,
+                                    limitPrice = limitPrice ?: currentMarketPrice
+                                )
                             )
-                        )
+                        } else {
+                            apiService.executeMarketOrder(
+                                ExecuteMarketOrderRequest(
+                                    ticker = stock.ticker,
+                                    side = "SELL",
+                                    quantity = quantity,
+                                    pricePerShare = currentMarketPrice
+                                )
+                            )
+                        }
                         if (response.isSuccessful && response.body() != null) {
                             val body = response.body()!!
                             availableCash = body.cashBalance
@@ -232,7 +270,7 @@ fun TradeScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        StockHeaderCard(stock = stock)
+        StockHeaderCard(stock = activeStockInfo)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -240,7 +278,6 @@ fun TradeScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Order Entry Card
         OrderEntryCard(
             selectedOrderType = selectedOrderType,
             onOrderTypeChange = { selectedOrderType = it },
@@ -256,7 +293,7 @@ fun TradeScreen(
                 successMessage = null
                 errorMessage = null
             },
-            stockPrice = stock.price,
+            stockPrice = currentMarketPrice,
             ticker = stock.ticker,
             quantity = quantity,
             limitPrice = limitPrice,
@@ -268,7 +305,6 @@ fun TradeScreen(
             onSell = handleSell
         )
 
-        // Pending Limit Orders Section
         if (pendingOrders.isNotEmpty()) {
             Spacer(modifier = Modifier.height(20.dp))
             PendingOrdersCard(
@@ -291,7 +327,6 @@ fun TradeScreen(
             )
         }
 
-        // Error Banner
         errorMessage?.let { msg ->
             Spacer(modifier = Modifier.height(16.dp))
             Card(
@@ -321,7 +356,6 @@ fun TradeScreen(
             }
         }
 
-        // Success Banner
         successMessage?.let { msg ->
             Spacer(modifier = Modifier.height(16.dp))
             SuccessNotificationBanner(message = msg, onDismiss = { successMessage = null })
@@ -470,7 +504,6 @@ fun OrderEntryCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Order Type Selector Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -511,7 +544,6 @@ fun OrderEntryCard(
                 singleLine = true
             )
 
-            // Limit Price Field (Visible only when Limit Order is selected)
             if (selectedOrderType == "LIMIT") {
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -545,7 +577,6 @@ fun OrderEntryCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Validation Messages
             if (quantityText.isNotEmpty() && !isQuantityValid) {
                 Text(
                     text = "Please enter a valid quantity greater than 0.",

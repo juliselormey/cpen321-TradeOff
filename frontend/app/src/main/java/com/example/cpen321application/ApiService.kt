@@ -68,6 +68,31 @@ data class CancelOrderResponse(
     val message: String
 )
 
+// Portfolio Models
+data class HoldingItemResponse(
+    val ticker: String,
+    val quantity: Double,
+    val averageCost: Double
+)
+
+data class TradeHistoryItemResponse(
+    val id: String,
+    val ticker: String,
+    val type: String,
+    val quantity: Double,
+    val pricePerShare: Double,
+    val totalAmount: Double,
+    val createdAt: String
+)
+
+data class PortfolioSummaryResponse(
+    val cashBalance: Double,
+    val startingBalance: Double,
+    val holdings: List<HoldingItemResponse>,
+    val recentTrades: List<TradeHistoryItemResponse>,
+    val pendingOrders: List<PendingOrderItem>
+)
+
 interface ApiService {
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
@@ -89,4 +114,7 @@ interface ApiService {
 
     @POST("/api/trades/orders/{id}/cancel")
     suspend fun cancelOrder(@Path("id") orderId: String): Response<CancelOrderResponse>
+
+    @GET("/api/portfolio")
+    suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
 }

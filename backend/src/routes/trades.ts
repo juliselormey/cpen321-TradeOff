@@ -233,10 +233,3 @@ const ZERO = new Prisma.Decimal(0);
  * POST /api/trades/execute (Backward compatible dispatcher)
  */
 
- const marketHandler = placeOrder("MARKET");
- const limitHandler = placeOrder("LIMIT");
-
-tradesRouter.post("/execute", (req: Request, res: Response) => {
-    const type = req.body?.type?.toString().toUpperCase();
-    return type === "LIMIT" ? limitHandler(req, res) : marketHandler(req, res);
-});

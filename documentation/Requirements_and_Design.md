@@ -5,16 +5,15 @@
 | **Change Date** | **Modified Sections**                                                              | **Rationale**                                  |
 | --------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
-| 2026-10-31      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
+| 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
 
 ---
 
 ## 2. Project Description
 
-**TradeOff** is a competitive virtual investing game, which lets users trade stocks with virtual money, build portfolios, and compete against friends using real market data. It is intended for students, young adults, investing beginners, and friends who want to compare their results. Investing can feel complicated, risky, and intimidating; TradeOff turns that practice into an interactive game where users can experiment with strategies and learn without risking real money.
+*TradeOff* is a competitive virtual investing game, which lets users trade stocks with virtual money, build portfolios, and compete against friends using real market data. It is intended for students, young adults, investing beginners, and friends who want to compare their results. Investing can feel complicated, risky, and intimidating; TradeOff turns that practice into an interactive game where users can experiment with strategies and learn without risking real money.
 
-> [!WARNING]
-> ***REWRITE***: Users can invest individually or compete in private investment challenges with an agreed starting amount of virtual money and a set competition period. Real-time portfolio information and leaderboards help users track investments and compare performance. The central technical challenge is representing real stock-market behavior in a playable virtual trading system while keeping market prices and portfolio values updated together.
+Users can practice virtual stock trading using virtual funds, and in real-time see the effects of the market, holding changes, and profits/losses. Real-time portfolio information and leaderboards help users track investments and compare performance between themselves, or against friends. The central technical challenge is representing real stock-market behavior in a playable virtual trading system while keeping market prices and portfolio values updated together.
 
 ---
 
@@ -30,10 +29,7 @@
 
 ### **3.2. Use Case Diagram**
 
-> [!WARNING]
-> remake so they match the new use cases. preface w/ ! to make it show up here
-
-[Use-case diagram reproduced from M2](images/m2-use-case-diagram.png)
+![3.2-use-case-diagram](images/3.2-use-case-diagram.png)
 
 ### **3.3. Actors Description**
 
@@ -44,15 +40,15 @@
 
 ### **3.4. Use Case Description**
 
-1. **[authentication] Sign-up/Sign-in**: Authenticating through the Google Sign-in Interface. If the account doesn't have a linked TradeOff account, one will be created and linked for them.
-2. **[authentication] Sign-out**: Clears authentication for users who are signed in, clearing the session from their TradeOff account and returning them to an unauthenticated user.
-3. **[+] Manage Preferences**: View and edit account and application information, including changing display name and username, or changing application appearance (e.g. light/dark mode). TradeOff will save the changed info accordingly.
-4. **[market] Browse Stocks**: Move though available stocks or use a search bar to view stocks by their company name or ticker symbol. TradeOff shows matching stocks and available market info.
-5. **[trading] Execute Trade**: Select a stock, specify how much of that stock, and choose to buy or sell using the virtual funds. User balance and shares are updated and the trade is recorded.
-6. **[portfolio] Load Portfolio**: View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
-7. **[social] Manage Friend Requests**: Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
-8. **[social] Remove Friend**: Users can remove an existing friend from their friend list. TradeOff will take notice of the removal request and will remove info regarding that friendship.
-9. **[social] View Leaderboard**: View rankings comparing cash balance or percentage cash profits/lossses between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
+1. **[authentication] Sign-up/Sign-in** - Authenticating through the Google Sign-in Interface. If the account doesn't have a linked TradeOff account, one will be created and linked for them.
+2. **[authentication] Sign-out** - Clears authentication for users who are signed in, clearing the session from their TradeOff account and returning them to an unauthenticated user.
+3. **[+] Manage Preferences** - View and edit account and application information, including changing display name and username, or changing application appearance (e.g. light/dark mode). TradeOff will save the changed info accordingly.
+4. **[market] Browse Stocks** - Move though available stocks or use a search bar to view stocks by their company name or ticker symbol. TradeOff shows matching stocks and available market info.
+5. **[trading] Execute Trade** - Select a stock, specify how much of that stock, and choose to buy or sell using the virtual funds. User balance and shares are updated and the trade is recorded.
+6. **[portfolio] Load Portfolio** - View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
+7. **[social] Manage Friend Requests** - Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
+8. **[social] Remove Friend** - Users can remove an existing friend from their friend list. TradeOff will take notice of the removal request and will remove info regarding that friendship.
+9. **[social] View Leaderboard** - View rankings comparing cash balance or percentage cash profits/lossses between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
 
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
@@ -221,7 +217,7 @@
 
 | **Prospective Market screen mockup** | **Prospective Portfolio screen mockup** |
 | --- | --- |
-| ![3.6-market-mockup](3.6-market-mockup.png) | ![3.6-portfolio-mockup](3.6-portfolio-mockup.png) |
+| ![3.6-market-mockup](images/3.6-market-mockup.png) | ![3.6-portfolio-mockup](images/3.6-portfolio-mockup.png) |
 
 ### **3.7. Non-Functional Requirements**
 
@@ -249,125 +245,109 @@
 
 ### **4.1. Main Components**
 
-> [!WARNING]
-> remake so they match what Project Description wants (namely, you need to add interfaces to these!)
-
 | **Component** | **Documented responsibility or connection** |
 | --- | --- |
 | **User Service** | Handles authentication verification, account creation and retrieval, and user information. Centralizing these responsibilities allows other services to rely on a consistent authenticated user identity. |
 | **Social Service** | Manages friend requests, friendships, and leaderboard information stored in the database. Separating social logic keeps relationship management independent of trade execution and market-data retrieval. |
-| **Portfolio Service** | Retrieves account holdings and transaction information and is intended to calculate portfolio valuations using market prices. It is defined separately from the Order Engine because reviewing investments and executing trades have different responsibilities. |
+| **Portfolio Service** | Retrieves account holdings and transaction information and is intended to calculate portfolio valuations using market prices. Different from the Order Engine, reviewing investments and executing trades are different. |
 | **Order Engine** | Processes virtual buy and sell requests and updates the associated cash balances, holdings, and transaction records. Centralizing trade execution supports consistent validation and database updates. |
 | **Market Service** | Retrieves stock information from Alpaca and provides market-data endpoints to the application. Centralizing market-data access avoids requiring each feature to communicate independently with the external provider. |
 | **Market Cache** | Stores recently retrieved market information to reduce repeated external API requests. Caching the data saves calling costs, and gives safe data to the Market Service and Portfolio Service. |
-| **Market Polling** | Periodically refreshes cached stock information. Though a different block, polling the API is partially built into the Market Service. |
-| **Notifier Service** | Planned backend component for sending application notifications through Firebase Cloud Messaging. Separating notification creation from the functional services would allow notification behavior to be managed independently when implemented. |
-| **Google Authentication Service** | Provides external identity authentication for TradeOff users. Using Google avoids implementing a separate password-based authentication system while allowing TradeOff to maintain its own application accounts. |
-| **Alpaca Market Data API** | Supplies external stock-market information used by TradeOff's Market functionality. This service is imperative because TradeOff requires market information from an external provider rather than maintaining its own market-data source. |
-| **Firebase Cloud Messaging** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
+| **Market Polling** | Periodically refreshes cached stock information. Though represented as a different block here, polling the API is partially built into the Market Service. |
+| **Notifier Service** | Planned backend component for sending application notifications through Firebase Cloud Messaging. Separating notification creation from the others lets there be a direct connection to external source Firebase. |
+| **(extern) Google OAuth Platform** | Provides external identity authentication for TradeOff users. Using Google avoids implementing a separate password-based authentication system while allowing TradeOff to maintain its own application accounts. |
+| **(extern) Alpaca Market Data API** | Supplies external stock-market information used by TradeOff's Market functionality. This service is imperative because TradeOff aims to emulate real market information rather than making fake market data. |
+| **(extern) Firebase Cloud Messaging** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
+| **(database) MySQL** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
+
+| **Interface** | **From** | **To** | **Purpose** |
+| --- | --- | --- | --- |
+| `POST /api/auth/google (idToken) → AuthResponse` | Frontend (Auth.) | User Service | Verifies Google credentials, retrieves or creates a user account, and issues a TradeOff authentication token. |
+| `GET /api/users/me (JWT) → UserProfile` | Frontend (Auth.) | User Service | Retrieves the authenticated user's profile information. |
+| `PATCH /api/users/me (JWT, profileChanges) → UserProfile` | Frontend (Auth.) | User Service | Updates supported user profile fields. |
+| `GET /api/market/stocks (searchParams) → StockList` | Frontend (Market) | Market Service | Retrieves stock listings and search results. |
+| `GET /api/market/stocks/:symbol (symbol) → StockDetails` | Frontend (Market) | Market Service | Retrieves stock details and the latest available quote. |
+| `GET /api/market/stocks/:symbol/history (symbol, range) → PriceHistory` | Frontend (Market) | Market Service | Retrieves historical prices for a selected stock. |
+| `POST /api/trades/execute (JWT, symbol, side, quantity, pricePerShare) → TradeResult` | Frontend (Trading) | Order Engine | Executes a virtual buy or sell transaction after validating available funds or holdings. |
+| `GET /api/trades/history (JWT) → TradeList` | Frontend (Trading) | Order Engine | Retrieves the user's previous virtual trades. |
+| `GET /api/portfolio (JWT) → PortfolioSummary` | Frontend (Portfolio) | Portfolio Service | Retrieves cash balances, holdings, and portfolio valuation. **Planned.** |
+| `GET /api/portfolio/performance (JWT, range) → PerformanceHistory` | Frontend (Portfolio) | Portfolio Service | Retrieves portfolio performance over a selected period. |
+| `GET /api/social/users (query) → UserList` | Frontend (Social) | Social Service | Searches for other TradeOff users. |
+| `GET /api/social/friends (JWT) → FriendList` | Frontend (Social) | Social Service | Retrieves the user's accepted friendships. |
+| `GET /api/social/requests (JWT) → FriendRequestList` | Frontend (Social) | Social Service | Retrieves pending friend requests. |
+| `POST /api/social/requests (JWT, recipientId) → FriendRequest` | Frontend (Social) | Social Service | Sends a friend request to another user. |
+| `POST /api/social/requests/:id/accept (JWT, requestId) → Friendship` | Frontend (Social) | Social Service | Accepts a pending friend request. |
+| `POST /api/social/requests/:id/decline (JWT, requestId) → Result` | Frontend (Social) | Social Service | Declines an incoming friend request. |
+| `DELETE /api/social/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Cancels an outgoing friend request. |
+| `DELETE /api/social/friends/:id (JWT, friendId) → Result` | Frontend (Social) | Social Service | Removes an existing friendship. |
+| `GET /api/social/leaderboard (JWT) → Leaderboard` | Frontend (Social) | Social Service | Retrieves friends-only rankings based on virtual cash balances and percentage cash changes. |
+| `StockQuote getStockQuote(String symbol)` | Portfolio Service | Market Service | Supplies stock quotes for portfolio valuation. |
+| `fetchStockQuotes(symbols) → StockQuotes` | Market Service | Alpaca Market Data API | Retrieves current market quotes from Alpaca. |
+| `fetchPriceHistory(symbol, range) → PriceHistory` | Market Service | Alpaca Market Data API | Retrieves historical market prices from Alpaca. |
+| `verifyIdToken(idToken) → GoogleIdentity` | User Service | Google Authentication | Validates a Google ID token and retrieves the verified identity. |
+| `findOrCreateUser(googleIdentity) → User` | User Service | MySQL | Retrieves or creates an account associated with a verified Google identity. |
+| `readOrUpdateFriendships(userId, operation) → SocialResult` | Social Service | MySQL | Retrieves or updates friendship and friend-request records. |
+| `executeTradeTransaction(userId, trade) → TradeResult` | Order Engine | MySQL | Atomically updates virtual cash, holdings, and trade history. |
+| `getPortfolioRecords(userId) → PortfolioRecords` | Portfolio Service | MySQL | Retrieves records needed to calculate portfolio information. |
+| `sendNotification(deviceToken, message) → DeliveryResult` | Notifier | Firebase Cloud Messaging | Requests delivery of a push notification. |
 
 ### **4.2. The Database**
 
-> [!WARNING]
-> remake so they match what Project Description wants
-
-1. **MySQL**
-   - **Purpose**: Store user accounts, virtual cash balances, holdings, trade history, watchlists, and social relationships. The database will support the Auth, Social, Order Engine, Portfolio, and Workers components.
-   - **Rationale**: MySQL supports structured relationships and constraints between users, holdings, and trades. Its transactions allow cash balances, holdings, and trade history to be updated together, preventing partially completed trades.
-   - **Access**: Backend components will access MySQL. The frontend will retrieve and modify data through backend interfaces rather than connecting directly to the database.
+1. **MySQL** - Stores user accounts, virtual cash balances, holdings, trade history, watchlists, social relationships, information for other components, among other data - Chosen as MySQL is popular in supporting the needed data, and in updating said data concurrently, avoiding errors such as partial trades.
 
 ### **4.3. External Modules**
 
-> [!WARNING]
-> remake so they match what Project Description wants
-
-1. **Google Authentication**
-   - **Purpose**: Allow users to sign in using their Google accounts. The Auth component will verify Google authentication credentials and associate the verified identity with a user account stored in MySQL.
-   - **Rationale**: Provides external authentication without using Firebase Authentication.
-2. **Alpaca Market Data API**
-   - **Purpose**: Supply stock prices and market information for stock searches, virtual trading, and portfolio valuation. The Poller component will retrieve market data and update the cache.
-   - **Rationale**: Real market data allows users to practice virtual investing using prices that reflect actual markets.
-3. **Firebase Cloud Messaging (FCM)**
-   - **Purpose**: Deliver push notifications, such as stock-price alerts, to users' Android devices through the Notifier component.
-   - **Rationale**: The course permits Firebase's push notification functionality. Firebase will not be used for authentication, database management, or other application operations.
+1. **Google Authentication** - Allows safe linkage between TradeOff and Google accounts - Chosen so we can authenticate in our app without using Firebase.
+2. **Alpaca Market Data API** - Supplies stock prices and market information for stock searches, virtual trading, and portfolio valuation - Chosen because real market data will help the app reflect normal markets, its main purpose!
+3. **Firebase Cloud Messaging (FCM)** - Deliver push notifications to relay important info - Chosen as it supports Android notifications (and is permitted by the course).
 
 ### **4.4. Frameworks and Libraries**
 
-> [!WARNING]
-> remake so they match what Project Description wants
-
-1. **Jetpack Compose**
-   - **Purpose**: Build the Android application's user interface.
-   - **Reason**: Required by the course and supports screens that react to changes in application state.
-
-2. **Express.js**
-   - **Purpose**: Implement backend API routes and request handling.
-   - **Reason**: Provides a straightforward framework for organizing the Node.js/TypeScript backend.
-
-3. **Retrofit and OkHttp**
-   - **Purpose**: Handle HTTP communication between the Android application and backend.
-   - **Reason**: Provide structured API definitions and configurable network connections.
-
-4. **Android Credential Manager and Google ID**
-   - **Purpose**: Support Google account sign-in.
-   - **Reason**: Integrate external authentication with Android without using Firebase Authentication.
-
-5. **Socket.IO and ws**
-   - **Purpose**: Support real-time communication and WebSocket connections.
-   - **Reason**: Allow the system to exchange updates through persistent connections.
-
-6. **Prisma (Planned)**
-   - **Purpose**: Define database models, manage migrations, and access MySQL from the backend.
-   - **Reason**: Provides typed database queries and transactions for consistent updates.
-
-7. **Firebase Cloud Messaging SDK (Planned)**
-   - **Purpose**: Send and receive push notifications.
-   - **Reason**: Supports Android notifications and is the Firebase functionality permitted by the course.
-
-8. **Jest and Supertest**
-   - **Purpose**: Run automated backend tests and verify HTTP API behavior.
-   - **Reason**: Support repeatable testing and coverage measurement.
-
-9. **Compose Testing APIs**
-   - **Purpose**: Automate interactions with Android Compose screens.
-   - **Reason**: Support verification of user flows through the application.
+1. **Jetpack Compose** - Builds the user interface - Chosen as it's required by the course and supports screens that react to changes in application state.
+2. **Express.js** - Implements backend API routes and request-handling - Chosen as it's straightforward in organizing the Node.js/TypeScript backend.
+3. **Retrofit + OkHttp** - Handles HTTP communication between the frontend and backend - Chosen as it provides structured API definitions and customizable connection.
+4. **Android Credential Manager** - Support for things relevant to Google sign-in - Chosen so we can authenticate in our app without using Firebase.
+6. **Prisma** - Defines database models, manages migrations, and accesses MySQL from the backend - Chosen for typed database queries and transactions for consistent updates.
+7. **Firebase Cloud Messaging SDK (Planned)** - Send and receive push notifications - Chosen as it's needed to support the FCM external module.
+8. **Jest and Supertest** - Runs automated backend tests and verifies HTTP API behavior - Chosen for constant and consistent testing of endpoints and backend code w/ coverage.
+9. **Compose Testing APIs** - Automates interactions with Android Compose screens - Chosen to support verification of user flows through TradeOff.
 
 ### **4.5. Dependencies Diagram**
 
 > [!WARNING]
-> remake so they match the new components. preface w/ ! to make it show up here
+> (remove this) might need to remake this so its consistent with 4.1
 
-[High-level design reproduced from M2, slide 5](images/m2-high-level-design.png)
+![H4.5-high-level-dependencies-diagram](images/4.5-high-level-dependencies-diagram.png)
 
 ### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
 
 > [!WARNING]
-> remake so they match the new use cases. preface w/ ! to make them show up here
+> (remove this) remake so they match the new use cases. lifelines should be the dependencies and messages between them should be the interfaces, add more interfaces above if we need them. preface the graphics w/ ! to make them show up here
 
-1. **Buy Shares**
+1. **Browse Stocks**
 
-[Buy Shares sequence diagram](images/sequence-buy-shares.png)
+![4.6-browse-stocks-sequence](images/4.6-browse-stocks-sequence.png)
 
-2. **Sell Shares**
+2. **Execute Trade**
 
-[Sell Shares sequence diagram](images/sequence-sell-shares.png)
+![4.6-execute-trade-sequence](images/4.6-execute-trade-sequence.png)
 
-3. **Manage Watchlist**
+3. **View Portfolio**
 
-[Manage Watchlist sequence diagram](images/sequence-manage-watchlist.png)
+![4.6-view-portfolio-sequence](images/4.6-view-portfolio-sequence.png)
 
-4. **View Live Portfolio**
+4. **Manage Friend Requests**
 
-[View Live Portfolio sequence diagram](images/sequence-view-live-portfolio.png)
+![4.6-manage-friend-requests-sequence](images/4.6-manage-friend-requests-sequence.png)
 
 5. **View Leaderboard**
 
-[View Leaderboard sequence diagram](images/sequence-view-leaderboard.png)
+![4.6-view-leaderboard-sequence](images/4.6-view-leaderboard-sequence.png)
 
 ### **4.7. Design of Non-Functional Requirements**
 
 > [!WARNING]
-> we may need specific implementation to be mentioned here if any
+> (remove this) these should be up to date, but we may need specific implementation to be mentioned here if any
 
 <a name="nfrd1"></a>
 

@@ -29,6 +29,14 @@ import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.PortfolioSummaryResponse
 import com.example.cpen321application.TradeHistoryItemResponse
 import com.example.cpen321application.util.SessionManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
@@ -65,46 +73,66 @@ fun PortfolioScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val refreshLock = remember { Mutex() }
+    val service = remember(context, apiService) { apiService ?: ApiClient.create(context) }
+    val marketApi = remember(context) { ApiClient.createMarket(context) }
 
     var summary by remember { mutableStateOf<PortfolioSummaryResponse?>(null) }
     var stockPrices by remember { mutableStateOf(mapOf<String, Double>()) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    suspend fun loadPortfolioData() {
-        if (SessionManager.isLoggedIn(context)) {
-            isLoading = true
-            try {
-                // Load live prices from Market API
-                val marketApi = ApiClient.createMarket(context)
-                val marketRes = marketApi.getStocks()
-                if (marketRes.stocks.isNotEmpty()) {
-                    val priceMap = marketRes.stocks
-                        .filter { it.currentPrice != null }
-                        .associate { it.ticker.uppercase(Locale.US) to (it.currentPrice?.toDoubleOrNull() ?: 100.0) }
-                    stockPrices = priceMap
-                }
-
-                // Load portfolio summary from Backend API
-                val service = apiService ?: ApiClient.create(context)
-                val response = service.getPortfolio()
-                if (response.isSuccessful && response.body() != null) {
-                    summary = response.body()
-                    errorMessage = null
-                } else {
-                    errorMessage = "Failed to load portfolio"
-                }
-            } catch (e: Exception) {
-                Log.e("PortfolioScreen", "Error loading portfolio", e)
-                errorMessage = "Network error loading portfolio"
-            } finally {
-                isLoading = false
+    suspend fun loadPortfolioData() = refreshLock.withLock {
+        if (!SessionManager.isLoggedIn(context)) return@withLock
+        isLoading = true
+        try {
+            val response = service.getPortfolio()
+            if (response.isSuccessful && response.body() != null) {
+                summary = response.body()
+                errorMessage = null
+            } else {
+                errorMessage = "Failed to load portfolio"
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            Log.e("PortfolioScreen", "Error loading portfolio", e)
+            errorMessage = "Network error loading portfolio"
+        } finally {
+            isLoading = false
         }
     }
 
-    LaunchedEffect(Unit) {
-        loadPortfolioData()
+    suspend fun refreshPrices() {
+        try {
+            val prices = marketApi.getStocks().stocks.mapNotNull { stock ->
+                val price = stock.currentPrice?.toDoubleOrNull() ?: return@mapNotNull null
+                stock.ticker.uppercase(Locale.US) to price
+            }.toMap()
+            stockPrices = stockPrices + prices
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
+            Log.w("PortfolioScreen", "Error refreshing prices", e)
+        }
+    }
+
+    LaunchedEffect(lifecycle, service, marketApi) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                while (isActive) {
+                    loadPortfolioData()
+                    delay(8_000)
+                }
+            }
+            launch {
+                while (isActive) {
+                    refreshPrices()
+                    delay(8_000)
+                }
+            }
+        }
     }
 
     // Evaluate live values of holdings
@@ -216,11 +244,12 @@ fun PortfolioScreen(
                         onCancel = { orderId ->
                             scope.launch {
                                 try {
-                                    val service = apiService ?: ApiClient.create(context)
                                     val res = service.cancelOrder(orderId)
                                     if (res.isSuccessful) {
                                         loadPortfolioData()
                                     }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
                                 } catch (e: Exception) {
                                     Log.e("PortfolioScreen", "Error cancelling order", e)
                                 }

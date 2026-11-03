@@ -50,6 +50,14 @@ import com.example.cpen321application.ExecuteLimitOrderRequest
 import com.example.cpen321application.ExecuteMarketOrderRequest
 import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.util.SessionManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -88,7 +96,11 @@ fun TradeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var currentMarketPrice by remember { mutableDoubleStateOf(stock.price) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val marketApi = remember(context) { ApiClient.createMarket(context) }
+    val accountRefreshLock = remember(stock.ticker) { Mutex() }
+    var currentMarketPrice by remember(stock.ticker) { mutableDoubleStateOf(stock.price) }
+    var marketChange by remember(stock.ticker) { mutableDoubleStateOf(stock.change) }
 
     // Account & position state
     var availableCash by remember { mutableDoubleStateOf(10000.00) }
@@ -108,19 +120,23 @@ fun TradeScreen(
     val effectivePrice = if (selectedOrderType == "LIMIT" && limitPrice != null) limitPrice else currentMarketPrice
     val totalAmount = quantity * effectivePrice
 
-    suspend fun refreshData() {
+    suspend fun refreshQuote() {
         try {
-            val marketApi = ApiClient.createMarket(context)
             val marketRes = marketApi.getStocks()
             val matchedStock = marketRes.stocks.find { it.ticker.equals(stock.ticker, ignoreCase = true) }
             val livePrice = matchedStock?.currentPrice?.toDoubleOrNull()
             if (livePrice != null) {
                 currentMarketPrice = livePrice
+                matchedStock.percentageChange?.let { marketChange = it }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Log.e("TradeScreen", "Failed to fetch live market price", e)
         }
+    }
 
+    suspend fun refreshAccount() = accountRefreshLock.withLock {
         if (apiService != null && SessionManager.isLoggedIn(context)) {
             try {
                 val posRes = apiService.getPosition(stock.ticker)
@@ -133,14 +149,29 @@ fun TradeScreen(
                 if (ordersRes.isSuccessful && ordersRes.body() != null) {
                     pendingOrders = ordersRes.body()!!.orders.filter { it.ticker.equals(stock.ticker, ignoreCase = true) }
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Log.e("TradeScreen", "Error refreshing data", e)
             }
         }
     }
 
-    LaunchedEffect(stock.ticker) {
-        refreshData()
+    LaunchedEffect(stock.ticker, lifecycle, marketApi, apiService) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                while (isActive) {
+                    refreshQuote()
+                    delay(8_000)
+                }
+            }
+            launch {
+                while (isActive) {
+                    refreshAccount()
+                    delay(8_000)
+                }
+            }
+        }
     }
 
     // Validation conditions
@@ -152,7 +183,7 @@ fun TradeScreen(
     val hasEnoughShares = ownedShares >= quantity
     val isSellEnabled = isQuantityValid && isLimitPriceValid && hasEnoughShares
 
-    val activeStockInfo = stock.copy(price = currentMarketPrice)
+    val activeStockInfo = stock.copy(price = currentMarketPrice, change = marketChange)
 
     val handleBuy = {
         if (isBuyEnabled) {
@@ -181,16 +212,20 @@ fun TradeScreen(
                         }
                         if (response.isSuccessful && response.body() != null) {
                             val body = response.body()!!
-                            availableCash = body.cashBalance
-                            ownedShares = body.ownedQuantity
+                            accountRefreshLock.withLock {
+                                availableCash = body.cashBalance
+                                ownedShares = body.ownedQuantity
+                            }
                             successMessage = body.message
                             errorMessage = null
                             quantityText = ""
                             limitPriceText = ""
-                            refreshData()
+                            refreshAccount()
                         } else {
                             errorMessage = response.errorBody()?.string() ?: "Failed to execute buy order"
                         }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (e: Exception) {
                         Log.e("TradeScreen", "Buy execution error", e)
                         errorMessage = "Network error executing order"
@@ -234,16 +269,20 @@ fun TradeScreen(
                         }
                         if (response.isSuccessful && response.body() != null) {
                             val body = response.body()!!
-                            availableCash = body.cashBalance
-                            ownedShares = body.ownedQuantity
+                            accountRefreshLock.withLock {
+                                availableCash = body.cashBalance
+                                ownedShares = body.ownedQuantity
+                            }
                             successMessage = body.message
                             errorMessage = null
                             quantityText = ""
                             limitPriceText = ""
-                            refreshData()
+                            refreshAccount()
                         } else {
                             errorMessage = response.errorBody()?.string() ?: "Failed to execute sell order"
                         }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (e: Exception) {
                         Log.e("TradeScreen", "Sell execution error", e)
                         errorMessage = "Network error executing order"
@@ -316,7 +355,7 @@ fun TradeScreen(
                                 val cancelRes = apiService.cancelOrder(orderId)
                                 if (cancelRes.isSuccessful) {
                                     successMessage = "Pending order cancelled successfully"
-                                    refreshData()
+                                    refreshAccount()
                                 }
                             } catch (e: Exception) {
                                 errorMessage = "Failed to cancel order"

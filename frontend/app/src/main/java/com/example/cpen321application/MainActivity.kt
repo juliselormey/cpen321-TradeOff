@@ -159,15 +159,17 @@ private fun AppDestinations(
     onDarkModeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val openTrade: (String) -> Unit = { ticker -> navController.navigate("Trade/" + ticker) }
     NavHost(navController, startDestination = Routes.Market, modifier = modifier) {
         composable(Routes.Portfolio) {
             ProtectedView(apiService = api) {
                 PortfolioScreen(apiService = api, onBack = { navController.showMarket() },
+                    onStockSelected = openTrade,
                     onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
             }
         }
         composable(Routes.Market) {
-            MarketScreen(onStockSelected = { navController.navigate("Trade/" + it) })
+            MarketScreen(onStockSelected = openTrade)
         }
         composable(Routes.Social) {
             ProtectedView(apiService = api) {

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +30,7 @@ import com.example.cpen321application.HoldingItemResponse
 import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.PortfolioSummaryResponse
 import com.example.cpen321application.TradeHistoryItemResponse
+import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.util.SessionManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -69,7 +72,8 @@ data class EvaluatedHolding(
 fun PortfolioScreen(
     apiService: ApiService? = null,
     onBack: () -> Unit = {},
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onStockSelected: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -231,7 +235,7 @@ fun PortfolioScreen(
                 }
             } else {
                 items(evaluatedHoldings, key = { it.ticker }) { holding ->
-                    HoldingCard(holding)
+                    HoldingCard(holding, onClick = { onStockSelected(holding.ticker) })
                 }
             }
 
@@ -344,15 +348,14 @@ private fun AssetAllocationCard(
 }
 
 @Composable
-private fun HoldingCard(holding: EvaluatedHolding) {
-    PortfolioPanel {
+private fun HoldingCard(holding: EvaluatedHolding, onClick: () -> Unit) {
+    PortfolioPanel(modifier = Modifier.clickable(
+        role = Role.Button,
+        onClickLabel = "Trade ${holding.ticker}",
+        onClick = onClick,
+    )) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                modifier = Modifier.size(42.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(holding.ticker.take(2), color = PortfolioGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
+            StockLogo(holding.ticker, Modifier.size(42.dp))
             Column(Modifier.weight(1f)) {
                 Text(holding.ticker, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text("Avg Cost: ${money(holding.averageCost)}", color = PortfolioMuted, fontSize = 13.sp)
@@ -429,9 +432,13 @@ private fun SectionTitle(title: String, detail: String) {
 }
 
 @Composable
-private fun PortfolioPanel(tint: Color = MaterialTheme.colorScheme.surface, content: @Composable ColumnScope.() -> Unit) {
+private fun PortfolioPanel(
+    modifier: Modifier = Modifier,
+    tint: Color = MaterialTheme.colorScheme.surface,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
             .background(tint, RoundedCornerShape(20.dp))
             .border(1.dp, PortfolioBorder, RoundedCornerShape(20.dp))
             .padding(18.dp),

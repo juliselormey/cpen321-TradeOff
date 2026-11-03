@@ -1,6 +1,5 @@
 package com.example.cpen321application.ui.market
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,8 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -24,7 +21,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cpen321application.ApiClient
-import com.example.cpen321application.R
+import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
 import java.text.NumberFormat
@@ -153,7 +150,7 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StockLogo(stock)
+                StockLogo(stock.ticker)
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
                     Text(stock.companyName, color = Muted, fontSize = 12.sp)
@@ -213,30 +210,4 @@ private fun StockHistory(stock: MarketStock, accent: Color) {
     stock.error?.let { Text(it.message, color = Red, fontSize = 11.sp) }
     Text("Prices may stay unchanged outside trading hours.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
 
-}
-
-@Composable
-private fun StockLogo(stock: MarketStock) {
-    Box(
-        Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (stock.ticker == "AAPL") Color(0xFF111111) else Color.White),
-        contentAlignment = Alignment.Center,
-    ) {
-        val logo = when (stock.ticker) {
-            "AAPL" -> R.drawable.ic_stock_apple
-            "MSFT" -> R.drawable.ic_stock_microsoft
-            "TSLA" -> R.drawable.ic_stock_tesla
-            "NVDA" -> R.drawable.ic_stock_nvidia
-            "GOOGL" -> R.drawable.ic_stock_google
-            "AMZN" -> R.drawable.ic_stock_amazon
-            else -> null
-        }
-        if (logo != null) Image(
-            painterResource(logo), "${stock.companyName} logo",
-            Modifier.fillMaxSize().padding(
-                if (stock.ticker in listOf("TSLA", "NVDA", "AMZN")) 0.dp else 9.dp,
-            ),
-        )
-        else Text(stock.ticker.take(1), color = Green, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-    }
 }

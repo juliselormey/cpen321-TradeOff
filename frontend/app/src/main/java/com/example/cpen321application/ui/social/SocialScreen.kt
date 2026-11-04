@@ -151,15 +151,7 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
     var byReturn by rememberSaveable { mutableStateOf(false) }
     var showAll by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(loader, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            loader.refresh()
-            while (isActive) {
-                delay(15_000)
-                if (loader.state.value.error == null) loader.refresh()
-            }
-        }
-    }
+    LeaderboardPolling(loader, lifecycle)
     val ranked = rankFriends(entries, byReturn)
     Column(modifier.fillMaxWidth()) {
         Text("Friends leaderboard", color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -195,6 +187,19 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
                         NumberFormat.getCurrencyInstance(Locale.US).format(it)
                     } ?: "Unavailable", color = MaterialTheme.colorScheme.onSurface)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeaderboardPolling(loader: LeaderboardLoader, lifecycle: Lifecycle) {
+    LaunchedEffect(loader, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            loader.refresh()
+            while (isActive) {
+                delay(15_000)
+                if (loader.state.value.error == null) loader.refresh()
             }
         }
     }

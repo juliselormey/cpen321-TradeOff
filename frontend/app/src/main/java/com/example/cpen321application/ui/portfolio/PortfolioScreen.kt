@@ -68,79 +68,65 @@ data class EvaluatedHolding(
     val returnPercent: Double get() = if (costBasis > 0) (profitLoss / costBasis) * 100 else 0.0
 }
 
-@Composable
-fun PortfolioScreen(
-    apiService: ApiService? = null,
-    onBack: () -> Unit = {},
-    onSignOut: () -> Unit = {},
-    onStockSelected: (String) -> Unit = {}
+private class PortfolioState(
+    private val context: android.content.Context,
+    private val service: ApiService,
+    private val marketApi: com.example.cpen321application.ui.market.data.MarketApiService,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val refreshLock = remember { Mutex() }
-    val service = remember(context, apiService) { apiService ?: ApiClient.create(context) }
-    val marketApi = remember(context) { ApiClient.createMarket(context) }
-
-    var summary by remember { mutableStateOf<PortfolioSummaryResponse?>(null) }
-    var stockPrices by remember { mutableStateOf(mapOf<String, Double>()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
+    private val refreshLock = Mutex()
+    var summary by mutableStateOf<PortfolioSummaryResponse?>(null)
+    var stockPrices by mutableStateOf(mapOf<String, Double>())
+    var isLoading by mutableStateOf(false)
+    var errorMessage by mutableStateOf<String?>(null)
     suspend fun loadPortfolioData() = refreshLock.withLock {
-        if (!SessionManager.isLoggedIn(context)) return@withLock
-        isLoading = true
-        try {
-            val response = service.getPortfolio()
-            if (response.isSuccessful && response.body() != null) {
-                summary = response.body()
-                errorMessage = null
-            } else {
-                errorMessage = "Failed to load portfolio"
+        if (SessionManager.isLoggedIn(context)) {
+            isLoading = true
+            try {
+                val response = service.getPortfolio()
+                if (response.isSuccessful && response.body() != null) {
+                    summary = response.body()
+                    errorMessage = null
+                } else {
+                    errorMessage = "Failed to load portfolio"
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: java.io.IOException) {
+                Log.e("PortfolioScreen", "Error loading portfolio", e)
+                errorMessage = "Network error loading portfolio"
+            } catch (e: retrofit2.HttpException) {
+                Log.e("PortfolioScreen", "Error loading portfolio", e)
+                errorMessage = "Network error loading portfolio"
+            } catch (e: com.google.gson.JsonParseException) {
+                Log.e("PortfolioScreen", "Error loading portfolio", e)
+                errorMessage = "Network error loading portfolio"
+            } finally {
+                isLoading = false
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (e: Exception) {
-            Log.e("PortfolioScreen", "Error loading portfolio", e)
-            errorMessage = "Network error loading portfolio"
-        } finally {
-            isLoading = false
         }
     }
 
     suspend fun refreshPrices() {
         try {
             val prices = marketApi.getStocks().stocks.mapNotNull { stock ->
-                val price = stock.currentPrice?.toDoubleOrNull() ?: return@mapNotNull null
-                stock.ticker.uppercase(Locale.US) to price
+                stock.currentPrice?.toDoubleOrNull()?.let { price ->
+                    stock.ticker.uppercase(Locale.US) to price
+                }
             }.toMap()
             stockPrices = stockPrices + prices
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (e: Exception) {
+        } catch (e: java.io.IOException) {
+            Log.w("PortfolioScreen", "Error refreshing prices", e)
+        } catch (e: retrofit2.HttpException) {
+            Log.w("PortfolioScreen", "Error refreshing prices", e)
+        } catch (e: com.google.gson.JsonParseException) {
             Log.w("PortfolioScreen", "Error refreshing prices", e)
         }
     }
 
-    LaunchedEffect(lifecycle, service, marketApi) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            launch {
-                while (isActive) {
-                    loadPortfolioData()
-                    delay(8_000)
-                }
-            }
-            launch {
-                while (isActive) {
-                    refreshPrices()
-                    delay(8_000)
-                }
-            }
-        }
-    }
-
     // Evaluate live values of holdings
-    val evaluatedHoldings = summary?.holdings?.map { h ->
+    val evaluatedHoldings get() = summary?.holdings?.map { h ->
         val price = stockPrices[h.ticker.uppercase(Locale.US)] ?: h.averageCost
         val currentValue = h.quantity * price
         val costBasis = h.quantity * h.averageCost
@@ -154,123 +140,164 @@ fun PortfolioScreen(
         )
     } ?: emptyList()
 
-    val cashBalance = summary?.cashBalance ?: 10000.0
-    val investedValue = evaluatedHoldings.sumOf { it.currentValue }
-    val totalPortfolioValue = investedValue + cashBalance
-    val totalProfitLoss = evaluatedHoldings.sumOf { it.profitLoss }
-    val totalCostBasis = evaluatedHoldings.sumOf { it.costBasis }
-    val totalReturnPercent = if (totalCostBasis > 0) (totalProfitLoss / totalCostBasis) * 100 else 0.0
+    val cashBalance get() = summary?.cashBalance ?: 10000.0
+    val investedValue get() = evaluatedHoldings.sumOf { it.currentValue }
+    val totalPortfolioValue get() = investedValue + cashBalance
+    val totalProfitLoss get() = evaluatedHoldings.sumOf { it.profitLoss }
+    val totalCostBasis get() = evaluatedHoldings.sumOf { it.costBasis }
+    val totalReturnPercent get() = if (totalCostBasis > 0) (totalProfitLoss / totalCostBasis) * 100 else 0.0
 
+    suspend fun cancelOrder(orderId: String) {
+        try {
+            if (service.cancelOrder(orderId).isSuccessful) loadPortfolioData()
+        } catch (e: java.io.IOException) {
+            Log.e("PortfolioScreen", "Error cancelling order", e)
+        } catch (e: retrofit2.HttpException) {
+            Log.e("PortfolioScreen", "Error cancelling order", e)
+        } catch (e: com.google.gson.JsonParseException) {
+            Log.e("PortfolioScreen", "Error cancelling order", e)
+        }
+    }
+}
+
+@Composable
+fun PortfolioScreen(
+    apiService: ApiService? = null,
+    onBack: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+    onStockSelected: (String) -> Unit = {},
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val service = remember(context, apiService) { apiService ?: ApiClient.create(context) }
+    val marketApi = remember(context) { ApiClient.createMarket(context) }
+    val state = remember(context, service, marketApi) { PortfolioState(context, service, marketApi) }
+    PortfolioPolling(state)
     MaterialTheme {
         LazyColumn(
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { PortfolioHeader(onBack, onSignOut) }
+            portfolioOverview(state)
+            portfolioHoldings(state.evaluatedHoldings, onStockSelected)
+            portfolioActivity(state.summary) { orderId -> scope.launch { state.cancelOrder(orderId) } }
+        }
+    }
+}
+
+@Composable
+private fun PortfolioPolling(state: PortfolioState) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle, state) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                while (isActive) { state.loadPortfolioData(); delay(8_000) }
+            }
+            launch {
+                while (isActive) { state.refreshPrices(); delay(8_000) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PortfolioHeader(onBack: () -> Unit, onSignOut: () -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+                Text("‹ Back to Market", color = PortfolioGreen, fontWeight = FontWeight.SemiBold)
+            }
+            TextButton(onClick = onSignOut, contentPadding = PaddingValues(0.dp)) {
+                Text("Sign Out", color = PortfolioRed, fontWeight = FontWeight.Bold)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Trade", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Off", color = PortfolioGreen, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+        }
+        Text("Learn. Invest. Grow.", color = PortfolioMuted, fontSize = 14.sp)
+        Text("Portfolio", fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
+    }
+
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.portfolioOverview(state: PortfolioState) {
+    with(state) {
+        if (isLoading && summary == null) {
             item {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                            Text("‹ Back to Market", color = PortfolioGreen, fontWeight = FontWeight.SemiBold)
-                        }
-                        TextButton(onClick = onSignOut, contentPadding = PaddingValues(0.dp)) {
-                            Text("Sign Out", color = PortfolioRed, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Trade", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Off", color = PortfolioGreen, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                    Text("Learn. Invest. Grow.", color = PortfolioMuted, fontSize = 14.sp)
-                    Text("Portfolio", fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 18.dp))
-                }
-            }
-
-            if (isLoading && summary == null) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = PortfolioGreen)
-                    }
-                }
-            }
-
-            errorMessage?.let { msg ->
-                item {
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))) {
-                        Text(msg, color = PortfolioRed, modifier = Modifier.padding(16.dp), fontSize = 14.sp)
-                    }
-                }
-            }
-
-            item {
-                PortfolioSummaryCard(
-                    totalValue = totalPortfolioValue,
-                    cashBalance = cashBalance,
-                    totalProfitLoss = totalProfitLoss,
-                    totalReturnPercent = totalReturnPercent
-                )
-            }
-
-            if (evaluatedHoldings.isNotEmpty()) {
-                item {
-                    AssetAllocationCard(
-                        holdings = evaluatedHoldings,
-                        cashBalance = cashBalance,
-                        totalValue = totalPortfolioValue
-                    )
-                }
-            }
-
-            item { SectionTitle("Holdings", "${evaluatedHoldings.size} assets") }
-
-            if (evaluatedHoldings.isEmpty()) {
-                item {
-                    PortfolioPanel {
-                        Text("No stock holdings yet. Use the Market tab to place trades!", color = PortfolioMuted, fontSize = 14.sp)
-                    }
-                }
-            } else {
-                items(evaluatedHoldings, key = { it.ticker }) { holding ->
-                    HoldingCard(holding, onClick = { onStockSelected(holding.ticker) })
-                }
-            }
-
-            // Pending Limit Orders Section
-            if (summary?.pendingOrders?.isNotEmpty() == true) {
-                item { SectionTitle("Pending Orders", "${summary!!.pendingOrders.size} active orders") }
-                items(summary!!.pendingOrders, key = { it.id }) { order ->
-                    PendingOrderCard(
-                        order = order,
-                        onCancel = { orderId ->
-                            scope.launch {
-                                try {
-                                    val res = service.cancelOrder(orderId)
-                                    if (res.isSuccessful) {
-                                        loadPortfolioData()
-                                    }
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (e: Exception) {
-                                    Log.e("PortfolioScreen", "Error cancelling order", e)
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-
-            // Recent Activity
-            if (summary?.recentTrades?.isNotEmpty() == true) {
-                item { SectionTitle("Recent Activity", "Executed transactions") }
-                items(summary!!.recentTrades, key = { it.id }) { trade ->
-                    TransactionCard(trade)
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PortfolioGreen)
                 }
             }
         }
+
+        errorMessage?.let { msg ->
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))) {
+                    Text(msg, color = PortfolioRed, modifier = Modifier.padding(16.dp), fontSize = 14.sp)
+                }
+            }
+        }
+
+        item {
+            PortfolioSummaryCard(
+                totalValue = totalPortfolioValue,
+                cashBalance = cashBalance,
+                totalProfitLoss = totalProfitLoss,
+                totalReturnPercent = totalReturnPercent
+            )
+        }
+
+        if (evaluatedHoldings.isNotEmpty()) {
+            item {
+                AssetAllocationCard(
+                    holdings = evaluatedHoldings,
+                    cashBalance = cashBalance,
+                    totalValue = totalPortfolioValue
+                )
+            }
+        }
+
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.portfolioHoldings(
+    evaluatedHoldings: List<EvaluatedHolding>, onStockSelected: (String) -> Unit,
+) {
+    item { SectionTitle("Holdings", "${evaluatedHoldings.size} assets") }
+
+    if (evaluatedHoldings.isEmpty()) {
+        item {
+            PortfolioPanel {
+                Text("No stock holdings yet. Use the Market tab to place trades!", color = PortfolioMuted, fontSize = 14.sp)
+            }
+        }
+    } else {
+        items(evaluatedHoldings, key = { it.ticker }) { holding ->
+            HoldingCard(holding, onClick = { onStockSelected(holding.ticker) })
+        }
+    }
+
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.portfolioActivity(
+    summary: PortfolioSummaryResponse?, onCancel: (String) -> Unit,
+) {
+    val pendingOrders = summary?.pendingOrders.orEmpty()
+    if (pendingOrders.isNotEmpty()) {
+        item { SectionTitle("Pending Orders", "${pendingOrders.size} active orders") }
+        items(pendingOrders, key = { it.id }) { order -> PendingOrderCard(order, onCancel) }
+    }
+    val recentTrades = summary?.recentTrades.orEmpty()
+    if (recentTrades.isNotEmpty()) {
+        item { SectionTitle("Recent Activity", "Executed transactions") }
+        items(recentTrades, key = { it.id }) { trade -> TransactionCard(trade) }
     }
 }
 

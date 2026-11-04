@@ -3,8 +3,8 @@
 ## 1. Change History
 
 | **Change Date** | **Modified Sections** | **Rationale** |
-|-----------------| --------------------- | ------------- |
-| _October 20_    | Commit Hash where Codacy Ran| _..._ |
+| ----------------- | --------------------- | ------------- |
+| 2026-11-03 | Everything concerning Automated Code Review Results (2.1, 2.2, 2.3, 2.4) | Filling out the sections for submission to CP2 |
 
 ---
 

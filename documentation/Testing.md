@@ -5,6 +5,8 @@
 | **Change Date** | **Modified Sections**                   | **Rationale**                                                                                                    |
 | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | 2026-10-20 | Section 4: Front-end test specification | Describe simple user flows through the currently implemented screens and state the sample-data limitations. |
+| 2026-11-03 | Section 2.1: Market API tests | Specify mocked and live integration tests for every Market HTTP interface. |
+| 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
 
 ---
 
@@ -14,26 +16,33 @@
 
 #### 2.1.1. Tests
 
-| **Interface**                 | **Describe Group Location, No Mocks**               | **Describe Group Location, With Mocks**          | **Mocked Components**              |
-| ----------------------------- | --------------------------------------------------- | ------------------------------------------------ | ---------------------------------- |
-| **POST /user/login**          | [`tests/no-mock/authenticationLogin.test.js#L1`](#) | [`tests/mock/authenticationLogin.test.js#L1`](#) | Google Authentication API, User DB |
-| **POST /study-groups/create** | ...                                                 | ...                                              | Study Group DB                     |
-| ...                           | ...                                                 | ...                                              | ...                                |
-| ...                           | ...                                                 | ...                                              | ...                                |
+| **Interface** | **Describe Group Location, No Mocks** | **Describe Group Location, With Mocks** | **Mocked Component** |
+|---|---|---|---|
+| `GET /api/market/stocks` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol/history` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
 
 #### 2.1.2. Commit Hash Where Tests Run
 
-e606decfba06f9cc5e03b99ea210799f50084b73
+Not recorded yet. Run the Market API test suites and record the tested commit here before submission.
 
-#### 2.1.3. Explanation on How to Run the Tests
+#### 2.1.3. How to Run Market API Tests
 
-1. **Clone the Repository**:
-  - Open your terminal and run:
-    ```
-    git clone https://github.com/example/your-project.git
-    ```
+Run mocked tests from the `backend` directory. They use deterministic provider responses and need no credentials, database, or internet:
 
-2. **...**
+```powershell
+npm.cmd run test:market:api:mock
+```
+
+Run no-mock integration tests from the `backend` directory. Put `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `backend/.env`; they contact Alpaca IEX and need internet access. They do not use MySQL. These tests consume live provider quota, so run them sparingly:
+
+```powershell
+npm.cmd run test:market:api:live
+```
+
+The tests cover successful responses and unsupported symbols. The no-mock suite expects Alpaca to return usable data; authentication, network, or provider failures should make it fail rather than silently pass.
+
+**Contract note:** The supplied Market specification says `GET /api/market/stocks` returns `503` when the provider is unavailable. Current implementation instead returns `200` with each affected stock marked `status: "unavailable"` and a `null` price. The mocked API test records current implementation behavior; update the route and corresponding test if the specification's overall `503` is mandatory.
 
 ### 2.2. GitHub Actions Configuration Location
 
@@ -76,56 +85,49 @@ _(Placeholder for Jest coverage screenshot without mocks)_
 
 ---
 
-## 4. Front-end Test Specification
+## 4. Market Frontend End-to-End Testing
 
-### 4.1. Test Location and Setup
+### Test Suite Location
 
-**Test directory:** `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/`
+The Market E2E suite is `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/MarketFlowTest.kt`. It launches the real Android app and sends HTTP requests through the production `/api/market/stocks` route and market cache. `backend/scripts/market-e2e-server.ts` supplies fixed, deterministic quote and history data through that route. It does not connect to MySQL, require sign-in, call Alpaca, or use API keys. The fixture data has Alpaca-shaped responses; passing these tests does not verify live Alpaca connectivity.
 
-**Setup:** Open the app on the emulator, sign in beforehand, and start on Market. Perform each flow through the app's screens rather than opening individual UI components in isolation.
+### How to Run E2E Tests
 
-**Scope:** These plans follow the currently available frontend user journeys from start to finish. Market, Portfolio, and Social use sample data, and Trade is a placeholder. These flows do not yet verify an end-to-end connection to the backend and database.
+1. Make sure backend dependencies are installed. From the `backend` folder, run this once if `node_modules` is missing:
 
-### 4.2. User Flows and Expected Results
+   ```text
+   npm install
+   ```
 
-#### Flow 1: Search for a Stock and Open Trade
+2. Start an Android emulator. In the first terminal, run the fixture server and keep it open:
 
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user opens Market. | Verify that the search field and sample stock list appear. |
-| 2. The user searches for a stock. | Enter `AAPL`. Verify that Apple appears and nonmatching stock rows disappear. |
-| 3. The user selects the stock. | Tap an Apple row. Verify that the Trade screen displays `Trade: AAPL`. |
-| 4. The user returns to Market. | Use Android Back. Verify that Market reappears and the search field can be used again. |
-| 2a. The search has no matching stocks. | Enter `ZZZZ_NOT_A_STOCK`. Verify that no stock rows appear. Clear the field and verify that the sample list returns. |
+   ```powershell
+   cd backend
+   npm.cmd run dev:e2e:market
+   ```
 
-Buying and selling are not tested because the current Trade screen only displays the selected ticker.
+3. In a second terminal at the repository root, run:
 
-#### Flow 2: View Portfolio Information
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-market-e2e-tests.ps1
+   ```
 
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user navigates to Portfolio. | From Market, tap Portfolio in the bottom navigation. Verify that the Portfolio heading and MOCK DATA label appear. |
-| 2. The user reviews the summary. | Verify that total portfolio value, available cash, and profit/loss show the local sample values. |
-| 3. The user reviews investments and activity. | Scroll through Asset Allocation, Holdings, and Recent Activity. Verify that the sample holdings and transaction details appear. |
-| 4. The user leaves Portfolio. | Tap Back to home. Verify that Market appears. |
+   The runner temporarily points `MARKET_API_BASE_URL` in `frontend/local.properties` to the fixture on port 3003, runs only `MarketFlowTest`, then restores the original local properties. Stop the fixture with Ctrl+C after tests finish. The emulator uses `10.0.2.2` to reach the host computer. If port 3003 is busy, stop the process using it and rerun the command. No manual URL edits are needed.
 
-This flow checks viewing existing sample information; it does not check real account balances or live price updates.
+### Tested Use Cases
 
-#### Flow 3: View Rankings and Use the Friends Screen
+Market: load all six supported stocks from the HTTP API, view each name, quote, chart, and local logo, and search by company name or ticker including the no-results state.
 
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user navigates to Social. | From Market, tap Social. Verify that the Leaderboard and Friends tabs appear. |
-| 2. The user reviews the leaderboard. | Verify that sample traders and ranks appear. Change the sort mode and check that the list follows Total value or Return % as selected. |
-| 3. The user expands the list. | Tap See all and verify that all seven sample traders can be viewed. Tap Show top 5 and verify that the list is limited to five. |
-| 4. The user views friends. | Tap Friends. Verify that sample friends appear. Change the name sort mode and check A-Z and Z-A ordering. |
-| 5. The user opens Add friend. | Tap Add friend. Verify that the dialog and ID/username field appear. |
-| 5a. The input is empty. | Verify that the dialog's Add friend button is disabled. |
-| 6. The user enters an ID or username. | Enter a non-blank value, then tap Add friend. Verify that the preview-only message appears. No actual friend request is expected. |
-| 7. The user returns to Market. | Close the dialog and tap Back to home. Verify that Market appears. |
+### Test Scenarios
 
-### 4.3. Test Results and Logs
+| Test | Scenario and expected behavior |
+|---|---|
+| `allSixStocksShowNamesQuotesChartsAndLocalLogos` | The app receives six fixture stocks and renders each company name, quote timestamps, chart, and bundled logo. |
+| `searchMatchesTickerAndCompanyAndShowsAnEmptyStateForNoMatch` | Search finds a stock by company and ticker, shows the empty state for an unknown query, and displays the expected fixture quote. |
 
-- **Status:** Planned; these flows have not been implemented as automated tests or executed for this report.
-- **Existing automated test:** `ExampleInstrumentedTest.kt` checks only the app's package name, not these user flows.
-- **Results and logs:** Not available yet. Record actual pass/fail results and logs after running the tests.
+### Execution Results
+
+The test runner writes Android instrumentation reports to the paths below. Record the latest result after running the suite on an emulator.
+
+HTML report: `frontend/app/build/reports/androidTests/connected/debug/index.html`.
+Raw test results: `frontend/app/build/outputs/androidTest-results/connected/debug/`.

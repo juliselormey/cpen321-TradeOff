@@ -42,9 +42,17 @@ android {
             "GOOGLE_CLIENT_ID",
             "\"${localProperty("GOOGLE_CLIENT_ID")}\""
         )
+        buildConfigField(
+            "String",
+            "MARKET_API_BASE_URL",
+            "\"${localProperty("MARKET_API_BASE_URL")}\""
+        )
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = localProperty("DEBUG_APPLICATION_ID_SUFFIX")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

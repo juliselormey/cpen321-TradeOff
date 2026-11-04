@@ -1,9 +1,6 @@
 package com.example.cpen321application
 
 import android.content.Context
-import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -17,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.DisposableEffect
+import com.example.cpen321application.ui.settings.SettingsScreen
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
@@ -28,11 +27,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +41,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,20 +62,16 @@ import com.example.cpen321application.ui.social.SocialScreen
 import com.example.cpen321application.ui.theme.CPEN321ApplicationTheme
 import com.example.cpen321application.ui.trade.TradeScreen
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import retrofit2.awaitResponse
 import java.net.HttpURLConnection
-import java.net.Inet4Address
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
-import kotlin.math.abs
 import com.example.cpen321application.util.SessionManager
+
 
 data class BottomNavItem(
     val title: String,
@@ -88,153 +80,127 @@ data class BottomNavItem(
 )
 
 class MainActivity : ComponentActivity() {
-    private lateinit var apiService: ApiService
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        apiService = ApiClient.create(applicationContext)
+        val api = ApiClient.create(applicationContext)
         enableEdgeToEdge()
-        setContent {
-            CPEN321ApplicationTheme {
-                val navController = rememberNavController()
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
+        setContent { TradeOffApp(api) }
+    }
+}
 
-                val topLevelRoutes = remember {
-                    listOf(
-                        BottomNavItem("Portfolio", Routes.Portfolio, Icons.Default.AccountBox),
-                        BottomNavItem("Market", Routes.Market, Icons.Default.ShoppingCart),
-                        BottomNavItem("Social", Routes.Social, Icons.Default.Person)
-                    )
+@Composable
+private fun TradeOffApp(api: ApiService) {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("appearance", Context.MODE_PRIVATE) }
+    var darkMode by remember { mutableStateOf(preferences.getBoolean("dark_mode", false)) }
+    val navController = rememberNavController()
+    val entry by navController.currentBackStackEntryAsState()
+    val items = remember {
+        listOf(
+            BottomNavItem("Portfolio", Routes.Portfolio, Icons.Default.AccountBox),
+            BottomNavItem("Market", Routes.Market, Icons.Default.ShoppingCart),
+            BottomNavItem("Social", Routes.Social, Icons.Default.Person),
+            BottomNavItem("Settings", Routes.Settings, Icons.Default.Settings)
+        )
+    }
+    CPEN321ApplicationTheme(darkTheme = darkMode) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                if (items.any { it.route == entry?.destination?.route }) {
+                    AppNavigationBar(items, entry?.destination?.route, navController)
                 }
-
-                val showBottomBar = currentRoute in topLevelRoutes.map { it.route }
-
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    bottomBar = {
-                        if (showBottomBar) {
-                            NavigationBar {
-                                topLevelRoutes.forEach { item ->
-                                    val selected = currentRoute == item.route
-                                    NavigationBarItem(
-                                        selected = selected,
-                                        onClick = {
-                                            if (currentRoute != item.route) {
-                                                navController.navigate(item.route) {
-                                                    popUpTo(Routes.Market) {
-                                                        saveState = true
-                                                    }
-                                                    launchSingleTop = true
-                                                    restoreState = true
-                                                }
-                                            }
-                                        },
-                                        icon = {
-                                            Icon(
-                                                imageVector = item.icon,
-                                                contentDescription = item.title
-                                            )
-                                        },
-                                        label = { Text(item.title) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = Routes.Market,
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable(Routes.Portfolio) {
-                            ProtectedView(apiService = apiService) {
-                                PortfolioScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                })
-                            }
-                        }
-
-                        composable(Routes.Market) {
-                            MarketScreen(
-                                onStockSelected = { ticker ->
-                                    navController.navigate("Trade/$ticker")
-                                }
-                            )
-                        }
-
-                        composable(Routes.Social) {
-                            ProtectedView(apiService = apiService) {
-                                SocialScreen(onBack = {
-                                    navController.navigate(Routes.Market) {
-                                        popUpTo(Routes.Market) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                })
-                            }
-                        }
-
-                        composable(Routes.Trade) { backStackEntry ->
-                            val ticker = backStackEntry.arguments?.getString("ticker") ?: ""
-                            TradeScreen(ticker = ticker)
-                        }
-
-                        composable(Routes.Login) {
-                            val context = LocalContext.current
-                            var loggedIn by remember { mutableStateOf(SessionManager.isLoggedIn(context)) }
-
-                            if (loggedIn) {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Text("You are signed in!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    MyButton("Sign Out") {
-                                        SessionManager.clearSession(context)
-                                        loggedIn = false
-                                    }
-                                }
-                            } else {
-                                LoginView(
-                                    apiService = apiService,
-                                    onSuccess = {
-                                        navController.navigate(Routes.Market) {
-                                            popUpTo(Routes.Market) { inclusive = true }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        composable(Routes.home) {
-                            HomeScreen(navController = navController)
-                        }
-                    }
-                }
+            }
+        ) { padding ->
+            AppDestinations(navController, api, darkMode, Modifier.padding(padding)) {
+                darkMode = it
+                preferences.edit().putBoolean("dark_mode", it).apply()
             }
         }
     }
 }
 
-data class LoginInfo (
-    val serverIp: String = "",
-    val clientIp: String = "",
-    val serverTime: String = "",
-    val clientTime: String = "",
-    val backendOwnerName: String = "",
-    val googleUserName: String = "",
-)
+@Composable
+private fun AppNavigationBar(items: List<BottomNavItem>, currentRoute: String?, navController: NavController) {
+    NavigationBar {
+        items.forEach { item ->
+            NavigationBarItem(
+                selected = currentRoute == item.route,
+                onClick = {
+                    if (currentRoute != item.route) {
+                        navController.navigate(item.route) {
+                            popUpTo(Routes.Market) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                icon = { Icon(item.icon, contentDescription = item.title) },
+                label = { Text(item.title) }
+            )
+        }
+    }
+}
+
+private fun NavController.showMarket() {
+    navigate(Routes.Market) {
+        popUpTo(Routes.Market) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+@Composable
+private fun AppDestinations(
+    navController: androidx.navigation.NavHostController,
+    api: ApiService,
+    darkMode: Boolean,
+    modifier: Modifier,
+    onDarkModeChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val openTrade: (String) -> Unit = { ticker -> navController.navigate("Trade/" + ticker) }
+    NavHost(navController, startDestination = Routes.Market, modifier = modifier) {
+        composable(Routes.Portfolio) {
+            ProtectedView(apiService = api) {
+                PortfolioScreen(apiService = api, onBack = { navController.showMarket() },
+                    onStockSelected = openTrade,
+                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+            }
+        }
+        composable(Routes.Market) {
+            MarketScreen(onStockSelected = openTrade)
+        }
+        composable(Routes.Social) {
+            ProtectedView(apiService = api) {
+                SocialScreen(onBack = { navController.showMarket() },
+                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+            }
+        }
+        composable(Routes.Settings) {
+            SettingsScreen(api, darkMode, onDarkModeChange, onSignIn = { navController.navigate(Routes.Login) })
+        }
+        composable(Routes.Trade) { entry ->
+            ProtectedView(apiService = api) {
+                TradeScreen(ticker = entry.arguments?.getString("ticker").orEmpty(), apiService = api,
+                    onBack = { navController.popBackStack() })
+            }
+        }
+        composable(Routes.Login) {
+            LoginView(apiService = api, onSuccess = {
+                navController.navigate(Routes.Market) {
+                    popUpTo(Routes.Market) { inclusive = true }
+                    launchSingleTop = true
+                }
+            })
+        }
+        composable(Routes.home) { HomeScreen(navController) }
+    }
+}
 
 object Routes {
     const val home = "home"
+    const val Settings = "Settings"
     const val Login = "Login"
     const val Social = "Social"
     const val Portfolio = "Portfolio"
@@ -266,6 +232,15 @@ fun ProtectedView(
     val context = LocalContext.current
     var isUserLoggedIn by remember { mutableStateOf(SessionManager.isLoggedIn(context)) }
 
+    DisposableEffect(context) {
+        val preferences = context.getSharedPreferences("user_session", Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            isUserLoggedIn = SessionManager.isLoggedIn(context)
+        }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        isUserLoggedIn = SessionManager.isLoggedIn(context)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     if (!isUserLoggedIn) {
         LoginView(
             apiService = apiService,
@@ -305,8 +280,16 @@ private suspend fun attemptLogin(
         }
     } catch (e: CancellationException) {
         throw e
-    } catch (e: Exception) {
+    } catch (_: GoogleIdTokenParsingException) {
+        LoginOutcome.Failure("Could not read the Google credential. Please try signing in again.")
+    } catch (e: GetCredentialException) {
         LoginOutcome.Failure(e.message ?: "Sign-in cancelled or failed")
+    } catch (_: java.io.IOException) {
+        LoginOutcome.Failure("Could not connect. Please try again.")
+    } catch (_: com.google.gson.JsonParseException) {
+        LoginOutcome.Failure("Could not read the sign-in response.")
+    } catch (e: IllegalStateException) {
+        LoginOutcome.Failure(e.message ?: "Invalid sign-in response")
     }
 }
 
@@ -398,30 +381,6 @@ private fun GoogleSignInButton(onClick: () -> Unit) {
 }
 /*--------------------------End Login-----------------------------*/
 
-private suspend fun fetchHealthStatus(apiBaseUrl: String): String = withContext(Dispatchers.IO) {
-    val healthUrl = "${apiBaseUrl.trimEnd('/')}/health"
-    try {
-        val connection = (URL(healthUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 5_000
-            readTimeout = 5_000
-        }
-
-        when (val code = connection.responseCode) {
-            HttpURLConnection.HTTP_OK -> {
-                val body = connection.inputStream.bufferedReader().use { it.readText() }
-                "Backend healthy ($healthUrl): $body"
-            }
-            else -> {
-                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() }
-                "Backend error ($healthUrl): HTTP $code${errorBody?.let { " — $it" } ?: ""}"
-            }
-        }
-    } catch (e: Exception) {
-        "Backend unreachable ($healthUrl): ${e.message ?: e.javaClass.simpleName}"
-    }
-}
-
 // HELPERS
 /*-------------------------- Google Sign-In Helper -----------------------------*/
 data class GoogleSignInResult(val idToken: String, val displayName: String)
@@ -466,13 +425,13 @@ suspend fun googleSignIn(context: Context): GoogleSignInResult {
             return GoogleSignInResult(idToken = googleIdTokenCredential.idToken, displayName = fullname)
         }
 
-        throw Exception("Invalid credential type: ${credential.type}")
+        throw IllegalStateException("Invalid credential type: ${credential.type}")
 
     } catch (e: GetCredentialCancellationException) {
-        Log.i("CredentialManagerException", "User Cancelled Sign-In", e)
+        Log.i("CredentialManagerExc", "User Cancelled Sign-In", e)
         throw e
     } catch (e: GetCredentialException) {
-        Log.e("CredentialManagerException", "Sign-In Failed", e)
+        Log.e("CredentialManagerExc", "Sign-In Failed", e)
         throw e
     }
 }

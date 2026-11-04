@@ -3,10 +3,10 @@ package com.example.cpen321application
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
-import retrofit2.http.PATCH
-import retrofit2.http.Header
 
 data class GoogleAuthRequest(val idToken: String)
 data class GoogleAuthResponse(val accessToken: String)
@@ -15,7 +15,8 @@ data class GoogleAuthResponse(val accessToken: String)
 data class UserPositionResponse(
     val cashBalance: Double,
     val ownedQuantity: Double,
-    val averageCost: Double
+    val averageCost: Double,
+    val availableQuantity: Double
 )
 
 data class ExecuteOrderRequest(
@@ -47,7 +48,8 @@ data class ExecuteOrderResponse(
     val message: String,
     val status: String, // "FILLED" or "PENDING"
     val cashBalance: Double,
-    val ownedQuantity: Double
+    val ownedQuantity: Double,
+    val availableQuantity: Double
 )
 
 data class PendingOrderItem(
@@ -95,15 +97,29 @@ data class PortfolioSummaryResponse(
     val pendingOrders: List<PendingOrderItem>
 )
 
-interface ApiService {
-    @GET("/api/users/me")
-    suspend fun profile(@Header("Authorization") authorization: String): Response<ProfileResponse>
-    @PATCH("/api/users/me")
-    suspend fun updateProfile(@Header("Authorization") authorization: String,
-        @Body profile: ProfileUpdate): Response<ProfileResponse>
+// User Profile Models
+data class UserProfile(
+    val id: String,
+    val email: String,
+    val displayName: String?,
+    val username: String?
+)
 
+data class ProfileResponse(val user: UserProfile)
+data class ProfileUpdate(val displayName: String, val username: String)
+
+interface ApiService {
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
+
+    @GET("api/auth/me")
+    suspend fun profile(@Header("Authorization") authorization: String): Response<ProfileResponse>
+
+    @PATCH("api/auth/me")
+    suspend fun updateProfile(
+        @Header("Authorization") authorization: String,
+        @Body profile: ProfileUpdate
+    ): Response<ProfileResponse>
 
     @GET("/api/trades/position/{ticker}")
     suspend fun getPosition(@Path("ticker") ticker: String): Response<UserPositionResponse>
@@ -126,8 +142,3 @@ interface ApiService {
     @GET("/api/portfolio")
     suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
 }
-
-
-data class UserProfile(val id: String, val email: String, val displayName: String?, val username: String?)
-data class ProfileResponse(val user: UserProfile)
-data class ProfileUpdate(val displayName: String, val username: String)

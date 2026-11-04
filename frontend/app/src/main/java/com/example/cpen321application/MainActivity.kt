@@ -188,8 +188,8 @@ private fun AppDestinations(
         }
         composable(Routes.Login) {
             LoginView(apiService = api, onSuccess = {
-                navController.navigate(Routes.Settings) {
-                    popUpTo(Routes.Settings) { inclusive = true }
+                navController.navigate(Routes.Market) {
+                    popUpTo(Routes.Market) { inclusive = true }
                     launchSingleTop = true
                 }
             })

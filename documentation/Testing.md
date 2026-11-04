@@ -76,76 +76,23 @@ _(Placeholder for Jest coverage screenshot without mocks)_
 
 ---
 
-## 4. Front-end Test Specification
-
-### 4.1. Test Location and Setup
-
-**Test directory:** `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/`
-
-**Setup:** Open the app on the emulator, sign in beforehand, and start on Market. Perform each flow through the app's screens rather than opening individual UI components in isolation.
-
-**Scope:** These plans follow the currently available frontend user journeys from start to finish. Market, Portfolio, and Social use sample data, and Trade is a placeholder. These flows do not yet verify an end-to-end connection to the backend and database.
-
-### 4.2. User Flows and Expected Results
-
-#### Flow 1: Search for a Stock and Open Trade
-
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user opens Market. | Verify that the search field and sample stock list appear. |
-| 2. The user searches for a stock. | Enter `AAPL`. Verify that Apple appears and nonmatching stock rows disappear. |
-| 3. The user selects the stock. | Tap an Apple row. Verify that the Trade screen displays `Trade: AAPL`. |
-| 4. The user returns to Market. | Use Android Back. Verify that Market reappears and the search field can be used again. |
-| 2a. The search has no matching stocks. | Enter `ZZZZ_NOT_A_STOCK`. Verify that no stock rows appear. Clear the field and verify that the sample list returns. |
-
-Buying and selling are not tested because the current Trade screen only displays the selected ticker.
-
-#### Flow 2: View Portfolio Information
-
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user navigates to Portfolio. | From Market, tap Portfolio in the bottom navigation. Verify that the Portfolio heading and MOCK DATA label appear. |
-| 2. The user reviews the summary. | Verify that total portfolio value, available cash, and profit/loss show the local sample values. |
-| 3. The user reviews investments and activity. | Scroll through Asset Allocation, Holdings, and Recent Activity. Verify that the sample holdings and transaction details appear. |
-| 4. The user leaves Portfolio. | Tap Back to home. Verify that Market appears. |
-
-This flow checks viewing existing sample information; it does not check real account balances or live price updates.
-
-#### Flow 3: View Rankings and Use the Friends Screen
-
-| Scenario step | Test action and expected result |
-| --- | --- |
-| 1. The user navigates to Social. | From Market, tap Social. Verify that the Leaderboard and Friends tabs appear. |
-| 2. The user reviews the leaderboard. | Verify that sample traders and ranks appear. Change the sort mode and check that the list follows Total value or Return % as selected. |
-| 3. The user expands the list. | Tap See all and verify that all seven sample traders can be viewed. Tap Show top 5 and verify that the list is limited to five. |
-| 4. The user views friends. | Tap Friends. Verify that sample friends appear. Change the name sort mode and check A-Z and Z-A ordering. |
-| 5. The user opens Add friend. | Tap Add friend. Verify that the dialog and ID/username field appear. |
-| 5a. The input is empty. | Verify that the dialog's Add friend button is disabled. |
-| 6. The user enters an ID or username. | Enter a non-blank value, then tap Add friend. Verify that the preview-only message appears. No actual friend request is expected. |
-| 7. The user returns to Market. | Close the dialog and tap Back to home. Verify that Market appears. |
-
-### 4.3. Test Results and Logs
-
-- **Status:** Planned; these flows have not been implemented as automated tests or executed for this report.
-- **Existing automated test:** `ExampleInstrumentedTest.kt` checks only the app's package name, not these user flows.
-- **Results and logs:** Not available yet. Record actual pass/fail results and logs after running the tests.
 ## 4. Portfolio Frontend End-to-End Testing
 
 ### Test Suite Location
 
-The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/PortfolioFlowTest.kt`. `RealBackendTest.kt` provides the signed-in test setup. These tests use the real app, API routes, and SQL database. The isolated test server is `backend/scripts/e2e-server.ts`.
+The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/PortfolioFlowTest.kt`. `RealBackendTest.kt` provides signed-in setup and test-account reset. The tests use the real app, backend routes, and SQL database. `backend/scripts/e2e-server.ts` starts an isolated backend for these tests.
 
 ### How to Run E2E Tests
 
-1. Create an empty MySQL database named `tradeoff_e2e_<name>` and add `backend/.env.e2e` with `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, Alpaca keys, and `E2E_USER_EMAIL`. Keep this file private; Git ignores it.
-2. Set these URLs in `frontend/local.properties`:
+1. Create an empty MySQL database named `tradeoff_e2e_<name>`. Create `backend/.env.e2e` with `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`, and `E2E_USER_EMAIL`. Keep the file private; Git ignores it.
+2. In `frontend/local.properties`, set:
 
    ```properties
    API_BASE_URL=http://10.0.2.2:3002/
    MARKET_API_BASE_URL=http://10.0.2.2:3002/
    ```
 
-3. In a terminal, prepare and start the backend:
+3. From a terminal at the repository root, start the test backend:
 
    ```powershell
    cd backend
@@ -156,14 +103,14 @@ The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpe
    npx.cmd tsx scripts/e2e-server.ts
    ```
 
-   Leave this terminal open. Start the app on an Android emulator and sign in with the Google account listed in `E2E_USER_EMAIL`.
-4. In a second terminal at the repository root, run:
+   Leave the terminal open. Start the app on an Android emulator and sign in with the Google account named in `E2E_USER_EMAIL`.
+4. Open a second terminal at the repository root and run:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\scripts\run-frontend-e2e-tests.ps1
    ```
 
-The tests reset the selected account before and after each case. Use only the disposable database: test data is reset to $10,000. `10.0.2.2` is the emulator address for the host computer.
+The tests reset the selected account before and after each scenario. Use only the disposable database; the account is reset to $10,000. The emulator uses `10.0.2.2` to reach your computer.
 
 ### Tested Use Cases
 
@@ -178,11 +125,11 @@ Portfolio: view an empty account, open a stock from Holdings and trade it, check
 | `externalTradeRefreshesOpenPortfolioWithoutNavigation` | A trade made while Portfolio stays open appears after polling. |
 | `priceMovementRevaluesPortfolioWithoutChangingSharesOrCash` | Changed quote updates value, P/L, and allocation while shares and cash remain constant. |
 | `portfolioFailureShowsErrorRetainsBalanceAndRecovers` | Portfolio request failure shows an error, retains cash, and recovers. |
-| `quoteRefreshFailureLabelsRetainedPortfolioValuesStale` | Failed quote refresh should mark retained values stale; this checks behavior the app may not yet implement. |
+| `quoteRefreshFailureLabelsRetainedPortfolioValuesStale` | Failed quote refresh should mark retained values stale; this test checks behavior the app may not yet implement. |
 
 ### Execution Results
 
-The Android app and instrumentation tests compiled. The full Portfolio suite has not completed successfully. An earlier run exposed a missing stale-value warning on Portfolio. Rerun the suite and record the current results before submission.
+The Android app and instrumentation tests compiled. The full Portfolio suite has not completed successfully. An earlier run exposed a missing stale-value warning on Portfolio. Rerun the suite and record current results before submission.
 
 HTML report: `frontend/app/build/reports/androidTests/connected/debug/index.html`.
 Raw test results: `frontend/app/build/outputs/androidTest-results/connected/debug/`.

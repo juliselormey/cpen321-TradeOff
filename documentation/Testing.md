@@ -5,6 +5,7 @@
 | **Change Date** | **Modified Sections**                   | **Rationale**                                                                                                    |
 | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | 2026-10-20 | Section 4: Front-end test specification | Describe simple user flows through the currently implemented screens and state the sample-data limitations. |
+| 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
 
 ---
 
@@ -76,63 +77,49 @@ _(Placeholder for Jest coverage screenshot without mocks)_
 
 ---
 
-## 4. Portfolio Frontend End-to-End Testing
+## 4. Market Frontend End-to-End Testing
 
 ### Test Suite Location
 
-The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/PortfolioFlowTest.kt`. `RealBackendTest.kt` provides signed-in setup and test-account reset. The tests use the real app, backend routes, and SQL database. `backend/scripts/e2e-server.ts` starts an isolated backend for these tests.
+The Market E2E suite is `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/MarketFlowTest.kt`. It launches the real Android app and sends HTTP requests through the production `/api/market/stocks` route and market cache. `backend/scripts/market-e2e-server.ts` supplies fixed, deterministic quote and history data through that route. It does not connect to MySQL, require sign-in, call Alpaca, or use API keys. The fixture data has Alpaca-shaped responses; passing these tests does not verify live Alpaca connectivity.
 
 ### How to Run E2E Tests
 
-1. From a PowerShell terminal at the repository root, run the one-time setup:
+1. Make sure backend dependencies are installed. From the `backend` folder, run this once if `node_modules` is missing:
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\setup-portfolio-e2e.ps1
+   ```text
+   npm install
    ```
 
-   Enter your MySQL administrator name/password when prompted. The script creates an isolated database and DB user, writes `backend/.env.e2e`, installs backend dependencies if needed, and creates the schema. Then edit that file and replace the Google client ID, Alpaca keys, and `E2E_USER_EMAIL` placeholders. Do not commit this file.
-2. In `frontend/local.properties`, set:
-
-   ```properties
-   API_BASE_URL=http://10.0.2.2:3002/
-   MARKET_API_BASE_URL=http://10.0.2.2:3002/
-   ```
-
-3. Start the test backend from the repository root:
+2. Start an Android emulator. In the first terminal, run the fixture server and keep it open:
 
    ```powershell
    cd backend
-   $env:DOTENV_CONFIG_PATH = '.env.e2e'
-   npx.cmd tsx scripts/e2e-server.ts
+   npm.cmd run dev:e2e:market
    ```
 
-   Leave the terminal open. Start the app on an Android emulator and sign in with the Google account named in `E2E_USER_EMAIL`.
-4. Open a second terminal at the repository root and run:
+3. In a second terminal at the repository root, run:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\run-frontend-e2e-tests.ps1
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-market-e2e-tests.ps1
    ```
 
-The tests reset the selected account before and after each scenario. Use only the disposable database; the account is reset to $10,000. The emulator uses `10.0.2.2` to reach your computer.
+   The runner temporarily points `MARKET_API_BASE_URL` in `frontend/local.properties` to the fixture on port 3003, runs only `MarketFlowTest`, then restores the original local properties. Stop the fixture with Ctrl+C after tests finish. The emulator uses `10.0.2.2` to reach the host computer. If port 3003 is busy, stop the process using it and rerun the command. No manual URL edits are needed.
 
 ### Tested Use Cases
 
-Portfolio: view an empty account, open a stock from Holdings and trade it, check balances/trade activity/allocation, and verify portfolio polling and error behavior.
+Market: load all six supported stocks from the HTTP API, view each name, quote, chart, and local logo, and search by company name or ticker including the no-results state.
 
 ### Test Scenarios
 
 | Test | Scenario and expected behavior |
 |---|---|
-| `emptyPortfolioShowsStartingCashWithoutInventedHoldings` | Empty account displays $10,000 cash/value and no invented positions. |
-| `holdingPurchaseUpdatesSharesCashActivityAndAllocation` | Open a holding, buy a share, return to Portfolio; shares, cash, activity, and allocation reflect the order. |
-| `externalTradeRefreshesOpenPortfolioWithoutNavigation` | A trade made while Portfolio stays open appears after polling. |
-| `priceMovementRevaluesPortfolioWithoutChangingSharesOrCash` | Changed quote updates value, P/L, and allocation while shares and cash remain constant. |
-| `portfolioFailureShowsErrorRetainsBalanceAndRecovers` | Portfolio request failure shows an error, retains cash, and recovers. |
-| `quoteRefreshFailureLabelsRetainedPortfolioValuesStale` | Failed quote refresh should mark retained values stale; this test checks behavior the app may not yet implement. |
+| `allSixStocksShowNamesQuotesChartsAndLocalLogos` | The app receives six fixture stocks and renders each company name, quote timestamps, chart, and bundled logo. |
+| `searchMatchesTickerAndCompanyAndShowsAnEmptyStateForNoMatch` | Search finds a stock by company and ticker, shows the empty state for an unknown query, and displays the expected fixture quote. |
 
 ### Execution Results
 
-The Android app and instrumentation tests compiled. The full Portfolio suite has not completed successfully. An earlier run exposed a missing stale-value warning on Portfolio. Rerun the suite and record current results before submission.
+The test runner writes Android instrumentation reports to the paths below. Record the latest result after running the suite on an emulator.
 
 HTML report: `frontend/app/build/reports/androidTests/connected/debug/index.html`.
 Raw test results: `frontend/app/build/outputs/androidTest-results/connected/debug/`.

@@ -84,7 +84,13 @@ The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpe
 
 ### How to Run E2E Tests
 
-1. Create an empty MySQL database named `tradeoff_e2e_<name>`. Create `backend/.env.e2e` with `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`, and `E2E_USER_EMAIL`. Keep the file private; Git ignores it.
+1. From a PowerShell terminal at the repository root, run the one-time setup:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\setup-portfolio-e2e.ps1
+   ```
+
+   Enter your MySQL administrator name/password when prompted. The script creates an isolated database and DB user, writes `backend/.env.e2e`, installs backend dependencies if needed, and creates the schema. Then edit that file and replace the Google client ID, Alpaca keys, and `E2E_USER_EMAIL` placeholders. Do not commit this file.
 2. In `frontend/local.properties`, set:
 
    ```properties
@@ -92,14 +98,11 @@ The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpe
    MARKET_API_BASE_URL=http://10.0.2.2:3002/
    ```
 
-3. From a terminal at the repository root, start the test backend:
+3. Start the test backend from the repository root:
 
    ```powershell
    cd backend
-   npm.cmd ci
    $env:DOTENV_CONFIG_PATH = '.env.e2e'
-   npx.cmd prisma generate
-   npx.cmd prisma db push
    npx.cmd tsx scripts/e2e-server.ts
    ```
 

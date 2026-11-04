@@ -1,5 +1,10 @@
 # README: TradeOff installation guide
 
+> [!CAUTION]
+> _Keep this README up to date with the steps required to build and run the frontend and backend (including any scripts, config files, and environment variables). TAs ill follow these instructions._
+> 
+> (we should probably complete enough of this section to help our peer reviewers)
+
 ## Getting You Going
 
 TradeOff is an Android investment-practice app w/ Google sign-in, live market data, virtual trading, portfolios, and a friends leaderboard.

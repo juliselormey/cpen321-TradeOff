@@ -12,6 +12,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest",
+    "test:market:api:mock": "jest tests/mock/marketApi.test.ts --runInBand",
+    "test:market:api:live": "jest tests/no-mock/market.test.ts --runInBand",
     "lint": "tsc -p tsconfig.lint.json && node .lint-tools/lint.js"
   },
   "engines": {

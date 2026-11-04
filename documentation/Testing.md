@@ -5,6 +5,7 @@
 | **Change Date** | **Modified Sections**                   | **Rationale**                                                                                                    |
 | --------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | 2026-10-20 | Section 4: Front-end test specification | Describe simple user flows through the currently implemented screens and state the sample-data limitations. |
+| 2026-11-03 | Section 2.1: Market API tests | Specify mocked and live integration tests for every Market HTTP interface. |
 | 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
 
 ---
@@ -15,26 +16,33 @@
 
 #### 2.1.1. Tests
 
-| **Interface**                 | **Describe Group Location, No Mocks**               | **Describe Group Location, With Mocks**          | **Mocked Components**              |
-| ----------------------------- | --------------------------------------------------- | ------------------------------------------------ | ---------------------------------- |
-| **POST /user/login**          | [`tests/no-mock/authenticationLogin.test.js#L1`](#) | [`tests/mock/authenticationLogin.test.js#L1`](#) | Google Authentication API, User DB |
-| **POST /study-groups/create** | ...                                                 | ...                                              | Study Group DB                     |
-| ...                           | ...                                                 | ...                                              | ...                                |
-| ...                           | ...                                                 | ...                                              | ...                                |
+| **Interface** | **Describe Group Location, No Mocks** | **Describe Group Location, With Mocks** | **Mocked Component** |
+|---|---|---|---|
+| `GET /api/market/stocks` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol/history` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
 
 #### 2.1.2. Commit Hash Where Tests Run
 
-e606decfba06f9cc5e03b99ea210799f50084b73
+Not recorded yet. Run the Market API test suites and record the tested commit here before submission.
 
-#### 2.1.3. Explanation on How to Run the Tests
+#### 2.1.3. How to Run Market API Tests
 
-1. **Clone the Repository**:
-  - Open your terminal and run:
-    ```
-    git clone https://github.com/example/your-project.git
-    ```
+Run mocked tests from the `backend` directory. They use deterministic provider responses and need no credentials, database, or internet:
 
-2. **...**
+```powershell
+npm.cmd run test:market:api:mock
+```
+
+Run no-mock integration tests from the `backend` directory. Put `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `backend/.env`; they contact Alpaca IEX and need internet access. They do not use MySQL. These tests consume live provider quota, so run them sparingly:
+
+```powershell
+npm.cmd run test:market:api:live
+```
+
+The tests cover successful responses and unsupported symbols. The no-mock suite expects Alpaca to return usable data; authentication, network, or provider failures should make it fail rather than silently pass.
+
+**Contract note:** The supplied Market specification says `GET /api/market/stocks` returns `503` when the provider is unavailable. Current implementation instead returns `200` with each affected stock marked `status: "unavailable"` and a `null` price. The mocked API test records current implementation behavior; update the route and corresponding test if the specification's overall `503` is mandatory.
 
 ### 2.2. GitHub Actions Configuration Location
 

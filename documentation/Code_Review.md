@@ -3,8 +3,8 @@
 ## 1. Change History
 
 | **Change Date** | **Modified Sections** | **Rationale** |
-| ----------------- | --------------------- | ------------- |
-| 2026-11-03 | Everything concerning Automated Code Review Results (2.1, 2.2, 2.3, 2.4) | Filling out the sections for submission to CP2 |
+|-----------------| --------------------- | ------------- |
+| 2026-11-01      | Automated Code Review Results in response to Codacy information | Filling out the sections for submission to CP2 |
 
 ---
 
@@ -16,24 +16,15 @@
 
 ### 2.2. Unfixed Issues per Codacy Category
 
-_(Placeholder for screenshots of Codacy's Category Breakdown table in Overview)_
+![2.2](images/2.2-codacy.png)
 
 ### 2.3. Unfixed Issues per Codacy Code Pattern
 
-_(Placeholder for screenshots of Codacy's Issues page)_
+![2.3](images/2.3-codacy.png)
 
 ### 2.4. Justifications for Unfixed Issues
 
-- **Code Pattern: [Usage of Deprecated Modules](#)**
-
-  1. **Issue**
-
-     - **Location in Git:** [`src/services/chatService.js#L31`](#)
-     - **Justification:** ...
-
-  2. ...
-
-- ...
+*none*
 
 ---
 

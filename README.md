@@ -1,26 +1,33 @@
-# TradeOff README
+# README: TradeOff installation guide
 
-TradeOff is an Android practice-investing app with Google sign-in, live market data, virtual trading, portfolios, and a friends leaderboard.
+## Getting You Going
 
-Follow these steps to clone the project and run the full app locally using an Android emulator. Complete the one-time setup first; later runs only require starting the backend and launching the app.
+TradeOff is an Android investment-practice app w/ Google sign-in, live market data, virtual trading, portfolios, and a friends leaderboard.
 
-## Requirements
+Follow these steps to clone the project and run the full app locally using an Android emulator.
 
-- [Git](https://git-scm.com/install/).
-- [Node.js 22.x](https://nodejs.org/en/download/) with npm 10.x.
-- [MySQL Community Server 8.4 LTS](https://dev.mysql.com/downloads/mysql/). During installation, keep port **3306**, set an administrator (`root`) password, and enable the service to start automatically.
-- [Android Studio](https://developer.android.com/studio) with **Android SDK Platform 35**, **Android Emulator**, and **Platform-Tools** installed through SDK Manager. Use JDK 17 or a compatible bundled JDK for Gradle.
-- OpenSSL. On Windows, Git normally includes it at `C:\Program Files\Git\usr\bin\openssl.exe`.
-- A Google account, a [Google Cloud project](https://console.cloud.google.com/) for sign-in, and [Alpaca API credentials](https://alpaca.markets/) for stock data. These must be configured; a fresh clone does not contain working credentials for a new tester.
+Complete the one-time setup first; later runs only require starting the backend and launching the app
 
-Commands below use **Windows PowerShell**. On macOS/Linux, use `npm`/`npx`, `cp`, `mkdir -p`, `curl`, and `./gradlew` in place of their Windows equivalents.
-
-```powershell
-git clone https://github.com/juliselormey/cpen321-TradeOff.git
-cd cpen321-TradeOff
-```
-
----
+> [!IMPORTANT]
+> Required software and tools include:
+> - [Git](https://git-scm.com/install/)
+> - [Node.js 22.x](https://nodejs.org/en/download/)
+>   - ...with npm 10.x
+> - [MySQL Community Server 8.4 LTS](https://dev.mysql.com/downloads/mysql/)
+>   - during installation (configurator), keep port **3306**, set an administrator (`root`) password, and enable the service to start automatically
+> - [Android Studio](https://developer.android.com/studio)
+>   - ...with **Android SDK Platform 35**, **Android Emulator**, and **Platform-Tools** installed through SDK Manager
+>   - Use JDK 17 or a compatible bundled JDK for Gradle
+> - [OpenSSL](https://openssl-library.org/source/)
+>   - On Windows, Git normally includes it at `C:\Program Files\Git\usr\bin\openssl.exe`
+> - A [Google account](google.com/), a [Google Cloud project](https://console.cloud.google.com/) for sign-in, and [Alpaca API credentials](https://alpaca.markets/) for stock data
+>   - must be configured; a fresh clone does not contain working credentials for a new tester
+> 
+> **Commands used assume Windows (PowerShell)**. On macOS/Linux, use `npm`/`npx`, `cp`, `mkdir -p`, `curl`, and `./gradlew` in place of their Windows equivalents.
+> ```powershell
+> git clone https://github.com/juliselormey/cpen321-TradeOff.git
+> cd cpen321-TradeOff
+> ```
 
 ## Backend Setup
 
@@ -28,7 +35,7 @@ cd cpen321-TradeOff
 
 Open **MySQL Command Line Client** and enter the root password chosen during installation. Alternatively, open a root connection in MySQL Workbench or run `mysql -u root -p` if MySQL is on your PATH.
 
-Run this SQL, replacing `YOUR_PASSWORD` with a long alphanumeric password of your choice:
+Run this SQL, entering the password if you have one, then run these commands, replacing `YOUR_PASSWORD` with a password of your choice. This is a one-time step for a new database.
 
 ```sql
 CREATE DATABASE tradeoff CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -36,7 +43,8 @@ CREATE USER 'tradeoff_app'@'localhost' IDENTIFIED BY 'YOUR_PASSWORD';
 GRANT ALL PRIVILEGES ON tradeoff.* TO 'tradeoff_app'@'localhost';
 ```
 
-This is a one-time step for a new database. **MySQL must be running** for login, accounts, trades, and portfolios. If you enabled automatic startup during installation, you do not need to start it manually. Otherwise, open `services.msc` on Windows, find your MySQL service, and click **Start**.
+> [!NOTE]
+> **MySQL must be running** for login, accounts, trades, and portfolios. If you enabled automatic startup during installation, you do not need to start it manually. Otherwise, open `services.msc` on Windows, find your MySQL service, and click **Start**.
 
 ### 2. Install dependencies and configure the backend
 
@@ -93,7 +101,8 @@ Copy-Item certs/cert.pem ../frontend/app/src/main/res/raw/cert.pem
 
 If PowerShell cannot find `openssl`, replace `openssl` in that command with `& "C:\Program Files\Git\usr\bin\openssl.exe"` after confirming that file exists. Run the command in PowerShell, not Git Bash. On macOS/Linux, use your installed `openssl` command.
 
-The frontend must have the same **public certificate** as the backend. Never copy the private `key.pem` into the frontend. Regenerating the certificate requires restarting the backend and rebuilding the app.
+> [!NOTE]
+> The frontend must have the same **public certificate** as the backend. Never copy the private `key.pem` into the frontend. Regenerating the certificate requires restarting the backend and rebuilding the app.
 
 ---
 
@@ -103,12 +112,13 @@ The frontend must have the same **public certificate** as the backend. Never cop
 
 1. Open the **`frontend/` folder** in Android Studio and allow Gradle to sync.
 2. In **SDK Manager**, install Android SDK Platform **35**, Platform-Tools, and Android Emulator if needed.
-3. In **Device Manager → Create Device**, choose a phone and an API 35 **Google Play** system image. Start the emulator and sign in to a Google account through its Play Store or Settings.
+3. In **Device Manager → Create Device**, choose a phone, then a **16KB Page Size w/ Google Play** system image w/ Android 16.0, API 36.0 "Baklava". Start the emulator and sign in to a Google account through its Play Store or Settings.
 4. Under **Settings → Build, Execution, Deployment → Build Tools → Gradle**, select JDK 17 or a compatible Android Studio bundled JDK. For terminal Gradle commands, set `JAVA_HOME` to the same JDK.
 
 ### 2. Configure Google sign-in
 
-Google must recognize your app's package name and your computer's debug signing certificate. This registration is required when building the app yourself.
+> [!NOTE]
+> Google must recognize your app's package name and your computer's debug signing certificate. This registration is required when building the app yourself.
 
 1. In Google Cloud Console, create/select a project. Open **Google Auth Platform**, configure the app's branding/contact information, and choose an audience. If using testing mode, add your test Google accounts under **Audience → Test users**.
 2. In a terminal opened in `frontend/`, run:
@@ -140,7 +150,7 @@ Use your actual SDK path from SDK Manager, and leave `DEBUG_APPLICATION_ID_SUFFI
 
 ---
 
-## Build and Run
+## Building and Running
 
 ### 1. Start the backend
 

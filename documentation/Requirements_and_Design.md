@@ -6,6 +6,7 @@
 | --------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------- |
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 | 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
+| 2026-11-03      | Continuation of changes on 2026-11-01 (3.2, 3.4, 3.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7) | In response to CP2 submission, backend changes, and TA feedback |
 
 ---
 
@@ -42,13 +43,14 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 1. **[authentication] Sign-up/Sign-in** - Authenticating through the Google Sign-in Interface. If the account doesn't have a linked TradeOff account, one will be created and linked for them.
 2. **[authentication] Sign-out** - Clears authentication for users who are signed in, clearing the session from their TradeOff account and returning them to an unauthenticated user.
-3. **[+] Manage Preferences** - View and edit account and application information, including changing display name and username, or changing application appearance (e.g. light/dark mode). TradeOff will save the changed info accordingly.
+3. **[authentication] Manage Preferences** - View and edit account and application information, including changing profile name and username, or changing application appearance (e.g. light/dark mode). TradeOff will save the changed info accordingly.
 4. **[market] Browse Stocks** - Move though available stocks or use a search bar to view stocks by their company name or ticker symbol. TradeOff shows matching stocks and available market info.
-5. **[trading] Execute Trade** - Select a stock, specify how much of that stock, and choose to buy or sell using the virtual funds. User balance and shares are updated and the trade is recorded.
-6. **[portfolio] Load Portfolio** - View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
-7. **[social] Manage Friend Requests** - Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
-8. **[social] Remove Friend** - Users can remove an existing friend from their friend list. TradeOff will take notice of the removal request and will remove info regarding that friendship.
-9. **[social] View Leaderboard** - View rankings comparing cash balance or percentage cash profits/lossses between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
+5. **[trading] Buy Stocks** - Select a stock, specify how much of that stock, and choose to buy using the virtual funds. User balance and shares are updated and the trade is recorded.
+6. **[trading] Sell Stocks** - Select an owned stock, specify how much of that stock you have, and choose to sell. User balance and shares are updated and the trade is recorded.
+7. **[portfolio] Load Portfolio** - View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
+8. **[social] Manage Friend Requests** - Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
+9. **[social] Remove Friend** - Users can remove an existing friend from their friend list. TradeOff will take notice of the removal request and will remove info regarding that friendship.
+10. **[social] View Leaderboard** - View rankings comparing portfolio value and percentage return between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
 
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
@@ -71,7 +73,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
    - Some Failure Scenarios:
       - (2a) Market information is unavailable.
          - (2a1) System indicates that the stock information could not be loaded.
-         - (2a2) Actor returns to the Market page to attempt loading the information again.
+         - (2a2) Actor presses Retry to retry loading the market info.
       - (5a) No stocks match the search input.
          - (5a1) System displays no matching results.
          - (5a2) Actor modifies or clears the search input.
@@ -79,42 +81,39 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 <a name="fucs2"></a>
 
-2. **Execute Trade**
-   - Description: Select a stock, specify how much of that stock, and choose to buy or sell using the virtual funds. User balance and shares are updated and the trade is recorded.
+2. **Buy Stocks**
+   - Description: Select a stock, specify how much of that stock, and choose to buy using virtual funds through a market or limit order. User balance and shares are updated when the purchase is completed, and the trade is recorded.
    - Primary Actor(s): Trader
    - Preconditions:
-      - Actor(s) are allowed to open the Trading page
+      - Trader is authenticated and has access to the Trading page
+      - Trader has sufficient virtual cash to purchase the selected shares
    - Postconditions:
-      - Trader's virtual cash balance and stock holdings reflect the completed trade
-      - The completed trade is recorded in the Trader's transaction history
+      - Trader's virtual cash balance and stock holdings reflect the completed purchase
+      - The completed purchase is recorded in the Trader's transaction history
    - Main Success Scenario:
       - (1) Trader opens the Trading page
       - (2) Trader selects a stock to trade
       - (3) System displays the selected stock and its trading information
-      - (4a) Trader chooses to buy shares
-         - (4a1) Trader selects the Buy option
-         - (4a2) Trader enters the number of shares to purchase
-         - (4a3) Trader submits the trade
-         - (4a4) System validates the quantity and available virtual cash
-         - (4a5) System executes the purchase and updates the Trader's cash balance and stock holdings
-         - (4a6) System records the completed transaction and displays the trade result
-      - (4b) Trader chooses to sell shares
-         - (4b1) Trader selects the Sell option
-         - (4b2) Trader enters the number of shares to sell
-         - (4b3) Trader submits the sale
-         - (4b4) System validates the quantity and available shares
-         - (4b5) System executes the sale and updates the Trader's cash balance and stock holdings
-         - (4b6) System records the completed transaction and displays the trade result
+      - (4) Trader selects the Buy option
+      - (5) Trader chooses a market order or limit order
+      - (6) Trader enters the number of shares to purchase (and a limit price if needed)
+      - (7) Trader submits the purchase
+      - (8) System validates the quantity and available/needed virtual cash
+      - (9) System executes the purchase and updates the Trader's cash balance and stock holdings
+      - (10) System records the completed transaction and displays the trade result
    - Some Failure Scenarios:
-      - (4c) Trader does not own enough shares to complete the sale.
-         - (4c1) System rejects the sale and informs the Trader that they have insufficient shares
-         - (4c2) Trader reduces the sale quantity and returns to step 4a3, or cancels the trade
-      - (7a) Trader has insufficient virtual cash for the purchase.
-         - (7a1) System rejects the purchase and informs the Trader that their available balance is insufficient
-         - (7a2) Trader reduces the purchase quantity and returns to step 6, or cancels the trade
-      - (7b) Trader enters an invalid quantity.
-         - (7b1) System rejects the trade and indicates that the entered quantity is invalid
-         - (7b2) Trader corrects the quantity and returns to step 6, or cancels the trade
+      - (8a) Trader has insufficient virtual cash for the purchase.
+         - (8a1) System rejects the purchase and informs the Trader that their available balance is insufficient
+         - (8a2) Trader reduces the purchase quantity and returns to step 7, or cancels the purchase
+      - (8b) Trader enters an invalid quantity.
+         - (8b1) System rejects the purchase and indicates that the entered quantity is invalid
+         - (8b2) Trader corrects the quantity and returns to step 7, or cancels the purchase
+      - (8c) Stock price information is unavailable.
+         - (8c1) System rejects the purchase and informs the Trader that the stock price could not be retrieved
+         - (8c2) Trader retries the purchase later or cancels it
+      - (8d) Trader enters a limit order where the price is lower than the market price.
+         - (5a6) Otherwise, System creates a pending order and reserves the required virtual cash
+         - (5a7) System displays the pending order, which can be completed or cancelled later
 
 <a name="fucs3"></a>
 
@@ -159,9 +158,9 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
       - (2) Trader selects the Friends section
       - (3) System displays the Trader's existing friends and pending friend requests
       - (4) Trader chooses to add a friend
-      - (5) Trader identifies another TradeOff user to send a friend request to
+      - (5) Trader identifies another TradeOff user to send a friend request to by friend ID
       - (6) Trader submits the friend request
-      - (7) System checks whether the requested friendship can be created
+      - (7) System checks whether the receiver exists and a friendship between them doesn't
       - (8) System creates a pending friend request
       - (9) System updates the displayed request information
    - Some Failure Scenarios:
@@ -190,7 +189,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 <a name="fucs5"></a>
 
 5. **View Leaderboard**
-   - Description: View rankings comparing cash balance or percentage cash profits/lossses between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
+   - Description: View rankings comparing portfolio value and percentage return between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
    - Primary Actor(s): Trader
    - Preconditions:
       - Actor(s) are allowed to open the Social page
@@ -200,9 +199,9 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
       - (1) Trader opens the Social page
       - (2) Trader selects the Leaderboard section
       - (3) System retrieves leaderboard information for the Trader and their accepted friends
-      - (4) System displays users ranked according to the selected criterion
+      - (4) System displays users ranked (by default it's total portfolio value)
       - (5) Trader examines the displayed rankings
-      - (6) Trader selects a different ranking criterion
+      - (6) Trader selects a different ranking criterion (e.g. % portfolio return)
       - (7) System reorders the leaderboard according to the selected criterion
       - (8) Trader reviews the updated rankings
    - Some Failure Scenarios:
@@ -253,43 +252,43 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 | **Order Engine** | Processes virtual buy and sell requests and updates the associated cash balances, holdings, and transaction records. Centralizing trade execution supports consistent validation and database updates. |
 | **Market Service** | Retrieves stock information from Alpaca and provides market-data endpoints to the application. Centralizing market-data access avoids requiring each feature to communicate independently with the external provider. |
 | **Market Cache** | Stores recently retrieved market information to reduce repeated external API requests. Caching the data saves calling costs, and gives safe data to the Market Service and Portfolio Service. |
-| **Market Polling** | Periodically refreshes cached stock information. Though represented as a different block here, polling the API is partially built into the Market Service. |
-| **Notifier Service** | Planned backend component for sending application notifications through Firebase Cloud Messaging. Separating notification creation from the others lets there be a direct connection to external source Firebase. |
 | **(extern) Google OAuth Platform** | Provides external identity authentication for TradeOff users. Using Google avoids implementing a separate password-based authentication system while allowing TradeOff to maintain its own application accounts. |
 | **(extern) Alpaca Market Data API** | Supplies external stock-market information used by TradeOff's Market functionality. This service is imperative because TradeOff aims to emulate real market information rather than making fake market data. |
-| **(extern) Firebase Cloud Messaging** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
 | **(database) MySQL** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
 
 | **Interface** | **From** | **To** | **Purpose** |
 | --- | --- | --- | --- |
-| `POST /api/auth/google (idToken) → AuthResponse` | Frontend (Auth.) | User Service | Verifies Google credentials, retrieves or creates a user account, and issues a TradeOff authentication token. |
+| `POST /api/auth/google (idToken) → AuthResponse` | Frontend (Auth.) | User Service | Verifies Google credentials, retrieves or creates a user account, and issues a TradeOff auth token. |
 | `GET /api/users/me (JWT) → UserProfile` | Frontend (Auth.) | User Service | Retrieves the authenticated user's profile information. |
 | `PATCH /api/users/me (JWT, profileChanges) → UserProfile` | Frontend (Auth.) | User Service | Updates supported user profile fields. |
-| `GET /api/market/stocks (searchParams) → StockList` | Frontend (Market) | Market Service | Retrieves stock listings and search results. |
+| `GET /api/market/stocks → StockList` | Frontend (Market) | Market Service | Retrieves the available stock listings and market information. |
 | `GET /api/market/stocks/:symbol (symbol) → StockDetails` | Frontend (Market) | Market Service | Retrieves stock details and the latest available quote. |
-| `GET /api/market/stocks/:symbol/history (symbol, range) → PriceHistory` | Frontend (Market) | Market Service | Retrieves historical prices for a selected stock. |
-| `POST /api/trades/execute (JWT, symbol, side, quantity, pricePerShare) → TradeResult` | Frontend (Trading) | Order Engine | Executes a virtual buy or sell transaction after validating available funds or holdings. |
-| `GET /api/trades/history (JWT) → TradeList` | Frontend (Trading) | Order Engine | Retrieves the user's previous virtual trades. |
-| `GET /api/portfolio (JWT) → PortfolioSummary` | Frontend (Portfolio) | Portfolio Service | Retrieves cash balances, holdings, and portfolio valuation. **Planned.** |
-| `GET /api/portfolio/performance (JWT, range) → PerformanceHistory` | Frontend (Portfolio) | Portfolio Service | Retrieves portfolio performance over a selected period. |
-| `GET /api/social/users (query) → UserList` | Frontend (Social) | Social Service | Searches for other TradeOff users. |
-| `GET /api/social/friends (JWT) → FriendList` | Frontend (Social) | Social Service | Retrieves the user's accepted friendships. |
-| `GET /api/social/requests (JWT) → FriendRequestList` | Frontend (Social) | Social Service | Retrieves pending friend requests. |
-| `POST /api/social/requests (JWT, recipientId) → FriendRequest` | Frontend (Social) | Social Service | Sends a friend request to another user. |
-| `POST /api/social/requests/:id/accept (JWT, requestId) → Friendship` | Frontend (Social) | Social Service | Accepts a pending friend request. |
-| `POST /api/social/requests/:id/decline (JWT, requestId) → Result` | Frontend (Social) | Social Service | Declines an incoming friend request. |
-| `DELETE /api/social/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Cancels an outgoing friend request. |
-| `DELETE /api/social/friends/:id (JWT, friendId) → Result` | Frontend (Social) | Social Service | Removes an existing friendship. |
-| `GET /api/social/leaderboard (JWT) → Leaderboard` | Frontend (Social) | Social Service | Retrieves friends-only rankings based on virtual cash balances and percentage cash changes. |
-| `StockQuote getStockQuote(String symbol)` | Portfolio Service | Market Service | Supplies stock quotes for portfolio valuation. |
+| `GET /api/market/stocks/:symbol/history (symbol) → PriceHistory` | Frontend (Market) | Market Service | Retrieves historical prices for a selected stock. |
+| `GET /api/market/stocks → StockList` | Frontend (Portfolio) | Market Service | Retrieves stock prices used by the frontend to calculate portfolio valuations. |
+| `POST /api/trades/execute (JWT, ticker, side, type, quantity, limitPrice) → TradeResult` | Frontend (Trading) | Order Engine | Executes a virtual buy or sell order after validating available funds or holdings. |
+| `POST /api/trades/execute/market (JWT, ticker, side, quantity) → TradeResult` | Frontend (Trading) | Order Engine | Executes a market buy or sell order using a server-obtained stock price. |
+| `POST /api/trades/execute/limit (JWT, ticker, side, quantity, limitPrice) → TradeResult` | Frontend (Trading) | Order Engine | Places a limit buy or sell order, which may be completed immediately or remain pending. |
+| `GET /api/trades/position/:ticker (JWT, ticker) → PositionDetails` | Frontend (Trading) | Order Engine | Retrieves the user's available cash and stock holdings for a selected stock. |
+| `GET /api/trades/orders/pending (JWT) → PendingOrders` | Frontend (Trading) | Order Engine | Retrieves the user's pending orders. |
+| `POST /api/trades/orders/:id/cancel (JWT, orderId) → CancelResult` | Frontend (Trading/Portfolio) | Order Engine | Cancels a pending order and releases reserved funds when applicable. |
+| `GET /api/portfolio (JWT) → PortfolioSummary` | Frontend (Portfolio) | Portfolio Service | Retrieves cash balances, holdings, recent trades, and pending orders. |
+| `GET /api/friends (JWT) → FriendList` | Frontend (Social) | Social Service | Retrieves the user's accepted friendships. |
+| `GET /api/friends/requests (JWT) → FriendRequestList` | Frontend (Social) | Social Service | Retrieves pending friend requests. |
+| `POST /api/friends/requests (JWT, userId) → FriendRequest` | Frontend (Social) | Social Service | Sends a friend request to another user. |
+| `POST /api/friends/requests/:id/accept (JWT, requestId) → Result` | Frontend (Social) | Social Service | Accepts a pending friend request. |
+| `DELETE /api/friends/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Declines an incoming friend request. |
+| `DELETE /api/friends/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Cancels an outgoing friend request. |
+| `DELETE /api/friends/:id (JWT, friendshipId) → Result` | Frontend (Social) | Social Service | Removes an existing friendship. |
+| `GET /api/friends/leaderboard (JWT) → Leaderboard` | Frontend (Social) | Social Service | Retrieves friends-only rankings based on total portfolio value and percentage returns. |
+| `Stock getStock(String ticker)` | Order Engine | Market Cache | Supplies stock prices for validating and executing virtual orders. |
+| `Stock getStock(String ticker)` | Social Service | Market Cache | Supplies stock prices for calculating leaderboard portfolio values. |
 | `fetchStockQuotes(symbols) → StockQuotes` | Market Service | Alpaca Market Data API | Retrieves current market quotes from Alpaca. |
-| `fetchPriceHistory(symbol, range) → PriceHistory` | Market Service | Alpaca Market Data API | Retrieves historical market prices from Alpaca. |
+| `fetchPriceHistory(symbol) → PriceHistory` | Market Service | Alpaca Market Data API | Retrieves historical market prices from Alpaca. |
 | `verifyIdToken(idToken) → GoogleIdentity` | User Service | Google Authentication | Validates a Google ID token and retrieves the verified identity. |
 | `findOrCreateUser(googleIdentity) → User` | User Service | MySQL | Retrieves or creates an account associated with a verified Google identity. |
 | `readOrUpdateFriendships(userId, operation) → SocialResult` | Social Service | MySQL | Retrieves or updates friendship and friend-request records. |
-| `executeTradeTransaction(userId, trade) → TradeResult` | Order Engine | MySQL | Atomically updates virtual cash, holdings, and trade history. |
-| `getPortfolioRecords(userId) → PortfolioRecords` | Portfolio Service | MySQL | Retrieves records needed to calculate portfolio information. |
-| `sendNotification(deviceToken, message) → DeliveryResult` | Notifier | Firebase Cloud Messaging | Requests delivery of a push notification. |
+| `executeTradeTransaction(userId, order) → TradeResult` | Order Engine | MySQL | Atomically updates virtual cash, holdings, orders, and trade history. |
+| `getPortfolioRecords(userId) → PortfolioRecords` | Portfolio Service | MySQL | Retrieves records needed to display portfolio information. |
 
 ### **4.2. The Database**
 
@@ -299,7 +298,6 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 1. **Google Authentication** - Allows safe linkage between TradeOff and Google accounts - Chosen so we can authenticate in our app without using Firebase.
 2. **Alpaca Market Data API** - Supplies stock prices and market information for stock searches, virtual trading, and portfolio valuation - Chosen because real market data will help the app reflect normal markets, its main purpose!
-3. **Firebase Cloud Messaging (FCM)** - Deliver push notifications to relay important info - Chosen as it supports Android notifications (and is permitted by the course).
 
 ### **4.4. Frameworks and Libraries**
 
@@ -308,46 +306,20 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 3. **Retrofit + OkHttp** - Handles HTTP communication between the frontend and backend - Chosen as it provides structured API definitions and customizable connection.
 4. **Android Credential Manager** - Support for things relevant to Google sign-in - Chosen so we can authenticate in our app without using Firebase.
 6. **Prisma** - Defines database models, manages migrations, and accesses MySQL from the backend - Chosen for typed database queries and transactions for consistent updates.
-7. **Firebase Cloud Messaging SDK (Planned)** - Send and receive push notifications - Chosen as it's needed to support the FCM external module.
-8. **Jest and Supertest** - Runs automated backend tests and verifies HTTP API behavior - Chosen for constant and consistent testing of endpoints and backend code w/ coverage.
-9. **Compose Testing APIs** - Automates interactions with Android Compose screens - Chosen to support verification of user flows through TradeOff.
+7. **Jest and Supertest** - Runs automated backend tests and verifies HTTP API behavior - Chosen for constant and consistent testing of endpoints and backend code w/ coverage.
+8. **Compose Testing APIs** - Automates interactions with Android Compose screens - Chosen to support verification of user flows through TradeOff.
 
 ### **4.5. Dependencies Diagram**
 
-> [!WARNING]
-> (remove this) might need to remake this so its consistent with 4.1
+![H4.5-cp2-high-level-dependencies-diagram](images/4.5-cp2-high-level-dependencies-diagram.png)
 
-![H4.5-high-level-dependencies-diagram](images/4.5-high-level-dependencies-diagram.png)
+### **4.6. Use Case Sequence Diagrams (5 Most Major Use Cases)**
 
-### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
-
-> [!WARNING]
-> (remove this) remake so they match the new use cases. lifelines should be the dependencies and messages between them should be the interfaces, add more interfaces above if we need them. preface the graphics w/ ! to make them show up here
-
-1. **Browse Stocks**
-
-![4.6-browse-stocks-sequence](images/4.6-browse-stocks-sequence.png)
-
-2. **Execute Trade**
-
-![4.6-execute-trade-sequence](images/4.6-execute-trade-sequence.png)
-
-3. **View Portfolio**
-
-![4.6-view-portfolio-sequence](images/4.6-view-portfolio-sequence.png)
-
-4. **Manage Friend Requests**
-
-![4.6-manage-friend-requests-sequence](images/4.6-manage-friend-requests-sequence.png)
-
-5. **View Leaderboard**
-
-![4.6-view-leaderboard-sequence](images/4.6-view-leaderboard-sequence.png)
+| **Browse Stocks** | **Buy Stocks** | **View Portfolio** | **Manage Friend Requests** | **View Leaderboard** |
+| --- | --- | --- | --- | --- |
+| ![4.6-browse-stocks-sequence](images/4.6-browse-stocks-sequence.png) | ![4.6-buy-stocks-sequence](images/4.6-buy-stocks-sequence.png) | ![4.6-view-portfolio-sequence](images/4.6-view-portfolio-sequence.png) | ![4.6-manage-friend-requests-sequence](images/4.6-manage-friend-requests-sequence.png) | ![4.6-view-leaderboard-sequence](images/4.6-view-leaderboard-sequence.png) |
 
 ### **4.7. Design of Non-Functional Requirements**
-
-> [!WARNING]
-> (remove this) these should be up to date, but we may need specific implementation to be mentioned here if any
 
 <a name="nfrd1"></a>
 

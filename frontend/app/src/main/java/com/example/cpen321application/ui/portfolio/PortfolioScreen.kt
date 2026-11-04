@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -175,7 +176,7 @@ fun PortfolioScreen(
     PortfolioPolling(state)
     MaterialTheme {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxSize().testTag("portfolio-list").background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -310,14 +311,14 @@ private fun PortfolioSummaryCard(
 ) {
     PortfolioPanel(tint = MaterialTheme.colorScheme.primaryContainer) {
         Text("Total Portfolio Value", color = PortfolioMuted, fontSize = 16.sp)
-        Text(money(totalValue), fontSize = 36.sp, fontWeight = FontWeight.Bold)
+        Text(money(totalValue), modifier = Modifier.testTag("portfolio-total"), fontSize = 36.sp, fontWeight = FontWeight.Bold)
         Text("Holdings + available virtual cash", color = PortfolioMuted, fontSize = 12.sp)
         HorizontalDivider(Modifier.padding(vertical = 16.dp), color = PortfolioBorder)
         Text("Available Virtual Cash", color = PortfolioMuted, fontSize = 14.sp)
-        Text(money(cashBalance), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text(money(cashBalance), modifier = Modifier.testTag("portfolio-cash"), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(16.dp))
         Text("Total Unrealized Profit/Loss", color = PortfolioMuted, fontSize = 14.sp)
-        ProfitLoss(totalProfitLoss, totalReturnPercent)
+        ProfitLoss(totalProfitLoss, totalReturnPercent, Modifier.testTag("portfolio-profit"))
     }
 }
 
@@ -360,7 +361,7 @@ private fun AssetAllocationCard(
         }
         slices.forEachIndexed { index, (symbol, value) ->
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().testTag("allocation-$symbol").semantics(mergeDescendants = true) {}.padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -376,7 +377,7 @@ private fun AssetAllocationCard(
 
 @Composable
 private fun HoldingCard(holding: EvaluatedHolding, onClick: () -> Unit) {
-    PortfolioPanel(modifier = Modifier.clickable(
+    PortfolioPanel(modifier = Modifier.testTag("holding-${holding.ticker}").clickable(
         role = Role.Button,
         onClickLabel = "Trade ${holding.ticker}",
         onClick = onClick,
@@ -474,13 +475,13 @@ private fun PortfolioPanel(
 }
 
 @Composable
-private fun ProfitLoss(amount: Double, percent: Double) {
+private fun ProfitLoss(amount: Double, percent: Double, modifier: Modifier = Modifier) {
     val sign = if (amount >= 0) "+" else "−"
     Text(
         "$sign${money(abs(amount))} ($sign${String.format(Locale.US, "%.2f", abs(percent))}%)",
         color = if (amount >= 0) PortfolioGreen else PortfolioRed,
         fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-        modifier = Modifier.padding(vertical = 4.dp),
+        modifier = modifier.padding(vertical = 4.dp),
     )
 }
 

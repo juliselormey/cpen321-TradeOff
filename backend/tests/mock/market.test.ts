@@ -199,7 +199,7 @@ describe('Mocked: market endpoints and caches', () => {
     fetchHistory.mockResolvedValue(Array.from({ length: 50 }, (_, i) => ({
       timestamp: new Date(START - (50 - i) * 86_400_000).toISOString(), price: 150 + i,
     })));
-    fetchQuote.mockImplementation(async () => ({ ...QUOTE, quoteAsOf: new Date(now()).toISOString() }));
+    fetchQuote.mockImplementation(() => Promise.resolve({ ...QUOTE, quoteAsOf: new Date(now()).toISOString() }));
     for (let index = 0; index < MAX_ROLLING_POINTS + 10; index++) {
       await service.getStock('AAPL');
       advance(8_000);

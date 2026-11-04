@@ -14,7 +14,7 @@ data class MeResponse(val user: FriendProfile)
 data class AddFriendRequest(val userId: String)
 data class SendFriendResponse(val request: FriendRequest)
 data class LeaderboardEntry(val user: FriendProfile, val isYou: Boolean,
-    val cashBalance: String?, val returnPercent: Double?)
+    val cashBalance: String?, val returnPercent: Double?, val totalPortfolioValue: String? = null)
 data class LeaderboardResponse(val entries: List<LeaderboardEntry>)
 
 interface FriendsApi {

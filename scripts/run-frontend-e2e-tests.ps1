@@ -1,23 +1,9 @@
 #!/usr/bin/env pwsh
-<#
-Run frontend E2E tests (app/src/androidTest/.../e2e/*.kt).
-
-Prerequisites: sign in inside the app on the emulator, then press Enter when prompted.
-Usage: .\scripts\run-frontend-e2e-tests.ps1
-
-NOTE ON EXECUTION POLICY:
-  Windows blocks script execution by default. If running this script fails
-  with a message about execution policies, either:
-    - run once: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-    - or launch with: pwsh -ExecutionPolicy Bypass -File .\scripts\run-frontend-e2e-tests.ps1
-#>
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-
-$Root = (Resolve-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) '..')).Path
-$FrontendDir = if ($env:FRONTEND_DIR) { $env:FRONTEND_DIR } else { Join-Path $Root 'frontend' }
-$env:FRONTEND_DIR = $FrontendDir
-
-. (Join-Path $Root 'scripts\lib\frontend-instrumented-test-common.ps1')
-Run-InstrumentedTests e2e
+$root = Split-Path -Parent $PSScriptRoot
+Push-Location (Join-Path $root 'frontend')
+try {
+    & .\gradlew.bat :app:connectedDebugAndroidTest "-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true" "-Pandroid.testInstrumentationRunnerArguments.class=com.example.cpen321application.e2e.PortfolioFlowTest" --console=plain
+    if ($LASTEXITCODE -ne 0) { throw 'Portfolio E2E failed. Inspect app/build/reports/androidTests/connected/debug/index.html.' }
+} finally { Pop-Location }

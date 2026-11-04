@@ -33,23 +33,26 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
             mutableState.value = MarketUiState(stocks = stocks, checkedAt = Instant.now().toString())
         } catch (error: CancellationException) {
             throw error
-        } catch (error: Exception) {
-            val message = when (error) {
-                is IOException -> "Cannot reach the backend. Check the server and your connection."
-                is HttpException -> "Market endpoint returned HTTP ${error.code()}. Check the backend version."
-                else -> "Could not load market data. Try again shortly."
-            }
-            mutableState.value = mutableState.value.copy(
-                stocks = mutableState.value.stocks.map {
-                    if (it.source == "alpaca" && it.currentPrice != null) {
-                        it.copy(status = "stale", history = it.history?.copy(status = "stale"))
-                    } else it
-                },
-                error = message,
-            )
+        } catch (_: IOException) {
+            showFailure("Cannot reach the backend. Check the server and your connection.")
+        } catch (error: HttpException) {
+            showFailure("Market endpoint returned HTTP " + error.code() + ". Check the backend version.")
+        } catch (_: com.google.gson.JsonParseException) {
+            showFailure("Could not read market data. Try again shortly.")
         } finally {
             mutableState.value = mutableState.value.copy(refreshing = false)
         }
+    }
+
+    private fun showFailure(message: String) {
+        mutableState.value = mutableState.value.copy(
+            stocks = mutableState.value.stocks.map {
+                if (it.source == "alpaca" && it.currentPrice != null) {
+                    it.copy(status = "stale", history = it.history?.copy(status = "stale"))
+                } else it
+            },
+            error = message
+        )
     }
 
     class Factory(private val repository: MarketRepository) : ViewModelProvider.Factory {

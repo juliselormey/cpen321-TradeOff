@@ -7,6 +7,8 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+# Generate the client for this schema; generation does not connect to a database.
+RUN DATABASE_URL=mysql://unused:unused@localhost:3306/unused npx prisma generate
 
 # sets process.env.PORT
 ENV PORT=3000 

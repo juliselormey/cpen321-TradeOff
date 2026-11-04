@@ -54,7 +54,7 @@ export class MarketService {
       performancePoints: history.points.map(point => point.price),
       historySource: history.points.length ? 'alpaca' : 'unavailable', history,
       source: 'alpaca', feed: 'iex',
-      status: quote ? (cached?.issue ? 'stale' : 'ok') : 'unavailable',
+      status: quote ? (cached.issue ? 'stale' : 'ok') : 'unavailable',
       quoteAsOf: quote?.quoteAsOf ?? null,
       fetchedAt: cached?.fetchedAt != null ? new Date(cached.fetchedAt).toISOString() : null,
       quoteAgeSeconds: quote ? Math.max(0, Math.floor((this.now() - Date.parse(quote.quoteAsOf)) / 1_000)) : null,
@@ -70,9 +70,10 @@ export class MarketService {
   }
 
   private async ensurePrice(symbol: string): Promise<void> {
-    if (this.provider.fetchQuotes) {
+    const fetchQuotes = this.provider.fetchQuotes?.bind(this.provider);
+    if (fetchQuotes) {
       return this.refreshBatch('prices', this.prices, REFRESH_INTERVAL_MS,
-        symbols => this.provider.fetchQuotes!(symbols), (ticker, quote, cached) => {
+        fetchQuotes, (ticker, quote, cached) => {
           if (cached && Date.parse(quote.quoteAsOf) < Date.parse(cached.quoteAsOf)) {
             throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an older snapshot.');
           }
@@ -94,9 +95,10 @@ export class MarketService {
   }
 
   private async ensureHistory(symbol: string): Promise<void> {
-    if (this.provider.fetchHistories) {
+    const fetchHistories = this.provider.fetchHistories?.bind(this.provider);
+    if (fetchHistories) {
       return this.refreshBatch('histories', this.histories, HISTORY_TTL_MS,
-        symbols => this.provider.fetchHistories!(symbols), (_ticker, points) =>
+        fetchHistories, (_ticker, points) =>
           [...points].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-MAX_DAILY_POINTS));
     }
     let entry = this.histories.get(symbol);
@@ -130,16 +132,22 @@ export class MarketService {
     const work = (async () => {
       let results: Record<string, T | MarketProviderError>;
       try { results = await fetch(due); } catch (error: unknown) {
-        await Promise.all(due.map(symbol => this.load(cache.get(symbol)!, ttl, async () => { throw error; })));
+        await Promise.all(due.map(symbol => {
+          const entry = cache.get(symbol);
+          if (!entry) throw new Error('Missing initialized cache entry');
+          return this.load(entry, ttl, () => Promise.reject(error instanceof Error ? error : new Error('Market provider failed')));
+        }));
         return;
       }
+      const values = new Map(Object.entries(results));
       await Promise.all(due.map(symbol => {
-        const entry = cache.get(symbol)!;
-        return this.load(entry, ttl, async () => {
-          const value = results[symbol];
+        const entry = cache.get(symbol);
+        if (!entry) throw new Error('Missing initialized cache entry');
+        return this.load(entry, ttl, () => {
+          const value = values.get(symbol);
           if (value === undefined) throw new MarketProviderError('PROVIDER_INVALID_DATA', `No Alpaca data for ${symbol}.`);
           if (value instanceof MarketProviderError) throw value;
-          return accept(symbol, value, entry.value);
+          return Promise.resolve(accept(symbol, value, entry.value));
         });
       }));
     })();
@@ -168,8 +176,9 @@ export class MarketService {
       entry.issue = null;
       entry.nextAttemptAt = this.now() + ttl;
     } catch (error: unknown) {
-      const failure = error instanceof MarketProviderError ? error :
-        new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.');
+      const failure = error instanceof MarketProviderError
+        ? error
+        : new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.');
       entry.issue = { code: failure.code, message: failure.message };
       entry.nextAttemptAt = this.now() + Math.max(REFRESH_INTERVAL_MS, failure.retryAfterMs);
       if (['PROVIDER_RATE_LIMITED', 'PROVIDER_AUTH_ERROR', 'MARKET_NOT_CONFIGURED'].includes(failure.code)) {

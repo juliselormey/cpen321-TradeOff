@@ -38,8 +38,17 @@ internal fun StockLogo(ticker: String, modifier: Modifier = Modifier) {
             "AMZN" -> R.drawable.ic_stock_amazon
             else -> null
         }
+        val companyName = when (symbol) {
+            "AAPL" -> "Apple Inc."
+            "MSFT" -> "Microsoft Corporation"
+            "TSLA" -> "Tesla, Inc."
+            "NVDA" -> "NVIDIA Corporation"
+            "GOOGL" -> "Alphabet Inc."
+            "AMZN" -> "Amazon.com, Inc."
+            else -> symbol
+        }
         if (logo != null) Image(
-            painterResource(logo), null,
+            painterResource(logo), "$companyName logo",
             Modifier.fillMaxSize().padding(
                 if (symbol in listOf("TSLA", "NVDA", "AMZN")) 0.dp else 9.dp,
             ),

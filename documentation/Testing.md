@@ -129,3 +129,60 @@ This flow checks viewing existing sample information; it does not check real acc
 - **Status:** Planned; these flows have not been implemented as automated tests or executed for this report.
 - **Existing automated test:** `ExampleInstrumentedTest.kt` checks only the app's package name, not these user flows.
 - **Results and logs:** Not available yet. Record actual pass/fail results and logs after running the tests.
+## 4. Portfolio Frontend End-to-End Testing
+
+### Test Suite Location
+
+The Portfolio E2E suite is in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/PortfolioFlowTest.kt`. `RealBackendTest.kt` provides the signed-in test setup. These tests use the real app, API routes, and SQL database. The isolated test server is `backend/scripts/e2e-server.ts`.
+
+### How to Run E2E Tests
+
+1. Create an empty MySQL database named `tradeoff_e2e_<name>` and add `backend/.env.e2e` with `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET`, Alpaca keys, and `E2E_USER_EMAIL`. Keep this file private; Git ignores it.
+2. Set these URLs in `frontend/local.properties`:
+
+   ```properties
+   API_BASE_URL=http://10.0.2.2:3002/
+   MARKET_API_BASE_URL=http://10.0.2.2:3002/
+   ```
+
+3. In a terminal, prepare and start the backend:
+
+   ```powershell
+   cd backend
+   npm.cmd ci
+   $env:DOTENV_CONFIG_PATH = '.env.e2e'
+   npx.cmd prisma generate
+   npx.cmd prisma db push
+   npx.cmd tsx scripts/e2e-server.ts
+   ```
+
+   Leave this terminal open. Start the app on an Android emulator and sign in with the Google account listed in `E2E_USER_EMAIL`.
+4. In a second terminal at the repository root, run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\run-frontend-e2e-tests.ps1
+   ```
+
+The tests reset the selected account before and after each case. Use only the disposable database: test data is reset to $10,000. `10.0.2.2` is the emulator address for the host computer.
+
+### Tested Use Cases
+
+Portfolio: view an empty account, open a stock from Holdings and trade it, check balances/trade activity/allocation, and verify portfolio polling and error behavior.
+
+### Test Scenarios
+
+| Test | Scenario and expected behavior |
+|---|---|
+| `emptyPortfolioShowsStartingCashWithoutInventedHoldings` | Empty account displays $10,000 cash/value and no invented positions. |
+| `holdingPurchaseUpdatesSharesCashActivityAndAllocation` | Open a holding, buy a share, return to Portfolio; shares, cash, activity, and allocation reflect the order. |
+| `externalTradeRefreshesOpenPortfolioWithoutNavigation` | A trade made while Portfolio stays open appears after polling. |
+| `priceMovementRevaluesPortfolioWithoutChangingSharesOrCash` | Changed quote updates value, P/L, and allocation while shares and cash remain constant. |
+| `portfolioFailureShowsErrorRetainsBalanceAndRecovers` | Portfolio request failure shows an error, retains cash, and recovers. |
+| `quoteRefreshFailureLabelsRetainedPortfolioValuesStale` | Failed quote refresh should mark retained values stale; this checks behavior the app may not yet implement. |
+
+### Execution Results
+
+The Android app and instrumentation tests compiled. The full Portfolio suite has not completed successfully. An earlier run exposed a missing stale-value warning on Portfolio. Rerun the suite and record the current results before submission.
+
+HTML report: `frontend/app/build/reports/androidTests/connected/debug/index.html`.
+Raw test results: `frontend/app/build/outputs/androidTest-results/connected/debug/`.

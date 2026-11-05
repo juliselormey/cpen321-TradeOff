@@ -38,6 +38,8 @@ export async function processPendingLimitOrders() {
             }
         }
         return { processedCount: pending.length, filledCount };
+    } catch (err) {
+        throw err;
     } finally {
         running = false;
     }

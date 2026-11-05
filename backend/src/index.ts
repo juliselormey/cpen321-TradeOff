@@ -7,15 +7,16 @@ import { db } from './prisma/db';
 
 const app = createApp();
 
-const keyPath = path.resolve(env.sslKeyPath);
-const certPath = path.resolve(env.sslCertPath);
+function getCertBuffer(filePath: string): Buffer {
+  const resolved = path.resolve(filePath);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  return fs.readFileSync(resolved);
+}
 
-/* eslint-disable security/detect-non-literal-fs-filename */
 const sslOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
+  key: getCertBuffer(env.sslKeyPath),
+  cert: getCertBuffer(env.sslCertPath),
 };
-/* eslint-enable security/detect-non-literal-fs-filename */
 
 const server = https.createServer(sslOptions, app);
 

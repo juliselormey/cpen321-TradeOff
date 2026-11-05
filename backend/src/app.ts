@@ -1,5 +1,4 @@
 import express, { type Express, Response, Request, NextFunction } from 'express';
-import info from './routes/info';
 import cors from 'cors';
 import { usersRouter } from "./routes/users";
 import { authRouter } from "./routes/auth";
@@ -18,7 +17,6 @@ export function createApp(): Express {
     res.json({ status: 'ok' });
   });
 
-  app.use("/api", info);
   app.use('/api/market', createMarketRouter());
   app.use("/api/auth", authRouter);
   app.use("/api/auth", usersRouter);

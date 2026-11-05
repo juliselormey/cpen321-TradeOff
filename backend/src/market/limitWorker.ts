@@ -39,7 +39,8 @@ export async function processPendingLimitOrders() {
         }
         return { processedCount: pending.length, filledCount };
     } catch (err) {
-        throw err;
+        console.error("Error processing pending limit orders:", err);
+        return { processedCount: 0, filledCount: 0 };
     } finally {
         running = false;
     }

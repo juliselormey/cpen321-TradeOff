@@ -2,7 +2,7 @@ import { Prisma } from "../generated/prisma/client";
 import { marketService } from "./service";
 
 export type Tx = Prisma.TransactionClient;
-type Order = Prisma.OrderGetPayload<{}>;
+type Order = Prisma.OrderGetPayload<Record<string, never>>;
 const ZERO = new Prisma.Decimal(0);
 
 export class OrderError extends Error {
@@ -15,14 +15,17 @@ export class OrderError extends Error {
 export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
     try {
         const stock = await marketService.getStock(ticker);
-        if (!stock.currentPrice || stock.status === "unavailable") throw new Error("unavailable");
+        if (!stock.currentPrice || stock.status === "unavailable") {
+            throw new OrderError(503, `Price unavailable for ${ticker}`);
+        }
         return new Prisma.Decimal(stock.currentPrice);
-    } catch {
+    } catch (err) {
+        if (err instanceof OrderError) throw err;
         throw new OrderError(503, `Price unavailable for ${ticker}`);
     }
 }
 
-export async function availableShares(tx: Tx, userId: string, ticker: string) {
+export async function availableShares(tx: Tx, userId: string, ticker: string): Promise<Prisma.Decimal> {
     const [position, pending] = await Promise.all([
         tx.position.findUnique({ where: { userId_ticker: { userId, ticker } } }),
         tx.order.aggregate({
@@ -30,7 +33,9 @@ export async function availableShares(tx: Tx, userId: string, ticker: string) {
             where: { userId, ticker, side: "SELL", status: "PENDING" },
         }),
     ]);
-    return (position?.quantity ?? ZERO).minus(pending._sum.quantity ?? ZERO);
+    const owned = position?.quantity ?? ZERO;
+    const reserved = pending._sum.quantity ?? ZERO;
+    return owned.minus(reserved);
 }
 
 /**
@@ -39,7 +44,6 @@ export async function availableShares(tx: Tx, userId: string, ticker: string) {
  * which rolls the whole transaction back, including the status claim.
  */
 export async function fillOrder(tx: Tx, order: Order, price: Prisma.Decimal): Promise<boolean> {
-    // Atomic claim: only one caller can move PENDING -> FILLED
     const claimed = await tx.order.updateMany({
         where: { id: order.id, status: "PENDING" },
         data: { status: "FILLED", executedPrice: price },
@@ -52,8 +56,8 @@ export async function fillOrder(tx: Tx, order: Order, price: Prisma.Decimal): Pr
     const position = await tx.position.findUnique({ where: posKey });
 
     if (side === "BUY") {
-        // Cash was held at placement: limit price for limit orders, price for market
-        const hold = qty.mul(order.type === "LIMIT" ? order.limitPrice! : price);
+        const limitPrice = order.limitPrice ?? price;
+        const hold = qty.mul(order.type === "LIMIT" ? limitPrice : price);
         const refund = hold.minus(cost);
         if (!refund.isZero()) {
             await tx.account.update({ where: { userId }, data: { cashBalance: { increment: refund } } });

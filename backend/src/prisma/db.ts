@@ -14,6 +14,10 @@ const adapter = new PrismaMariaDb({
   user: decodeURIComponent(url.username),
   password: decodeURIComponent(url.password),
   database: url.pathname.slice(1),
+  // Local MySQL development uses RSA authentication without a provisioned key.
+  // Never retrieve an untrusted server key for remote or production databases.
+  allowPublicKeyRetrieval: process.env.NODE_ENV === "development" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname),
 });
 
 export const db = new PrismaClient({ adapter });

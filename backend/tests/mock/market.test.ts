@@ -71,7 +71,9 @@ describe('Mocked: market endpoints and caches', () => {
     await Promise.all([first, second, chart]);
     fetchQuote.mockResolvedValue(QUOTE);
     fetchHistory.mockResolvedValue(HISTORY);
-    await Promise.all(Array.from({ length: 10 }, () => request(app).get('/api/market/stocks').expect(200)));
+    await Promise.all(Array.from({ length: 10 }, async () => {
+      await request(app).get('/api/market/stocks').expect(200);
+    }));
     expect(fetchQuote).toHaveBeenCalledTimes(6);
     expect(fetchHistory).toHaveBeenCalledTimes(6);
   });

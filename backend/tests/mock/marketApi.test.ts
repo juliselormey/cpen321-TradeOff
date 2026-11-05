@@ -18,13 +18,20 @@ function fixture(overrides: Partial<QuoteProvider> = {}) {
     percentageChange: 1,
     quoteAsOf: new Date(NOW).toISOString(),
   }])) as Record<string, ProviderQuote>;
-  const fetchQuote = jest.fn<Promise<ProviderQuote>, [string]>(async ticker => quotes[ticker]!);
-  const fetchHistory = jest.fn<Promise<PricePoint[]>, [string]>(async () => history);
+
+  const getQuote = (ticker: string): ProviderQuote => {
+    const q = Object.prototype.hasOwnProperty.call(quotes, ticker) ? quotes[ticker] : undefined;
+    if (!q) throw new Error(`Missing quote for ${ticker}`);
+    return q;
+  };
+
+  const fetchQuote = jest.fn<Promise<ProviderQuote>, [string]>((ticker: string) => Promise.resolve(getQuote(ticker)));
+  const fetchHistory = jest.fn<Promise<PricePoint[]>, [string]>(() => Promise.resolve(history));
   const fetchQuotes = jest.fn<Promise<Record<string, ProviderQuote | MarketProviderError>>, [readonly string[]]>(
-    async symbols => Object.fromEntries(symbols.map(symbol => [symbol, quotes[symbol]!])),
+    symbols => Promise.resolve(Object.fromEntries(symbols.map(symbol => [symbol, getQuote(symbol)]))),
   );
   const fetchHistories = jest.fn<Promise<Record<string, PricePoint[] | MarketProviderError>>, [readonly string[]]>(
-    async symbols => Object.fromEntries(symbols.map(symbol => [symbol, history])),
+    symbols => Promise.resolve(Object.fromEntries(symbols.map(symbol => [symbol, history]))),
   );
   const provider: QuoteProvider = { fetchQuote, fetchHistory, fetchQuotes, fetchHistories, ...overrides };
   const app = express();

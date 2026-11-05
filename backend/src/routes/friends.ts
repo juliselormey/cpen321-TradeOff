@@ -32,8 +32,9 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
         orderBy: { id: "asc" },
     });
     // Reuse the shared market cache once per distinct symbol, not once per friend.
-    const symbols = [...new Set(users.flatMap(user => user.positions
-        .filter(position => position.quantity.greaterThan(0)).map(position => position.ticker)))];
+    const symbols = Array.from(new Set(users.flatMap(user => user.positions
+        .filter((p: { quantity: Prisma.Decimal; ticker: string }) => p.quantity.greaterThan(0))
+        .map((p: { ticker: string }) => p.ticker))));
     const prices = new Map(await Promise.all(symbols.map(async ticker => {
         try {
             const stock = await marketService.getStock(ticker);

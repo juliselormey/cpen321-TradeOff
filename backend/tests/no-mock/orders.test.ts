@@ -121,7 +121,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
         test("Limit BUY fills immediately at actual market price when limit price >= market price", async () => {
             const livePriceDecimal = await getServerPrice("AAPL");
             const livePrice = livePriceDecimal.toNumber();
-            const limitPrice = livePrice + 50.0; // Guaranteed >= live market price
+            const limitPrice = livePrice + 50.0;
 
             const res = await request(app)
                 .post("/api/trades/execute/limit")
@@ -131,7 +131,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
                     side: "BUY",
                     quantity: 2,
                     pricePerShare: livePrice,
-                    limitPrice: limitPrice,
+                    limitPrice,
                 });
 
             expect(res.status).toBe(200);
@@ -142,14 +142,14 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
             const trades = await db.trade.findMany({ where: { userId: testUserId } });
             expect(trades).toHaveLength(1);
             expect(trades[0]).toBeDefined();
-            expect(Number(trades[0]!.pricePerShare)).toBe(livePrice);
-            expect(Number(trades[0]!.totalAmount)).toBe(2 * livePrice);
+            expect(Number(trades[0]?.pricePerShare)).toBe(livePrice);
+            expect(Number(trades[0]?.totalAmount)).toBe(2 * livePrice);
         }, 15000);
 
         test("Limit SELL fills immediately at higher market price when limit price <= market price", async () => {
             const livePriceDecimal = await getServerPrice("AAPL");
             const livePrice = livePriceDecimal.toNumber();
-            const limitPrice = Math.max(1.0, livePrice - 50.0); // Guaranteed <= live market price
+            const limitPrice = Math.max(1.0, livePrice - 50.0);
 
             // Buy 5 shares first
             await request(app)
@@ -165,7 +165,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
                     side: "SELL",
                     quantity: 2,
                     pricePerShare: livePrice,
-                    limitPrice: limitPrice,
+                    limitPrice,
                 });
 
             expect(res.status).toBe(200);
@@ -188,25 +188,24 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
                     side: "BUY",
                     quantity: 2,
                     pricePerShare: 200,
-                    limitPrice: 1.0, // Guaranteed < live market price, stays PENDING
+                    limitPrice: 1.0,
                 });
 
             expect(res.status).toBe(200);
             expect(res.body.status).toBe("PENDING");
-            expect(res.body.cashBalance).toBe(9998); // $10,000 - $2 reserved
+            expect(res.body.cashBalance).toBe(9998);
 
             const dbOrders = await db.order.findMany({ where: { userId: testUserId } });
             expect(dbOrders).toHaveLength(1);
             expect(dbOrders[0]).toBeDefined();
-            expect(dbOrders[0]!.status).toBe("PENDING");
-            expect(Number(dbOrders[0]!.limitPrice)).toBe(1.0);
+            expect(dbOrders[0]?.status).toBe("PENDING");
+            expect(Number(dbOrders[0]?.limitPrice)).toBe(1.0);
         }, 15000);
 
         test("Pending Limit BUY reserves cash and prevents a subsequent Market BUY from overcommitting funds", async () => {
             const livePriceDecimal = await getServerPrice("MSFT");
             const livePrice = livePriceDecimal.toNumber();
 
-            // 1. Place Limit BUY for 20 shares @ $400 ($8,000 reserved funds, leaving $2,000 available cash)
             const limitRes = await request(app)
                 .post("/api/trades/execute/limit")
                 .set("Authorization", `Bearer ${authToken}`)
@@ -220,11 +219,9 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
 
             expect(limitRes.status).toBe(200);
 
-            // If it stayed pending (limit price < live price)
             if (limitRes.body.status === "PENDING") {
-                expect(limitRes.body.cashBalance).toBe(2000); // $10,000 - $8,000
+                expect(limitRes.body.cashBalance).toBe(2000);
 
-                // Attempt Market BUY for $3,000 worth of AAPL
                 const marketRes = await request(app)
                     .post("/api/trades/execute/market")
                     .set("Authorization", `Bearer ${authToken}`)
@@ -238,13 +235,12 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
                 expect(marketRes.status).toBe(400);
                 expect(marketRes.body).toEqual({ error: "Insufficient cash balance" });
 
-                // Cancelling limit order releases cash
                 const pendingOrders = await request(app)
                     .get("/api/trades/orders/pending")
                     .set("Authorization", `Bearer ${authToken}`);
 
                 expect(pendingOrders.body.orders[0]).toBeDefined();
-                const orderId = pendingOrders.body.orders[0]!.id;
+                const orderId = pendingOrders.body.orders[0]?.id;
 
                 await request(app)
                     .post(`/api/trades/orders/${orderId}/cancel`)

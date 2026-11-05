@@ -67,9 +67,9 @@ describe('Unmocked API: GET /api/market/stocks/:symbol/history', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).toMatchObject({ symbol: 'AAPL', feed: 'iex', status: 'ok' });
     expect(response.body.points.length).toBeGreaterThan(0);
-    for (const point of response.body.points) {
+    for (const point of response.body.points as Array<{ price: unknown; timestamp: unknown }>) {
       expect(Number(point.price)).toBeGreaterThan(0);
-      expect(Number.isFinite(Date.parse(point.timestamp))).toBe(true);
+      expect(Number.isFinite(Date.parse(String(point.timestamp)))).toBe(true);
     }
   });
 

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { db } from "../prisma/db";
 import { requireAuth } from "../middleware/auth";
+import { asyncHandler } from "../util/asyncHandler";
 
 export const portfolioRouter = Router();
 portfolioRouter.use(requireAuth);
@@ -9,10 +10,11 @@ portfolioRouter.use(requireAuth);
  * GET /api/portfolio
  * Returns complete user portfolio summary: cash balance, holdings, recent trades, and pending orders
  */
-portfolioRouter.get("/", async (req: Request, res: Response) => {
+portfolioRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
     const userId = req.userId;
     if (!userId) {
-        return res.status(401).json({ error: "Unauthorized" });
+        res.status(401).json({ error: "Unauthorized" });
+        return;
     }
 
     try {
@@ -30,7 +32,7 @@ portfolioRouter.get("/", async (req: Request, res: Response) => {
             }),
         ]);
 
-        return res.json({
+        res.json({
             cashBalance: account ? Number(account.cashBalance) : 10000.0,
             startingBalance: account ? Number(account.startingBalance) : 10000.0,
             holdings: positions.map((p) => ({
@@ -60,6 +62,6 @@ portfolioRouter.get("/", async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: "Failed to fetch portfolio summary" });
+        res.status(500).json({ error: "Failed to fetch portfolio summary" });
     }
-});
+}));

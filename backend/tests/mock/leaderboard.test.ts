@@ -12,7 +12,7 @@ jest.mock("../../src/prisma/db", () => ({ db: { user: {
 jest.mock("../../src/market/service", () => ({ marketService: { getStock: jest.fn() } }));
 const app = express();
 app.use("/api/friends", friendsRouter);
-const decimal = (value: number) => new Prisma.Decimal(value);
+const decimal = (value: number): Prisma.Decimal => new Prisma.Decimal(value);
 
 beforeEach(() => {
     jest.resetAllMocks();

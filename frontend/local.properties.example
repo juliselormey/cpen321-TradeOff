@@ -1,16 +1,17 @@
-# Path to your Android SDK. Android Studio usually writes this for you.
+# Merge into local.properties; preserve Android Studio's existing sdk.dir.
+# Use your actual SDK path, with forward slashes on Windows. Do not quote values.
+# Windows: C:/Users/YOUR_USERNAME/AppData/Local/Android/Sdk
+# macOS: /Users/YOUR_USERNAME/Library/Android/sdk
 sdk.dir=/path/to/Android/sdk
 
-# Backend base URL baked into the APK at build time.
-#API_BASE_URL=https://10.0.2.2:3000
-API_BASE_URL=https://34.105.116.91:3000
-# Google OAuth client ID.
-GOOGLE_CLIENT_ID=
+# Standard emulator reaches the full local HTTPS backend at 10.0.2.2.
+# For a physical device use the computer's LAN IP instead.
+# Copy the backend public certificate into the app as described in README.
+API_BASE_URL=https://10.0.2.2:3000/
+MARKET_API_BASE_URL=https://10.0.2.2:3000/
 
-# Other API keys, secrets, and configurations
+# Web application OAuth client ID, matching backend/.env; not a client secret.
+GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 
-# Optional Android Emulator Market override: keep npm run dev:market running.
-# 10.0.2.2 reaches the host loopback directly; no adb reverse is needed.
-# MARKET_API_BASE_URL=http://10.0.2.2:3001/
-# Optional: install beside an existing app signed by another debug key.
+# Normally leave unset; a suffix needs matching Android OAuth registration.
 # DEBUG_APPLICATION_ID_SUFFIX=.marketdemo

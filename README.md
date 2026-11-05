@@ -1,9 +1,5 @@
 # README: TradeOff installation guide
 
-> [!CAUTION]
-> _Keep this README up to date with the steps required to build and run the frontend and backend (including any scripts, config files, and environment variables). TAs ill follow these instructions._
-> 
-> (we should probably complete enough of this section to help our peer reviewers)
 
 ## Getting You Going
 
@@ -25,7 +21,7 @@ Complete the one-time setup first; later runs only require starting the backend 
 >   - Use JDK 17 or a compatible bundled JDK for Gradle
 > - [OpenSSL](https://openssl-library.org/source/)
 >   - On Windows, Git normally includes it at `C:\Program Files\Git\usr\bin\openssl.exe`
-> - A [Google account](google.com/), a [Google Cloud project](https://console.cloud.google.com/) for sign-in, and [Alpaca API credentials](https://alpaca.markets/) for stock data
+> - A [Google account](https://accounts.google.com/), a [Google Cloud project](https://console.cloud.google.com/) for sign-in, and [Alpaca API credentials](https://alpaca.markets/) for stock data
 >   - must be configured; a fresh clone does not contain working credentials for a new tester
 > 
 > **Commands used assume Windows (PowerShell)**. On macOS/Linux, use `npm`/`npx`, `cp`, `mkdir -p`, `curl`, and `./gradlew` in place of their Windows equivalents.
@@ -34,13 +30,31 @@ Complete the one-time setup first; later runs only require starting the backend 
 > cd cpen321-TradeOff
 > ```
 
+## Which terminal should I use?
+
+Use **PowerShell** on Windows: a PowerShell tab in Windows Terminal, VS Code, or Android Studio works. Use **MySQL Command Line Client** or a **MySQL Workbench SQL query tab** for SQL statements, not PowerShell. If you start `mysql -u root -p` from PowerShell, enter SQL at the `mysql>` prompt and type `exit` to return.
+
+| Task | Terminal | Working folder |
+| --- | --- | --- |
+| `npm.cmd ci`, Prisma commands, backend build/tests | PowerShell | `backend/` |
+| JWT generation (`node -e ...`) | PowerShell with Node.js installed | Any folder |
+| OpenSSL certificate generation and certificate copy | PowerShell | `backend/` |
+| `npm.cmd run dev` | PowerShell; keep it open | `backend/` |
+| `curl.exe` connection checks | A second PowerShell terminal | `backend/` |
+| `.\gradlew.bat signingReport` and Android build/tests | PowerShell | `frontend/` |
+| `CREATE DATABASE`, `CREATE USER`, `GRANT` | MySQL client or Workbench SQL tab | Not applicable |
+
+The repository root contains this README, `backend/`, and `frontend/`. On this machine it is `C:\Users\jerry\CPEN321_project\cpen321-TradeOff`; use your own clone path. From the root, run `cd backend` or `cd frontend`. Run `cd ..` to return to the root, or `Get-Location` to check your current folder. Each new terminal needs its own working folder.
+
+Blocks marked `dotenv` or `properties` are **file contents**, not terminal commands. Paste them into the indicated configuration file. Configure Google Cloud and Alpaca in your browser, and emulator settings in Android Studio.
+
 ## Backend Setup
 
 ### 1. Create the local database
 
 Open **MySQL Command Line Client** and enter the root password chosen during installation. Alternatively, open a root connection in MySQL Workbench or run `mysql -u root -p` if MySQL is on your PATH.
 
-Run this SQL, entering the password if you have one, then run these commands, replacing `YOUR_PASSWORD` with a password of your choice. This is a one-time step for a new database.
+After connecting as root, run this SQL, replacing `YOUR_PASSWORD` with a password of your choice. This is a one-time step for a new database.
 
 ```sql
 CREATE DATABASE tradeoff CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -58,10 +72,10 @@ In PowerShell, from the repository root:
 ```powershell
 cd backend
 npm.cmd ci
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Open `backend/.env` and set:
+If `backend/.env` already exists, keep its values and edit only the settings needed. Open `backend/.env` and set:
 
 ```dotenv
 PORT=3000
@@ -74,13 +88,18 @@ ALPACA_API_SECRET_KEY=YOUR_MATCHING_ALPACA_SECRET
 ```
 
 - Use the database password from step 1. If it contains reserved URL characters, URL-encode them in `DATABASE_URL`.
-- Generate `JWT_SECRET` with the following command and paste the output into `.env`:
+- Generate `JWT_SECRET` in PowerShell with Node.js installed, from any folder. Paste the output into `JWT_SECRET` in `backend/.env`:
 
   ```powershell
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ```
 
-- In your Alpaca dashboard, generate an API key and secret, then copy both values into `.env`. The backend uses Alpaca's IEX stock-data feed; the account must have access to it. See [Alpaca market-data access](https://docs.alpaca.markets/us/v1.4.2/docs/about-market-data-api).
+- Get your Alpaca API keys:
+  1. Sign up at [Alpaca](https://app.alpaca.markets/signup).
+  2. Open your **Paper Trading** account and generate API keys.
+  3. Set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `backend/.env` to the matching key and secret.
+  4. Save the file and restart the backend if it is running.
+  These are separate from `JWT_SECRET`. Your Alpaca account must have access to the IEX stock-data feed.
 - Set `GOOGLE_CLIENT_ID` using the Google sign-in steps under Frontend Setup below, **before starting the backend**.
 
 Do not commit `.env`, share API secrets, or reuse the example secret.
@@ -97,7 +116,7 @@ New-Item -ItemType Directory -Force certs
 
 `db push` creates the current tables in your new local database. If using an existing database and Prisma warns about data loss, inspect the changes rather than forcing them. The migration history alone does not yet create every trading table.
 
-Generate the local certificate with OpenSSL:
+Generate the local certificate in **PowerShell, still in `backend/`**, with OpenSSL:
 
 ```powershell
 openssl req -x509 -newkey rsa:2048 -sha256 -nodes -keyout certs/key.pem -out certs/cert.pem -days 365 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2" -addext "basicConstraints=critical,CA:TRUE"
@@ -107,7 +126,7 @@ Copy-Item certs/cert.pem ../frontend/app/src/main/res/raw/cert.pem
 If PowerShell cannot find `openssl`, replace `openssl` in that command with `& "C:\Program Files\Git\usr\bin\openssl.exe"` after confirming that file exists. Run the command in PowerShell, not Git Bash. On macOS/Linux, use your installed `openssl` command.
 
 > [!NOTE]
-> The frontend must have the same **public certificate** as the backend. Never copy the private `key.pem` into the frontend. Regenerating the certificate requires restarting the backend and rebuilding the app.
+> The frontend must have the same **public certificate** as the backend. Never copy the private `key.pem` into the frontend. Regenerating the certificate requires restarting the backend and rebuilding the app. The copied frontend certificate is a tracked file; keep your local certificate replacement out of unrelated commits.
 
 ---
 
@@ -151,7 +170,7 @@ MARKET_API_BASE_URL=https://10.0.2.2:3000/
 GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
-Use your actual SDK path from SDK Manager, and leave `DEBUG_APPLICATION_ID_SUFFIX` unset. `10.0.2.2` lets the Android emulator reach your computer. Both URLs must point to the full backend on port **3000**, not the old remote address in the example file.
+Use your actual SDK path from SDK Manager, and leave `DEBUG_APPLICATION_ID_SUFFIX` unset. `10.0.2.2` lets the Android emulator reach your computer. Both URLs must point to the full backend on port **3000**, not a remote deployment or the separate market development server.
 
 ---
 
@@ -211,6 +230,7 @@ Run from `backend/`:
 
 ```powershell
 npm.cmd run build
+npm.cmd run typecheck
 npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 ```
 
@@ -221,6 +241,8 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 | Problem | Fix |
 | --- | --- |
 | Cannot connect to MySQL / port 3306 | Start the MySQL service and check `DATABASE_URL` and the database user's password. |
+| MySQL reports `ER_CANNOT_RETRIEVE_RSA_KEY` | The database driver cannot complete RSA-based authentication with this server configuration. Configure a trusted database TLS connection or server public key with the driver before retrying; the current setup has not passed this check. |
+| Certificate does not match `localhost` | Generate the local certificate using the command above, restart the backend, copy the new public certificate into Android, and rebuild. |
 | Google sign-in fails | Check the debug SHA-1/package registration, test-user access, Google Play emulator, and matching **Web** client IDs. |
 | Certificate / `Trust anchor` error | Copy the backend's current `cert.pem` to the frontend's `app/src/main/res/raw/cert.pem`, then rebuild/reinstall. |
 | `MARKET_NOT_CONFIGURED` | Set both Alpaca variables in `backend/.env`, start from `backend/`, and restart the backend. |
@@ -229,5 +251,3 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 | Account/Portfolio stops working after being signed in | Tokens expire after 15 minutes; sign out and back in. |
 | Port 3000 is already in use | Stop the older backend process before starting another one. |
 | PowerShell blocks `npm.ps1` | Use `npm.cmd` and `npx.cmd` as shown above. |
-
-The checked-in Docker configuration still targets an older backend setup; use the local instructions above. Market quotes may remain unchanged between refreshes even when the connection works.

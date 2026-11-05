@@ -1,10 +1,11 @@
-import {Router, type Request, type Response} from 'express';
+import { Router, type Request, type Response } from 'express';
 import axios from 'axios';
 import { env } from '../config/env';
+import { asyncHandler } from '../util/asyncHandler';
 
-const router = Router()
+const router = Router();
 
-router.get('/server-ip', async (_req: Request, res: Response) => {
+router.get('/server-ip', asyncHandler(async (_req: Request, res: Response) => {
     let serverIp = env.serverPublicIp;
 
     if (serverIp === 'unknown') {
@@ -29,20 +30,19 @@ router.get('/server-ip', async (_req: Request, res: Response) => {
         ip: serverIp,
         clientIp
     });
-})
+}));
 
 router.get("/server-time", (_req: Request, res: Response) => {
-    const now = new Date()
-    const hr = String(now.getUTCHours()).padStart(2, '0')
-    const min = String(now.getUTCMinutes()).padStart(2, '0')
-    const sec = String(now.getUTCSeconds()).padStart(2, '0')
+    const now = new Date();
+    const hr = String(now.getUTCHours()).padStart(2, '0');
+    const min = String(now.getUTCMinutes()).padStart(2, '0');
+    const sec = String(now.getUTCSeconds()).padStart(2, '0');
 
-    res.json({time: `${hr}:${min}:${sec} GMT+00:00`})
- })
+    res.json({ time: `${hr}:${min}:${sec} GMT+00:00` });
+});
 
 router.get('/name', (_req: Request, res: Response) => {
-    res.json({firstName: 'Kevin', lastName: 'Zhu'})
-})
-
+    res.json({ firstName: 'Kevin', lastName: 'Zhu' });
+});
 
 export default router;

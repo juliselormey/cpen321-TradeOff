@@ -12,15 +12,17 @@ const history: PricePoint[] = [
 ];
 
 function fixture(overrides: Partial<QuoteProvider> = {}) {
-  const quotes = Object.fromEntries(LIVE_SYMBOLS.map((ticker, index) => [ticker, {
-    price: 100 + index,
-    change: 1,
-    percentageChange: 1,
-    quoteAsOf: new Date(NOW).toISOString(),
-  }])) as Record<string, ProviderQuote>;
+  const quotes = new Map<string, ProviderQuote>(
+    LIVE_SYMBOLS.map((ticker, index) => [ticker, {
+      price: 100 + index,
+      change: 1,
+      percentageChange: 1,
+      quoteAsOf: new Date(NOW).toISOString(),
+    }])
+  );
 
   const getQuote = (ticker: string): ProviderQuote => {
-    const q = Object.prototype.hasOwnProperty.call(quotes, ticker) ? quotes[ticker] : undefined;
+    const q = quotes.get(ticker);
     if (!q) throw new Error(`Missing quote for ${ticker}`);
     return q;
   };

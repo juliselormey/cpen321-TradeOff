@@ -9,14 +9,14 @@ import { MarketService } from '../src/market/service';
 import { LIVE_SYMBOLS } from '../src/market/catalog';
 import { PricePoint, ProviderQuote } from '../src/market/types';
 
-const companies: Record<string, { price: number; change: number }> = {
-  AAPL: { price: 200, change: 2.5 },
-  MSFT: { price: 410, change: 1.2 },
-  TSLA: { price: 250, change: -3.1 },
-  NVDA: { price: 140, change: 4.2 },
-  GOOGL: { price: 175, change: 0.8 },
-  AMZN: { price: 190, change: 1.7 },
-};
+const companies = new Map<string, { price: number; change: number }>([
+  ['AAPL', { price: 200, change: 2.5 }],
+  ['MSFT', { price: 410, change: 1.2 }],
+  ['TSLA', { price: 250, change: -3.1 }],
+  ['NVDA', { price: 140, change: 4.2 }],
+  ['GOOGL', { price: 175, change: 0.8 }],
+  ['AMZN', { price: 190, change: 1.7 }],
+]);
 
 const history: PricePoint[] = [
   { timestamp: '2026-10-20T14:30:00.000Z', price: 98 },
@@ -26,7 +26,7 @@ const history: PricePoint[] = [
 
 const provider = {
   fetchQuote(symbol: string): Promise<ProviderQuote> {
-    const stock = Object.prototype.hasOwnProperty.call(companies, symbol) ? companies[symbol] : undefined;
+    const stock = companies.get(symbol);
     if (!stock) return Promise.reject(new Error(`Unknown fixture symbol: ${symbol}`));
     return Promise.resolve({
       price: stock.price,

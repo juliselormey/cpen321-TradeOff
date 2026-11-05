@@ -238,8 +238,8 @@ const placeOrder = (type: OrderType) => asyncHandler(async (req: Request, res: R
 
 tradesRouter.post("/execute/market", placeOrder("MARKET"));
 tradesRouter.post("/execute/limit", placeOrder("LIMIT"));
-tradesRouter.post("/execute", asyncHandler(async (req: Request, res: Response) => {
+tradesRouter.post("/execute", asyncHandler((req: Request, res: Response) => {
     const raw = typeof req.body === "object" && req.body !== null ? (req.body as Record<string, unknown>) : {};
     const type: OrderType = raw.type?.toString().toUpperCase() === "LIMIT" ? "LIMIT" : "MARKET";
-    return placeOrder(type)(req, res);
+    void placeOrder(type)(req, res);
 }));

@@ -35,7 +35,8 @@ export async function availableShares(tx: Tx, userId: string, ticker: string): P
     ]);
     const owned = position?.quantity ?? ZERO;
     const reserved = pending._sum.quantity ?? ZERO;
-    return owned.minus(reserved);
+    const diff: Prisma.Decimal = owned.minus(reserved);
+    return diff;
 }
 
 /**

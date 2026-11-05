@@ -73,11 +73,11 @@ app.post('/__e2e/reset', asyncHandler(async (req, res) => {
 
 app.use((req, res, next) => {
   const mode = activeFault();
-  const prefixes: Record<string, string> = {
-    portfolio: '/api/portfolio',
-    market: '/api/market',
-  };
-  const prefix = Object.prototype.hasOwnProperty.call(prefixes, mode) ? prefixes[mode] : undefined;
+  const prefixes = new Map<string, string>([
+    ['portfolio', '/api/portfolio'],
+    ['market', '/api/market'],
+  ]);
+  const prefix = prefixes.get(mode);
   if (prefix && req.path.startsWith(prefix)) {
     res.status(503).json({ error: 'E2E injected service outage' });
     return;

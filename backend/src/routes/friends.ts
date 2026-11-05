@@ -36,7 +36,7 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
     for (const user of users) {
         for (const pos of user.positions) {
             if (pos.quantity.greaterThan(0)) {
-                rawSymbols.push(pos.ticker);
+                rawSymbols.push(String(pos.ticker));
             }
         }
     }

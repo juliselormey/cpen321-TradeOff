@@ -213,7 +213,7 @@ async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma
     };
 }
 
-const placeOrder = (type: OrderType) => asyncHandler(async (req: Request, res: Response) => {
+async function handlePlaceOrder(type: OrderType, req: Request, res: Response): Promise<void> {
     const userId = req.userId;
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
@@ -234,12 +234,15 @@ const placeOrder = (type: OrderType) => asyncHandler(async (req: Request, res: R
         console.error(error);
         res.status(500).json({ error: `Failed to execute ${type.toLowerCase()} order` });
     }
-});
+}
+
+const placeOrder = (type: OrderType) =>
+    asyncHandler((req: Request, res: Response) => handlePlaceOrder(type, req, res));
 
 tradesRouter.post("/execute/market", placeOrder("MARKET"));
 tradesRouter.post("/execute/limit", placeOrder("LIMIT"));
-tradesRouter.post("/execute", asyncHandler((req: Request, res: Response) => {
+tradesRouter.post("/execute", asyncHandler(async (req: Request, res: Response) => {
     const raw = typeof req.body === "object" && req.body !== null ? (req.body as Record<string, unknown>) : {};
     const type: OrderType = raw.type?.toString().toUpperCase() === "LIMIT" ? "LIMIT" : "MARKET";
-    void placeOrder(type)(req, res);
+    await handlePlaceOrder(type, req, res);
 }));

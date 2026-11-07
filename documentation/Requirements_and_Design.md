@@ -12,6 +12,9 @@
 
 ## 2. Project Description
 
+> [!CAUTION]
+> notes for revision go here
+
 *TradeOff* is a competitive virtual investing game, which lets users trade stocks with virtual money, build portfolios, and compete against friends using real market data. It is intended for students, young adults, investing beginners, and friends who want to compare their results. Investing can feel complicated, risky, and intimidating; TradeOff turns that practice into an interactive game where users can experiment with strategies and learn without risking real money.
 
 Users can practice virtual stock trading using virtual funds, and in real-time see the effects of the market, holding changes, and profits/losses. Real-time portfolio information and leaderboards help users track investments and compare performance between themselves, or against friends. The central technical challenge is representing real stock-market behavior in a playable virtual trading system while keeping market prices and portfolio values updated together.
@@ -19,6 +22,9 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 ---
 
 ## 3. Requirements Specification
+
+> [!CAUTION]
+> changing user preferences and stuff like that would be another feature entirely (DO NOT MERGE IT WITH AUTH)
 
 ### **3.1. List of Features**
 
@@ -30,9 +36,15 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **3.2. Use Case Diagram**
 
+> [!CAUTION]
+> notes for revision go here
+
 ![3.2-use-case-diagram](images/3.2-use-case-diagram.png)
 
 ### **3.3. Actors Description**
+
+> [!CAUTION]
+> notes for revision go here
 
 1. **[primary] Guest (unauthenticated user)** - One who has no TradeOff account. All of the user interface is barred for this user except for market data (which they cannot act on...).
 2.  **[primary] Trader (authenticated user)** - One who has a TradeOff account. They can thus act on market data, execute trading, use social features, have a logged history viewable by portfolio, among other app capabilities.
@@ -40,6 +52,11 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 4. **[secondary] Alpaca Market Data API - Secondary**: Bridges TradeOff with necessary stock market data to emulate an investment platform (maybe be more specific?)
 
 ### **3.4. Use Case Description**
+
+> [!CAUTION]
+> if it branches at all they should probably be different use cases
+> 
+> "manage" = implies adding, creating, deleting. maybe "edit pref."?
 
 1. **[authentication] Sign-up/Sign-in** - Authenticating through the Google Sign-in Interface. If the account doesn't have a linked TradeOff account, one will be created and linked for them.
 2. **[authentication] Sign-out** - Clears authentication for users who are signed in, clearing the session from their TradeOff account and returning them to an unauthenticated user.
@@ -53,6 +70,9 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 10. **[social] View Leaderboard** - View rankings comparing portfolio value and percentage return between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
 
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
+
+> [!CAUTION]
+> notes for revision go here
 
 <a name="fucs1"></a>
 
@@ -214,11 +234,19 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **3.6. Screen Mock-ups**
 
+> [!CAUTION]
+> notes for revision go here
+
 | **Prospective Market screen mockup** | **Prospective Portfolio screen mockup** |
 | --- | --- |
 | ![3.6-market-mockup](images/3.6-market-mockup.png) | ![3.6-portfolio-mockup](images/3.6-portfolio-mockup.png) |
 
 ### **3.7. Non-Functional Requirements**
+
+> [!CAUTION]
+> make these make more sense for the app + its users
+> 
+> ground the values in somethiing realistic (+ check for android apps specifically)
 
 <a name="nfr1"></a>
 
@@ -243,6 +271,15 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 ## 4. Designs Specification
 
 ### **4.1. Main Components**
+
+> [!CAUTION]
+> match the template (match interfaces w/ components
+> 
+> do not list external or database here
+> 
+> market cache should not be split (only if it's for all APIs)
+> 
+> when implementing push notifs, make a versatile notif service
 
 | **Component** | **Documented responsibility or connection** |
 | --- | --- |
@@ -292,14 +329,23 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **4.2. The Database**
 
+> [!CAUTION]
+> notes for revision go here
+
 1. **MySQL** - Stores user accounts, virtual cash balances, holdings, trade history, watchlists, social relationships, information for other components, among other data - Chosen as MySQL is popular in supporting the needed data, and in updating said data concurrently, avoiding errors such as partial trades.
 
 ### **4.3. External Modules**
+
+> [!CAUTION]
+> notes for revision go here
 
 1. **Google Authentication** - Allows safe linkage between TradeOff and Google accounts - Chosen so we can authenticate in our app without using Firebase.
 2. **Alpaca Market Data API** - Supplies stock prices and market information for stock searches, virtual trading, and portfolio valuation - Chosen because real market data will help the app reflect normal markets, its main purpose!
 
 ### **4.4. Frameworks and Libraries**
+
+> [!CAUTION]
+> notes for revision go here
 
 1. **Jetpack Compose** - Builds the user interface - Chosen as it's required by the course and supports screens that react to changes in application state.
 2. **Express.js** - Implements backend API routes and request-handling - Chosen as it's straightforward in organizing the Node.js/TypeScript backend.
@@ -311,15 +357,26 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **4.5. Dependencies Diagram**
 
+> [!CAUTION]
+> frontend fetches auth token and backend uses it
+>
+> math with the template more than you do now
+
 ![H4.5-cp2-high-level-dependencies-diagram](images/4.5-cp2-high-level-dependencies-diagram.png)
 
 ### **4.6. Use Case Sequence Diagrams (5 Most Major Use Cases)**
+
+> [!CAUTION]
+> for alt boxes, wait to get a response then act on it w/ the cases
 
 | **Browse Stocks** | **Buy Stocks** | **View Portfolio** | **Manage Friend Requests** | **View Leaderboard** |
 | --- | --- | --- | --- | --- |
 | ![4.6-browse-stocks-sequence](images/4.6-browse-stocks-sequence.png) | ![4.6-buy-stocks-sequence](images/4.6-buy-stocks-sequence.png) | ![4.6-view-portfolio-sequence](images/4.6-view-portfolio-sequence.png) | ![4.6-manage-friend-requests-sequence](images/4.6-manage-friend-requests-sequence.png) | ![4.6-view-leaderboard-sequence](images/4.6-view-leaderboard-sequence.png) |
 
 ### **4.7. Design of Non-Functional Requirements**
+
+> [!CAUTION]
+> notes for revision go here
 
 <a name="nfrd1"></a>
 

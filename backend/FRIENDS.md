@@ -1,18 +1,19 @@
 # Friends API
 
 All endpoints require `Authorization: Bearer <access-token>` from the existing login.
-Friend requests require recipient consent. Add by user UUID (`user.id` from
-`POST /api/auth/me`); display names are not unique and are not usernames.
-Users from the original integer-ID database retain their IDs as numeric strings
-(for example, `"12"`), which are also accepted by the API.
+Friend requests require recipient consent. Add by unique username, matching the
+username in account Settings. Input is trimmed and lowercased; usernames contain
+3–24 letters, numbers or underscores. Accounts without a username must set one
+in Settings before others can find them. Internal IDs (including legacy numeric
+strings) remain unchanged; friendships and pending requests survive renaming.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| POST | `/api/friends/requests` | Body: `{ "userId": "<recipient UUID>" }`. Returns 201 `{ request }`. |
+| POST | `/api/friends/requests` | Body: `{ "username": "<recipient username>" }`. Returns 201 `{ request }`. |
 | GET | `/api/friends/requests` | Returns `{ incoming: [], outgoing: [] }` for pending requests. |
 | POST | `/api/friends/requests/:id/accept` | Recipient accepts a pending request. Returns 204. |
 | DELETE | `/api/friends/requests/:id` | Recipient declines or sender cancels. Returns 204. |
-| GET | `/api/friends` | Returns `{ friends: [{ friendshipId, user: { id, displayName, avatarUrl } }] }`. |
+| GET | `/api/friends` | Returns `{ friends: [{ friendshipId, user: { id, username, displayName, avatarUrl } }] }`. |
 | DELETE | `/api/friends/:id` | Either participant removes an accepted friendship using `friendshipId`. Returns 204. |
 
 Request objects include `id`, `senderId`, `recipientId`, `pairKey`, `status`,

@@ -1,11 +1,12 @@
 import express from "express";
 import request from "supertest";
 import jwt from "jsonwebtoken";
+import { usersRouter } from "../../src/routes/users";
 import { friendsRouter } from "../../src/routes/friends";
 import { db } from "../../src/prisma/db";
 
 jest.mock("../../src/prisma/db", () => ({ db: {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn() },
     friendship: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() },
 } }));
 
@@ -17,6 +18,7 @@ const token = (id: string) => `Bearer ${jwt.sign({ sub: id }, secret)}`;
 const app = express();
 app.use(express.json());
 app.use("/api/friends", friendsRouter);
+app.use("/api/users", usersRouter);
 const users = jest.mocked(db.user.findUnique);
 const friendships = jest.mocked(db.friendship);
 
@@ -41,7 +43,7 @@ test("invalid tokens and banned users are rejected", async () => {
     await request(app).get("/api/friends").set("Authorization", token(sender)).expect(403);
 });
 
-test.each([{}, { userId: 12 }, { userId: "not-a-uuid" }, { userId: sender }])(
+test.each([{}, { username: 12 }, { username: "bad name" }, { username: "ab" }, { username: "a".repeat(25) }, { username: "self" }])(
     "rejects invalid or self target %j", async body => {
         await request(app).post("/api/friends/requests").set("Authorization", token(sender))
             .send(body).expect(400);
@@ -52,7 +54,7 @@ test.each([null, { id: recipient, isBanned: true }])("rejects unavailable target
     users.mockResolvedValueOnce({ id: sender, isBanned: false } as never)
         .mockResolvedValueOnce(target as never);
     await request(app).post("/api/friends/requests").set("Authorization", token(sender))
-        .send({ userId: recipient }).expect(404);
+        .send({ username: "recipient" }).expect(404);
 });
 
 test("creates a pending request with a direction-independent pair key and public profiles", async () => {
@@ -60,12 +62,13 @@ test("creates a pending request with a direction-independent pair key and public
         .mockResolvedValueOnce({ id: sender, isBanned: false } as never);
     friendships.create.mockResolvedValue({ id: "one", status: "PENDING" } as never);
     const response = await request(app).post("/api/friends/requests").set("Authorization", token(recipient))
-        .send({ userId: sender }).expect(201);
+        .send({ username: " SENDER " }).expect(201);
     expect(response.body.request.status).toBe("PENDING");
+    expect(users).toHaveBeenLastCalledWith({ where: { username: "sender" }, select: { id: true, isBanned: true } });
     expect(friendships.create).toHaveBeenCalledWith({
         data: { senderId: recipient, recipientId: sender, pairKey: `${sender}:${recipient}` },
-        include: { sender: { select: { id: true, displayName: true, avatarUrl: true } },
-            recipient: { select: { id: true, displayName: true, avatarUrl: true } } },
+        include: { sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+            recipient: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
     });
 });
 
@@ -74,7 +77,7 @@ test("duplicate or reciprocal requests return conflict", async () => {
         .mockResolvedValueOnce({ id: recipient, isBanned: false } as never);
     friendships.create.mockRejectedValue({ code: "P2002" });
     await request(app).post("/api/friends/requests").set("Authorization", token(sender))
-        .send({ userId: recipient }).expect(409);
+        .send({ username: "recipient" }).expect(409);
 });
 
 test("supports existing numeric user IDs preserved as strings by the migration", async () => {
@@ -82,7 +85,7 @@ test("supports existing numeric user IDs preserved as strings by the migration",
         .mockResolvedValueOnce({ id: "12", isBanned: false } as never);
     friendships.create.mockResolvedValue({ id: "one", status: "PENDING" } as never);
     await request(app).post("/api/friends/requests").set("Authorization", token(sender))
-        .send({ userId: "12" }).expect(201);
+        .send({ username: "legacy_user" }).expect(201);
     expect(friendships.create).toHaveBeenCalledWith(expect.objectContaining({ data: {
         senderId: sender, recipientId: "12", pairKey: `${sender}:12`,
     } }));
@@ -109,7 +112,7 @@ test.each(["/requests/one", "/one"])("deletion is scoped to participants and sta
 });
 
 test("lists the other user's profile for either direction of friendship", async () => {
-    const other = { id: recipient, displayName: "Other", avatarUrl: null };
+    const other = { id: recipient, displayName: "Other", username: "other", avatarUrl: null };
     friendships.findMany.mockResolvedValue([
         { id: "one", senderId: sender, recipient: other },
         { id: "two", senderId: recipient, sender: other },
@@ -132,4 +135,46 @@ test("separates incoming and outgoing pending requests", async () => {
     expect(friendships.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
         status: "PENDING", OR: [{ senderId: sender }, { recipientId: sender }],
     } }));
+});
+
+test("renaming preserves pending and accepted friendships and uses the new username", async () => {
+    const alice = { id: sender, username: "alice", displayName: "Alice", isBanned: false };
+    const bob = { id: recipient, username: "bob", displayName: "Bob", isBanned: false };
+    const row = { id: "stable-request", senderId: sender, recipientId: recipient,
+        pairKey: `${sender}:${recipient}`, status: "PENDING", sender: alice, recipient: bob };
+    users.mockImplementation((args) => {
+        const where = args.where;
+        return Promise.resolve([alice, bob].find(user => where.id ? user.id === where.id : user.username === where.username) ?? null) as never;
+    });
+    jest.mocked(db.user.update).mockImplementation((args) => {
+        Object.assign(bob, args.data);
+        return Promise.resolve(bob) as never;
+    });
+    friendships.create.mockResolvedValue(row as never);
+    friendships.findMany.mockResolvedValue([row] as never);
+    friendships.updateMany.mockImplementation(() => {
+        row.status = "ACCEPTED";
+        return Promise.resolve({ count: 1 }) as never;
+    });
+    await request(app).post("/api/friends/requests").set("Authorization", token(sender))
+        .send({ username: "bob" }).expect(201);
+    const rename = (username: string) => request(app).patch("/api/users/me")
+        .set("Authorization", token(recipient)).send({ displayName: "Bob", username });
+    await rename("bob_new").expect(200);
+    const pending = await request(app).get("/api/friends/requests").set("Authorization", token(sender)).expect(200);
+    expect(pending.body.outgoing[0].recipient.username).toBe("bob_new");
+    expect(pending.body.outgoing[0].id).toBe("stable-request");
+    await request(app).post("/api/friends/requests/stable-request/accept")
+        .set("Authorization", token(recipient)).expect(204);
+    await rename("bob_latest").expect(200);
+    const accepted = await request(app).get("/api/friends").set("Authorization", token(sender)).expect(200);
+    expect(accepted.body.friends[0]).toMatchObject({ friendshipId: "stable-request",
+        user: { id: recipient, username: "bob_latest" } });
+    await request(app).post("/api/friends/requests").set("Authorization", token(sender))
+        .send({ username: "bob" }).expect(404);
+    friendships.create.mockRejectedValue({ code: "P2002" });
+    await request(app).post("/api/friends/requests").set("Authorization", token(sender))
+        .send({ username: "bob_latest" }).expect(409);
+    expect(row.pairKey).toBe(`${sender}:${recipient}`);
+    expect(friendships.deleteMany).not.toHaveBeenCalled();
 });

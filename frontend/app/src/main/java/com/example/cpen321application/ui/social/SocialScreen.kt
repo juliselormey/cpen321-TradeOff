@@ -180,6 +180,7 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
                     Column(Modifier.weight(1f)) {
                         Text(entry.user.label + if (entry.isYou) " (You)" else "", color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold)
+                        Text(entry.user.username ?: "Username not set", color = Muted, style = MaterialTheme.typography.bodySmall)
                         Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% total return", it) }
                             ?: "Return unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
                     }

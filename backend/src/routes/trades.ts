@@ -152,8 +152,12 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
     if (type === "MARKET" && limitPrice != null) {
         throw new OrderError(400, "Limit price is forbidden for market orders");
     }
-    if (type === "LIMIT" && (typeof limitPrice !== "number" || limitPrice <= 0)) {
-        throw new OrderError(400, "Limit price is required for limit orders and must be positive");
+    let validatedLimitPrice: number | null = null;
+    if (type === "LIMIT") {
+        if (typeof limitPrice !== "number" || limitPrice <= 0) {
+            throw new OrderError(400, "Limit price is required for limit orders and must be positive");
+        }
+        validatedLimitPrice = limitPrice;
     }
 
     return {
@@ -161,7 +165,7 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
         side: sideRaw,
         type,
         quantity,
-        limitPrice: type === "LIMIT" ? limitPrice : null,
+        limitPrice: validatedLimitPrice,
     };
 }
 

@@ -116,13 +116,13 @@ The Market E2E suite is `frontend/app/src/androidTest/java/com/example/cpen321ap
 
 ### Tested Use Cases
 
-Market: load all six supported stocks from the HTTP API, view each name, quote, chart, and local logo, and search by company name or ticker including the no-results state.
+Market: load the 100-stock catalog from the HTTP API, view names, quotes, charts, and bundled logos or ticker badges, and search by company name or ticker including the no-results state.
 
 ### Test Scenarios
 
 | Test | Scenario and expected behavior |
 |---|---|
-| `allSixStocksShowNamesQuotesChartsAndLocalLogos` | The app receives six fixture stocks and renders each company name, quote timestamps, chart, and bundled logo. |
+| `allSixStocksShowNamesQuotesChartsAndLocalLogos` | The app loads the fixture catalog and verifies the name, quote timestamps, chart, and bundled logo for each of the six original stocks. |
 | `searchMatchesTickerAndCompanyAndShowsAnEmptyStateForNoMatch` | Search finds a stock by company and ticker, shows the empty state for an unknown query, and displays the expected fixture quote. |
 
 ### Execution Results

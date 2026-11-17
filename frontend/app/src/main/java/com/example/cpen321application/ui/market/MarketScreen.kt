@@ -150,7 +150,7 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StockLogo(stock.ticker)
+                StockLogo(stock.ticker, companyName = stock.companyName)
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
                     Text(stock.companyName, color = Muted, fontSize = 12.sp)

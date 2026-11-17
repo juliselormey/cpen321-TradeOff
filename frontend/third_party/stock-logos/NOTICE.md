@@ -1,7 +1,7 @@
 # Stock logos supplied by the user
 
-The current `res/drawable/ic_stock_*.png` files were supplied by the user.
-They are copied without altering the source images:
+The six original `res/drawable/ic_stock_*.png` files were supplied by the user
+and copied without altering the source images:
 
 | Stock | Supplied filename |
 | --- | --- |
@@ -16,6 +16,10 @@ The filenames record their supplied names, not independently verified download
 origins or license grants. Brand names and logos belong to their respective
 owners. GOOGL uses Google's mark for the Alphabet listing.
 
-These assets replace the earlier Simple Icons vectors and are bundled locally;
-no runtime logo service or additional API key is required. Apple uses a dark
-UI tile for contrast with the supplied white mark.
+The additional 94 PNGs in `res/drawable-nodpi/ic_stock_*.png` were supplied as
+clipboard attachments and copied without altering the source images. Their
+filenames use the stock tickers. Comcast uses the supplied peacock mark.
+The Amex GBT attachment was excluded because it represents Global Business
+Travel Group. The American Express listing uses the replacement American Express PNG.
+
+The app bundles these assets locally. Light marks use a dark tile for contrast.

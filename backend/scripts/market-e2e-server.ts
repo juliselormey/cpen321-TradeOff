@@ -26,8 +26,7 @@ const history: PricePoint[] = [
 
 const provider = {
   fetchQuote(symbol: string): Promise<ProviderQuote> {
-    const stock = companies.get(symbol);
-    if (!stock) return Promise.reject(new Error(`Unknown fixture symbol: ${symbol}`));
+    const stock = companies.get(symbol) ?? { price: 100, change: 1 };
     return Promise.resolve({
       price: stock.price,
       change: stock.change,

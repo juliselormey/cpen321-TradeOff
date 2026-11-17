@@ -30,7 +30,7 @@ abstract class RealBackendTest {
         control("reset", "{}")
         ready = true
         compose.activityRule.scenario.recreate()
-        waitText("Alpaca IEX connected · 6 stocks")
+        waitText("Alpaca IEX connected · 100 stocks")
     }
 
     @After fun restoreAccount() { if (ready) control("reset", "{}") }

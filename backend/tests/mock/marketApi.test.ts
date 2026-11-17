@@ -42,13 +42,13 @@ function fixture(overrides: Partial<QuoteProvider> = {}) {
 }
 
 describe('Mocked API: GET /api/market/stocks', () => {
-  test('Input: GET with no parameters; Output: six catalog stocks and refresh metadata (200)', async () => {
+  test('Input: GET with no parameters; Output: 100 catalog stocks and refresh metadata (200)', async () => {
     const f = fixture();
     const response = await request(f.app).get('/api/market/stocks').expect(200);
 
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).toMatchObject({ liveSymbols: LIVE_SYMBOLS, refreshIntervalMs: 8_000 });
-    expect(response.body.stocks).toHaveLength(6);
+    expect(response.body.stocks).toHaveLength(LIVE_SYMBOLS.length);
     expect(response.body.stocks[0]).toMatchObject({
       ticker: 'AAPL', companyName: 'Apple Inc.', currentPrice: '100', source: 'alpaca',
       feed: 'iex', status: 'ok', isFavorite: true,
@@ -68,7 +68,7 @@ describe('Mocked API: GET /api/market/stocks', () => {
     });
     const response = await request(f.app).get('/api/market/stocks').expect(200);
 
-    expect(response.body.stocks).toHaveLength(6);
+    expect(response.body.stocks).toHaveLength(LIVE_SYMBOLS.length);
     expect(response.body.stocks.every((stock: { status: string; currentPrice: unknown }) =>
       stock.status === 'unavailable' && stock.currentPrice === null,
     )).toBe(true);

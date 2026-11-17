@@ -3,6 +3,7 @@ import cors from 'cors';
 import { usersRouter } from "./routes/users";
 import { authRouter } from "./routes/auth";
 import { friendsRouter } from "./routes/friends";
+import { favoritesRouter } from "./routes/favorites";
 import { createMarketRouter } from './market/routes';
 import { tradesRouter } from "./routes/trades";
 import { portfolioRouter } from "./routes/portfolio";
@@ -20,6 +21,7 @@ export function createApp(): Express {
   app.use('/api/market', createMarketRouter());
   app.use("/api/auth", authRouter);
   app.use("/api/auth", usersRouter);
+  app.use("/api/users/me/favorites", favoritesRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/friends", friendsRouter);
   app.use("/api/trades", tradesRouter);

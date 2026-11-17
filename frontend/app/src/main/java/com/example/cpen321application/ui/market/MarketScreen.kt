@@ -1,11 +1,16 @@
 package com.example.cpen321application.ui.market
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -13,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,9 +28,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cpen321application.ApiClient
+import com.example.cpen321application.ApiService
 import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
+import com.example.cpen321application.util.SessionManager
+import java.io.IOException
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneOffset
@@ -32,6 +42,7 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 
 private val Green: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
@@ -39,15 +50,46 @@ private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val Red: Color @Composable get() = MaterialTheme.colorScheme.error
 
 @Composable
-fun MarketScreen(onStockSelected: (String) -> Unit) {
+fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInRequired: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val factory = remember(context) {
         MarketViewModel.Factory(MarketRepository(ApiClient.createMarket(context)))
     }
     val model: MarketViewModel = viewModel(factory = factory)
     val state by model.state.collectAsState()
+    val tokens = remember(context) { SessionManager.observeToken(context) }
+    val token by tokens.collectAsState(initial = SessionManager.getToken(context))
+    val sessionToken = token
+    var favorites by remember(sessionToken) { mutableStateOf<Set<String>?>(null) }
+    var favoritesBusy by remember(sessionToken) { mutableStateOf(false) }
+    var favoritesError by remember(sessionToken) { mutableStateOf<String?>(null) }
+    var needsSignIn by remember(sessionToken) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
+    fun requestFavorites(request: suspend (String) -> Set<String>) {
+        if (sessionToken.isNullOrEmpty() || favoritesBusy || SessionManager.getToken(context) != sessionToken) return
+        favoritesBusy = true
+        favoritesError = null
+        needsSignIn = false
+        scope.launch {
+            try {
+                favorites = request("Bearer $sessionToken")
+            } catch (error: HttpException) {
+                needsSignIn = error.code() == 401
+                favoritesError = if (needsSignIn) "Sign in again to access your favorites."
+                    else "Favorites request failed (HTTP ${error.code()})."
+            } catch (_: IOException) {
+                favoritesError = "Could not reach the favorites server."
+            } catch (_: com.google.gson.JsonParseException) {
+                favoritesError = "Could not read your favorites."
+            } finally {
+                favoritesBusy = false
+            }
+        }
+    }
+    fun loadFavorites() = requestFavorites { api.getStockFavorites(it).tickers.toSet() }
+
+    LaunchedEffect(sessionToken) { loadFavorites() }
     LaunchedEffect(model, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
@@ -56,18 +98,66 @@ fun MarketScreen(onStockSelected: (String) -> Unit) {
             }
         }
     }
-    MarketContent(state, onStockSelected, onRetry = { scope.launch { model.refresh() } })
+    MarketContent(
+        state = state,
+        favoriteTickers = favorites.orEmpty(),
+        signedIn = !sessionToken.isNullOrEmpty(),
+        favoritesBusy = favoritesBusy,
+        favoritesError = favoritesError,
+        onFavoritesRetry = { if (needsSignIn) onSignInRequired() else loadFavorites() },
+        onStockSelected = onStockSelected,
+        onSignInRequired = onSignInRequired,
+        onFavoriteChanged = { ticker, favorite ->
+            val current = favorites
+            if (sessionToken.isNullOrEmpty() || needsSignIn) {
+                onSignInRequired()
+            } else if (current == null) {
+                loadFavorites()
+            } else {
+                requestFavorites { authorization ->
+                    if (favorite) {
+                        api.addStockFavorite(authorization, ticker)
+                        current + ticker
+                    } else {
+                        api.removeStockFavorite(authorization, ticker)
+                        current - ticker
+                    }
+                }
+            }
+        },
+        onOpenFavorites = {
+            if (needsSignIn) onSignInRequired() else loadFavorites()
+            scope.launch { model.refresh() }
+        },
+        onRefresh = { scope.launch { model.refresh() } },
+    )
 }
 
 @Composable
-private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Unit, onRetry: () -> Unit) {
+private fun MarketContent(
+    state: MarketUiState,
+    favoriteTickers: Set<String>,
+    signedIn: Boolean,
+    favoritesBusy: Boolean,
+    favoritesError: String?,
+    onFavoritesRetry: () -> Unit,
+    onStockSelected: (String) -> Unit,
+    onSignInRequired: () -> Unit,
+    onFavoriteChanged: (String, Boolean) -> Unit,
+    onOpenFavorites: () -> Unit,
+    onRefresh: () -> Unit,
+) {
     var query by rememberSaveable { mutableStateOf("") }
+    var showFavorites by rememberSaveable { mutableStateOf(false) }
+    val stocksListState = rememberLazyListState()
+    val favoritesListState = rememberLazyListState()
     val stocks = state.stocks.filter {
-        it.ticker.contains(query, true) || it.companyName.contains(query, true)
+        (!showFavorites || it.ticker in favoriteTickers) &&
+            (it.ticker.contains(query, true) || it.companyName.contains(query, true))
     }
-    val favorites = stocks.filter { it.isFavorite }
     MaterialTheme {
         LazyColumn(
+            state = if (showFavorites) favoritesListState else stocksListState,
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -77,7 +167,7 @@ private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Uni
                 Text("Market", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
                 Text("Explore stocks. Practice investing.", color = Muted, fontSize = 14.sp)
             }
-            item { ConnectionCard(state, onRetry) }
+            item { ConnectionCard(state, onRefresh) }
             item {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true,
@@ -85,24 +175,52 @@ private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Uni
                     modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
                 )
             }
-            item {
-                Text("My Favorites", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            stickyHeader {
+                TabRow(selectedTabIndex = if (showFavorites) 1 else 0) {
+                    Tab(selected = !showFavorites, onClick = { showFavorites = false },
+                        text = { Text("Stocks") })
+                    Tab(
+                        selected = showFavorites,
+                        onClick = {
+                            if (!signedIn) {
+                                onSignInRequired()
+                            } else if (!showFavorites) {
+                                showFavorites = true
+                                onOpenFavorites()
+                            }
+                        },
+                        text = { Text("Favorites") },
+                    )
+                }
             }
-            if (favorites.isEmpty()) {
-                item { Text("No matching favorites.", color = Muted, fontSize = 12.sp) }
-            }
-            items(favorites, key = { "favorite:${it.ticker}" }) { stock ->
-                StockCard(stock, onClick = { onStockSelected(stock.ticker) })
-            }
-            item {
-                Text("All Stocks", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("${stocks.size} stocks • USD", color = Muted, fontSize = 12.sp)
+            if (favoritesError != null) {
+                item {
+                    Text(favoritesError, color = Red)
+                    TextButton(onClick = onFavoritesRetry) { Text("Retry favorites") }
+                }
             }
             if (stocks.isEmpty()) {
-                item { Text("No stocks match your search.", color = Muted, modifier = Modifier.padding(16.dp)) }
+                item {
+                    val message = when {
+                        showFavorites && !signedIn -> "Sign in to save your favorite stocks."
+                        showFavorites && favoritesBusy -> "Loading favorites…"
+                        showFavorites && favoritesError != null -> null
+                        showFavorites && favoriteTickers.isEmpty() -> "Tap a star in Stocks to add a favorite."
+                        showFavorites -> "No favorites match your search."
+                        else -> "No stocks match your search."
+                    }
+                    if (message != null) Text(message, color = Muted, modifier = Modifier.padding(16.dp))
+                }
             }
-            items(stocks, key = { "all:${it.ticker}" }) { stock ->
-                StockCard(stock, onClick = { onStockSelected(stock.ticker) })
+            items(stocks, key = { it.ticker }) { stock ->
+                StockCard(
+                    stock = stock,
+                    isFavorite = stock.ticker in favoriteTickers,
+                    signedIn = signedIn,
+                    favoritesBusy = favoritesBusy,
+                    onClick = { onStockSelected(stock.ticker) },
+                    onFavoriteChanged = { onFavoriteChanged(stock.ticker, it) },
+                )
             }
             item {
                 Text("Virtual investing • Prices and charts from Alpaca IEX.\nIEX is one exchange, not the full US market.", color = Muted, fontSize = 12.sp)
@@ -139,7 +257,14 @@ private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
+private fun StockCard(
+    stock: MarketStock,
+    isFavorite: Boolean,
+    signedIn: Boolean,
+    favoritesBusy: Boolean,
+    onClick: () -> Unit,
+    onFavoriteChanged: (Boolean) -> Unit,
+) {
     val provider = stock.source == "alpaca"
     val positive = (stock.percentageChange ?: 0.0) >= 0
     val accent = if (positive) Green else Red
@@ -154,8 +279,27 @@ private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
                     Text(stock.companyName, color = Muted, fontSize = 12.sp)
+                    Text(if (provider) "ALPACA · IEX" else "SAMPLE", color = if (provider) Green else Muted,
+                        fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(if (provider) "ALPACA · IEX" else "SAMPLE", color = if (provider) Green else Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                val favoriteAction = when {
+                    !signedIn -> "Sign in to add ${stock.ticker} to favorites"
+                    isFavorite -> "Remove ${stock.ticker} from favorites"
+                    else -> "Add ${stock.ticker} to favorites"
+                }
+                IconToggleButton(
+                    checked = isFavorite,
+                    enabled = !favoritesBusy,
+                    onCheckedChange = onFavoriteChanged,
+                    modifier = Modifier.semantics { contentDescription = favoriteAction },
+                ) {
+                    val tint by animateColorAsState(
+                        targetValue = if (isFavorite) Green else Muted.copy(alpha = 0.45f),
+                        animationSpec = tween(durationMillis = 180),
+                        label = "Favorite star tint",
+                    )
+                    Icon(Icons.Rounded.Star, contentDescription = null, tint = tint)
+                }
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(price(stock.currentPrice), color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)

@@ -171,7 +171,11 @@ private fun AppDestinations(
             }
         }
         composable(Routes.Market) {
-            MarketScreen(onStockSelected = openTrade)
+            MarketScreen(
+                api = api,
+                onStockSelected = openTrade,
+                onSignInRequired = { navController.navigate(Routes.Login) },
+            )
         }
         composable(Routes.Social) {
             ProtectedView(apiService = api, onBack = goBack) {

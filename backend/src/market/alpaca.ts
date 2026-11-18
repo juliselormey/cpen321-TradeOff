@@ -33,9 +33,14 @@ export function parseAlpacaSnapshot(data: unknown): ProviderQuote {
 
 export function parseAlpacaBars(data: unknown): PricePoint[] {
   const root = object(data);
-  const rawBars = Array.isArray(root.bars) ? root.bars : [];
+  if (root.bars === null || root.bars === undefined || (Array.isArray(root.bars) && root.bars.length === 0)) {
+    return [];
+  }
+  if (!Array.isArray(root.bars)) {
+    throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an invalid historical bar.');
+  }
   const points = new Map<string, PricePoint>();
-  for (const item of rawBars) {
+  for (const item of root.bars) {
     const bar = object(item);
     const time = timestamp(bar.t);
     const p = positive(bar.c);
@@ -103,6 +108,7 @@ export class AlpacaProvider implements QuoteProvider {
       throw new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
     }
     const end = new Date(this.now());
+    end.setUTCHours(0, 0, 0, 0);
     const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
     try {
       // eslint-disable-next-line security/detect-non-literal-uri
@@ -168,9 +174,10 @@ export class AlpacaProvider implements QuoteProvider {
     }
     if (tickers.length === 0) return {};
     const end = new Date(this.now());
+    end.setUTCHours(0, 0, 0, 0);
     const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
-    const barsBySymbol: Record<string, unknown[]> = {};
-    for (const t of tickers) barsBySymbol[t] = [];
+    const barsBySymbol: Record<string, unknown> = {};
+    for (const t of tickers) barsBySymbol[t] = undefined;
     let pageToken: string | null = null;
     const seenTokens = new Set<string>();
 
@@ -197,8 +204,13 @@ export class AlpacaProvider implements QuoteProvider {
         const barsMap = object(root.bars);
         for (const ticker of tickers) {
           const raw = barsMap[ticker] ?? barsMap[ticker.toUpperCase()];
-          if (Array.isArray(raw)) {
-            barsBySymbol[ticker] = (barsBySymbol[ticker] || []).concat(raw);
+          if (raw !== undefined) {
+            if (Array.isArray(raw)) {
+              const current = Array.isArray(barsBySymbol[ticker]) ? (barsBySymbol[ticker] as unknown[]) : [];
+              barsBySymbol[ticker] = current.concat(raw);
+            } else {
+              barsBySymbol[ticker] = raw;
+            }
           }
         }
         const nextToken = typeof root.next_page_token === 'string' && root.next_page_token ? root.next_page_token : null;

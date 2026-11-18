@@ -32,7 +32,7 @@ function fixture() {
 
 let f: ReturnType<typeof fixture>;
 let provider: any;
-const expireCache = () => f.advance(8_000 + 1);
+const expireCache = () => { f.advance(8_000 + 1); };
 
 beforeEach(() => {
   jest.useFakeTimers(FAKE_DATE);

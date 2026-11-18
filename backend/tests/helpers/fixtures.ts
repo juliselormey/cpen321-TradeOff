@@ -33,7 +33,7 @@ export const getCash = async (id: string) => {
   return acc ? Number(acc.cashBalance) : 0;
 };
 
-export const giveShares = (userId: string, ticker: string = 'AAPL', quantity: number = 1, avgCost = 100) =>
+export const giveShares = (userId: string, ticker = 'AAPL', quantity: number = 1, avgCost = 100) =>
   db.position.create({
     data: {
       userId,
@@ -43,7 +43,7 @@ export const giveShares = (userId: string, ticker: string = 'AAPL', quantity: nu
     },
   });
 
-export const getQty = async (userId: string, ticker: string = 'AAPL') => {
+export const getQty = async (userId: string, ticker = 'AAPL') => {
   const t = (ticker ?? 'AAPL').toUpperCase();
   const p = await db.position.findUnique({
     where: { userId_ticker: { userId, ticker: t } },
@@ -51,7 +51,7 @@ export const getQty = async (userId: string, ticker: string = 'AAPL') => {
   return p ? Number(p.quantity) : 0;
 };
 
-export const getAvgCost = async (userId: string, ticker: string = 'AAPL') => {
+export const getAvgCost = async (userId: string, ticker = 'AAPL') => {
   const t = (ticker ?? 'AAPL').toUpperCase();
   const p = await db.position.findUnique({
     where: { userId_ticker: { userId, ticker: t } },

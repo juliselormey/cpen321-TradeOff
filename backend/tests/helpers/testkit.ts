@@ -3,7 +3,7 @@ import type { Response } from 'supertest';
 
 export const SECRET = process.env.JWT_SECRET ?? 'test-secret';
 export const SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA'];
-export const T = SYMBOLS[0] as string;
+export const T = SYMBOLS[0]!;
 export const UNSUPPORTED = 'ZZZZ';
 export const CACHE_MS = 8000;
 
@@ -11,8 +11,8 @@ export const FAKE_DATE: any = {
   doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval',
     'setTimeout', 'clearTimeout', 'queueMicrotask', 'performance', 'hrtime'],
 };
-export const advanceMs = (ms: number) => jest.setSystemTime(Date.now() + ms);
-export const expireCache = () => advanceMs(CACHE_MS + 1);
+export const advanceMs = (ms: number) => { jest.setSystemTime(Date.now() + ms); };
+export const expireCache = () => { advanceMs(CACHE_MS + 1); };
 
 export const tokenFor = (id: string, opts: jwt.SignOptions = { expiresIn: '1h' }) =>
   jwt.sign({ sub: id }, SECRET, opts);

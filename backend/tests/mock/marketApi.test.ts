@@ -43,10 +43,10 @@ const one = (s: string) => request(f.app).get(`/api/market/stocks/${s}`);
 const hist = (s: string) => request(f.app).get(`/api/market/stocks/${s}/history`);
 
 describe('Mocked API: GET /api/market/stocks', () => {
-  it('MKT-01 returns all six stocks with name, ticker, price, change', async () => {
+  it('MKT-01 returns all 100 stocks with name, ticker, price, change', async () => {
     const res = await list();
     expect(res.status).toBe(200);
-    expect(res.body.stocks).toHaveLength(6);
+    expect(res.body.stocks).toHaveLength(100);
     for (const s of res.body.stocks) {
       expect(SYMBOLS).toContain(s.ticker);
       expect(s).toEqual(expect.objectContaining({ companyName: expect.any(String), currentPrice: '100', change: '1' }));

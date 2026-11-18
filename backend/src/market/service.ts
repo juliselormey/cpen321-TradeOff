@@ -214,5 +214,6 @@
       }
     }
 
-    export const marketService = new MarketService();
-    export { valuePortfolio, loadPrices, ValuationInput, HoldingValue, Valuation, PriceUnavailableError, STARTING_BALANCE, valuePortfolio as computePortfolioValue } from './valuation';
+export const marketService = new MarketService();
+export { valuePortfolio, loadPrices, PriceUnavailableError, STARTING_BALANCE, valuePortfolio as computePortfolioValue } from './valuation';
+export type { ValuationInput, HoldingValue, Valuation } from './valuation';

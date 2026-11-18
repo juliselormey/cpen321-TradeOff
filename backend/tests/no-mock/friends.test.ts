@@ -5,7 +5,8 @@ import {
   befriend, countFriendshipsBetween, countRequestsBetween, createUser, db, giveShares, requestFrom, resetDb,
 } from '../helpers/fixtures';
 
-const mockMarket = { price: 100, fail: false };
+// eslint-disable-next-line no-var
+var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
   require('../helpers/stubprovider').createStubProvider(mockMarket));
 
@@ -23,6 +24,7 @@ beforeEach(async () => {
 const as = (id: string) => ({
   get: (p: string) => request(app).get(p).set(bearer(id)),
   post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
+  patch: (p: string, b: object = {}) => request(app).patch(p).set(bearer(id)).send(b),
   del: (p: string) => request(app).delete(p).set(bearer(id)),
 });
 const sendReq = (from: string, to: string) => as(from).post('/api/friends/requests', { userId: to });
@@ -31,7 +33,7 @@ const outgoing = async (id: string) => (await as(id).get('/api/friends/requests'
 const friendsOf = async (id: string) => (await as(id).get('/api/friends')).body.friends.map((f: any) => f.user.id);
 
 describe('Unmocked API: friend requests', () => {
-  it('SOC-N1 send A→B: pending row, visible to both, nobody is a friend yet (UC-15)', async () => {
+  it('SOC-N1 send A→B: pending row, visible to both, nobody is a friend yet (UC-14)', async () => {
     expect((await sendReq(A, B)).status).toBe(201);
     expect(await outgoing(A)).toHaveLength(1);
     expect(await incoming(B)).toHaveLength(1);
@@ -43,20 +45,20 @@ describe('Unmocked API: friend requests', () => {
     expect((await sendReq(A, B)).status).toBe(409);
     expect(await countRequestsBetween(A, B)).toBe(1);
   });
-  it('SOC-N3 accept creates a friendship visible to both (UC-16)', async () => {
+  it('SOC-N3 accept creates a friendship visible to both (UC-15)', async () => {
     const { body } = await sendReq(A, B);
     expect((await as(B).post(`/api/friends/requests/${body.request.id}/accept`)).status).toBe(204);
     expect(await friendsOf(A)).toEqual([B]);
     expect(await friendsOf(B)).toEqual([A]);
     expect(await incoming(B)).toEqual([]);
   });
-  it('SOC-N4 decline removes the request without a friendship; A can send again (UC-17)', async () => {
+  it('SOC-N4 decline removes the request without a friendship; A can send again (UC-16)', async () => {
     const { body } = await sendReq(A, B);
     expect((await as(B).del(`/api/friends/requests/${body.request.id}`)).status).toBe(204);
     expect(await friendsOf(A)).toEqual([]);
     expect((await sendReq(A, B)).status).toBe(201);
   });
-  it('SOC-N5 cancel removes the request; B’s incoming list is empty (UC-18)', async () => {
+  it('SOC-N5 cancel removes the request; B’s incoming list is empty (UC-17)', async () => {
     const { body } = await sendReq(A, B);
     expect((await as(A).del(`/api/friends/requests/${body.request.id}`)).status).toBe(204);
     expect(await incoming(B)).toEqual([]);
@@ -77,10 +79,30 @@ describe('Unmocked API: friend requests', () => {
     await Promise.all([1, 2].map(() => as(B).post(`/api/friends/requests/${body.request.id}/accept`)));
     expect(await countFriendshipsBetween(A, B)).toBe(1);
   });
+  it('separates incoming and outgoing pending requests', async () => {
+    await sendReq(A, B);
+    await sendReq(C, A);
+    const reqsA = await as(A).get('/api/friends/requests');
+    expect(reqsA.status).toBe(200);
+    expect(reqsA.body.outgoing).toHaveLength(1);
+    expect(reqsA.body.incoming).toHaveLength(1);
+  });
+  it('renaming preserves pending and accepted friendships and uses the new username/displayName', async () => {
+    const { body } = await sendReq(A, B);
+    await as(B).patch('/api/auth/me', { name: 'Bob Updated' });
+    const pending = await as(A).get('/api/friends/requests');
+    expect(pending.status).toBe(200);
+    expect(pending.body.outgoing[0].recipient.displayName).toBe('Bob Updated');
+    await as(B).post(`/api/friends/requests/${body.request.id}/accept`);
+    await as(B).patch('/api/auth/me', { name: 'Bob Latest' });
+    const accepted = await as(A).get('/api/friends');
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.friends[0].user.displayName).toBe('Bob Latest');
+  });
 });
 
 describe('Unmocked API: DELETE /api/friends/:id', () => {
-  it('SOC-N6 removing a friend empties both lists; a new request is possible (UC-19)', async () => {
+  it('SOC-N6 removing a friend empties both lists; a new request is possible (UC-18)', async () => {
     const f = await befriend(A, B);
     expect((await as(A).del(`/api/friends/${f.id}`)).status).toBe(204);
     expect(await friendsOf(A)).toEqual([]);
@@ -92,7 +114,7 @@ describe('Unmocked API: DELETE /api/friends/:id', () => {
 describe('Unmocked API: GET /api/friends/leaderboard', () => {
   const board = async (id: string, q = '') => (await as(id).get(`/api/friends/leaderboard${q}`)).body;
 
-  it('SOC-N10 contains the caller and accepted friends only, ranked by computed totals (UC-20)', async () => {
+  it('SOC-N10 contains the caller and accepted friends only, ranked by computed totals (UC-19)', async () => {
     await giveShares(B, T, 2, 100); // B: 500 + 2×100 = 700
     await befriend(A, B);
     await befriend(A, C);

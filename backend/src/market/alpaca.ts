@@ -126,30 +126,99 @@ export class AlpacaProvider implements QuoteProvider {
   }
 
   async fetchQuotes(tickers: readonly string[]): Promise<Record<string, ProviderQuote | MarketProviderError>> {
-    const entries = await Promise.all(
-      tickers.map(async ticker => {
-        try {
-          const q = await this.fetchQuote(ticker);
-          return [ticker, q] as const;
-        } catch (error: unknown) {
-          return [ticker, error instanceof MarketProviderError ? error : failure(error)] as const;
+    const { key, secret } = this.credentials();
+    if (!key || !secret) {
+      const err = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
+      return Object.fromEntries(tickers.map(t => [t, err]));
+    }
+    if (tickers.length === 0) return {};
+    try {
+      const res = await axios.get('https://data.alpaca.markets/v2/stocks/snapshots', {
+        params: { symbols: tickers.join(','), feed: 'iex' },
+        headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
+        timeout: 4_000,
+        maxRedirects: 0,
+      });
+      const data = object(res.data);
+      const result: Record<string, ProviderQuote | MarketProviderError> = {};
+      for (const ticker of tickers) {
+        const item = data[ticker] ?? data[ticker.toUpperCase()] ?? data[ticker.toLowerCase()];
+        if (!item) {
+          result[ticker] = new MarketProviderError('PROVIDER_INVALID_DATA', `No snapshot returned for ${ticker}`);
+        } else {
+          try {
+            result[ticker] = parseAlpacaSnapshot(item);
+          } catch (err: unknown) {
+            result[ticker] = err instanceof MarketProviderError ? err : failure(err);
+          }
         }
-      })
-    );
-    return Object.fromEntries(entries);
+      }
+      return result;
+    } catch (error: unknown) {
+      throw failure(error);
+    }
   }
 
   async fetchHistories(tickers: readonly string[]): Promise<Record<string, PricePoint[] | MarketProviderError>> {
-    const entries = await Promise.all(
-      tickers.map(async ticker => {
-        try {
-          const h = await this.fetchHistory(ticker);
-          return [ticker, h] as const;
-        } catch (error: unknown) {
-          return [ticker, error instanceof MarketProviderError ? error : failure(error)] as const;
+    const { key, secret } = this.credentials();
+    if (!key || !secret) {
+      const err = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
+      return Object.fromEntries(tickers.map(t => [t, err]));
+    }
+    if (tickers.length === 0) return {};
+    const end = new Date(this.now());
+    const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
+    const barsBySymbol: Record<string, unknown[]> = {};
+    for (const t of tickers) barsBySymbol[t] = [];
+    let pageToken: string | null = null;
+    const seenTokens = new Set<string>();
+
+    try {
+      do {
+        const params: Record<string, unknown> = {
+          symbols: tickers.join(','),
+          timeframe: '1Day',
+          feed: 'iex',
+          start: start.toISOString(),
+          end: end.toISOString(),
+          limit: 1000,
+          sort: 'desc',
+          adjustment: 'raw',
+        };
+        if (pageToken) params.page_token = pageToken;
+        const res = await axios.get('https://data.alpaca.markets/v2/stocks/bars', {
+          params,
+          headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
+          timeout: 4_000,
+          maxRedirects: 0,
+        });
+        const root = object(res.data);
+        const barsMap = object(root.bars);
+        for (const ticker of tickers) {
+          const raw = barsMap[ticker] ?? barsMap[ticker.toUpperCase()];
+          if (Array.isArray(raw)) {
+            barsBySymbol[ticker] = (barsBySymbol[ticker] || []).concat(raw);
+          }
         }
-      })
-    );
-    return Object.fromEntries(entries);
+        const nextToken = typeof root.next_page_token === 'string' && root.next_page_token ? root.next_page_token : null;
+        if (nextToken && seenTokens.has(nextToken)) {
+          throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned a repeating pagination token.');
+        }
+        if (nextToken) seenTokens.add(nextToken);
+        pageToken = nextToken;
+      } while (pageToken);
+
+      const result: Record<string, PricePoint[] | MarketProviderError> = {};
+      for (const ticker of tickers) {
+        try {
+          result[ticker] = parseAlpacaBars({ bars: barsBySymbol[ticker] });
+        } catch (err: unknown) {
+          result[ticker] = err instanceof MarketProviderError ? err : failure(err);
+        }
+      }
+      return result;
+    } catch (error: unknown) {
+      throw failure(error);
+    }
   }
 }

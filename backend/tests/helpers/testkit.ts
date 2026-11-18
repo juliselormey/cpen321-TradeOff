@@ -2,8 +2,8 @@ import jwt from 'jsonwebtoken';
 import type { Response } from 'supertest';
 
 export const SECRET = process.env.JWT_SECRET ?? 'test-secret';
-export const SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA'];
-export const T = SYMBOLS[0]!;
+export const SYMBOLS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA'] as const;
+export const T = SYMBOLS[0];
 export const UNSUPPORTED = 'ZZZZ';
 export const CACHE_MS = 8000;
 

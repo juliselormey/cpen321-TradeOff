@@ -18,18 +18,11 @@ export async function findOrCreateUser(google: {
     });
 
     if (existing) {
-        /* eslint-disable @typescript-eslint/no-unsafe-return,
-        @typescript-eslint/no-unsafe-assignment,
-        @typescript-eslint/no-unsafe-argument,
-        @typescript-eslint/no-unsafe-member-access,
-        @typescript-eslint/no-unsafe-call */
         return db.user.update({
             where: { id: existing.id },
             data: { email: google.email },
         });
     }
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return db.user.create({
         data: {
             googleSub: google.googleSub,

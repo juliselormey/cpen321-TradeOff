@@ -1,5 +1,6 @@
 import request from 'supertest';
 import type { Express } from 'express';
+import type * as StubProvider from '../helpers/stubProvider';
 import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import {
@@ -8,7 +9,7 @@ import {
 
 const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/services/alpacaProvider', () =>
-  require('../helpers/stubProvider').createStubProvider(mockMarket));
+  jest.requireActual<typeof StubProvider>('../helpers/stubProvider').createStubProvider(mockMarket));
 
 interface LimitOrderWorker { runLimitOrderWorkerOnce: () => Promise<void> }
 
@@ -35,6 +36,7 @@ const market = (uid: string, o: object = {}) =>
 const limit = (uid: string, o: object = {}) =>
   request(app).post('/api/trades/execute/limit').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, limitPrice: 100, ...o });
 const cancel = (uid: string, id: string) => request(app).post(`/api/trades/orders/${id}/cancel`).set(bearer(uid));
+const orderIdFrom = (res: { body: unknown }) => (res.body as { orderId: string }).orderId;
 
 describe('Unmocked API: POST /api/trades/execute/market', () => {
   it('TRD-N1 buy debits cash, creates the position, records one trade (UC-09)', async () => {
@@ -62,7 +64,7 @@ describe('Unmocked API: POST /api/trades/execute/market', () => {
   it('TRD-N5 two simultaneous buys cannot overdraw the account', async () => {
     await db.account.update({ where: { userId: A }, data: { cashBalance: 100 } });
     setPrice(60);
-    const statuses = (await Promise.all([market(A), market(A)])).map((r) => r.status).sort();
+    const statuses = (await Promise.all([market(A), market(A)])).map((r: { status: number }) => r.status).sort();
     expect(statuses).toEqual([200, 400]);
     expect(await getCash(A)).toBe(40);
   });
@@ -99,7 +101,7 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
   it('TRD-N7 limit below market → pending order, cash reserved, no position, no trade (UC-10)', async () => {
     const res = await limit(A, { limitPrice: 90, quantity: 2 });
     expect(res.status).toBe(200);
-    const order = await getOrder(res.body.orderId);
+    const order = await getOrder(orderIdFrom(res));
     expect(order?.status).toBe('PENDING');
     expect(await getCash(A)).toBe(10000 - 180);
     expect(await getQty(A, T)).toBe(0);
@@ -108,23 +110,23 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
   it('TRD-N8 limit at or above market → filled immediately, nothing left pending', async () => {
     const res = await limit(A, { limitPrice: 110 });
     expect(res.status).toBe(200);
-    expect((await getOrder(res.body.orderId))?.status).toBe('FILLED');
+    expect((await getOrder(orderIdFrom(res)))?.status).toBe('FILLED');
     expect(await countTrades(A)).toBe(1);
     expect(await db.order.count({ where: { userId: A, status: 'PENDING' } })).toBe(0);
   });
   it('TRD-N9 worker fills a pending buy once the price crosses the limit', async () => {
-    const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90, quantity: 2 }));
     setPrice(85);
     await tick();
-    expect((await getOrder(body.orderId))?.status).toBe('FILLED');
+    expect((await getOrder(orderId))?.status).toBe('FILLED');
     expect(await countTrades(A)).toBe(1);
     expect(await getQty(A, T)).toBe(2);
   });
   it('TRD-N10 worker leaves the order pending while price > limit', async () => {
-    const { body } = await limit(A, { limitPrice: 90 });
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90 }));
     setPrice(95);
     await tick();
-    expect((await getOrder(body.orderId))?.status).toBe('PENDING');
+    expect((await getOrder(orderId))?.status).toBe('PENDING');
     expect(await countTrades(A)).toBe(0);
   });
   it('TRD-N11 a second tick does not fill the same order twice', async () => {
@@ -135,30 +137,30 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
     expect(await countTrades(A)).toBe(1);
   });
   it('TRD-N12 worker never fills a cancelled order', async () => {
-    const { body } = await limit(A, { limitPrice: 90 });
-    await cancel(A, body.orderId);
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90 }));
+    await cancel(A, orderId);
     setPrice(80);
     await tick();
-    expect((await getOrder(body.orderId))?.status).toBe('CANCELLED');
+    expect((await getOrder(orderId))?.status).toBe('CANCELLED');
     expect(await countTrades(A)).toBe(0);
   });
   it('TRD-N13 worker survives a provider outage and fills after recovery', async () => {
-    const { body } = await limit(A, { limitPrice: 90 });
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90 }));
     mockMarket.fail = true; expireCache();
     await expect(tick()).resolves.not.toThrow();
-    expect((await getOrder(body.orderId))?.status).toBe('PENDING');
+    expect((await getOrder(orderId))?.status).toBe('PENDING');
     setPrice(85);
     await tick();
-    expect((await getOrder(body.orderId))?.status).toBe('FILLED');
+    expect((await getOrder(orderId))?.status).toBe('FILLED');
   });
   it('TRD-N17 pending limit sell fills when the price rises to the limit', async () => {
     await giveShares(A, T, 5, 90);
-    const { body } = await limit(A, { side: 'sell', quantity: 2, limitPrice: 120 });
-    expect((await getOrder(body.orderId))?.status).toBe('PENDING');
+    const orderId = orderIdFrom(await limit(A, { side: 'sell', quantity: 2, limitPrice: 120 }));
+    expect((await getOrder(orderId))?.status).toBe('PENDING');
     setPrice(125);
     const before = await getCash(A);
     await tick();
-    expect((await getOrder(body.orderId))?.status).toBe('FILLED');
+    expect((await getOrder(orderId))?.status).toBe('FILLED');
     expect(await getQty(A, T)).toBe(3);
     expect(await getCash(A)).toBeGreaterThanOrEqual(before + 240);
   });
@@ -166,24 +168,24 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
 
 describe('Unmocked API: POST /api/trades/orders/:id/cancel', () => {
   it('TRD-N18 cancel releases exactly the reserved cash, position untouched (UC-12)', async () => {
-    const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
-    const res = await cancel(A, body.orderId);
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90, quantity: 2 }));
+    const res = await cancel(A, orderId);
     expect(res.status).toBe(200);
-    expect((await getOrder(body.orderId))?.status).toBe('CANCELLED');
+    expect((await getOrder(orderId))?.status).toBe('CANCELLED');
     expect(await getCash(A)).toBe(10000);
     expect(await getQty(A, T)).toBe(0);
   });
   it('TRD-N19 cancelling twice → 409 and cash released only once', async () => {
-    const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
-    await cancel(A, body.orderId);
-    expect((await cancel(A, body.orderId)).status).toBe(409);
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90, quantity: 2 }));
+    await cancel(A, orderId);
+    expect((await cancel(A, orderId)).status).toBe(409);
     expect(await getCash(A)).toBe(10000);
   });
   it('TRD-N20 cancel racing the worker: exactly one outcome, cash consistent', async () => {
-    const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90, quantity: 2 }));
     setPrice(85);
-    await Promise.all([cancel(A, body.orderId), tick()]);
-    const status = (await getOrder(body.orderId))?.status;
+    await Promise.all([cancel(A, orderId), tick()]);
+    const status = (await getOrder(orderId))?.status;
     if (status === 'CANCELLED') {
       expect(await countTrades(A)).toBe(0);
       expect(await getCash(A)).toBe(10000);
@@ -194,8 +196,8 @@ describe('Unmocked API: POST /api/trades/orders/:id/cancel', () => {
     }
   });
   it('TRD-N21 another user cannot cancel the order → 404, order stays pending', async () => {
-    const { body } = await limit(A, { limitPrice: 90 });
-    expect((await cancel(B, body.orderId)).status).toBe(404);
-    expect((await getOrder(body.orderId))?.status).toBe('PENDING');
+    const orderId = orderIdFrom(await limit(A, { limitPrice: 90 }));
+    expect((await cancel(B, orderId)).status).toBe(404);
+    expect((await getOrder(orderId))?.status).toBe('PENDING');
   });
 });

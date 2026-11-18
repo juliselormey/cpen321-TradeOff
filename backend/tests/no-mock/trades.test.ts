@@ -9,7 +9,7 @@ const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/services/alpacaProvider', () =>
   require('../helpers/stubProvider').createStubProvider(mockMarket));
 
-let app: any, worker: any, A: string, B: string;
+let app: unknown, worker: any, A: string, B: string;
 const tick = () => worker.runLimitOrderWorkerOnce();
 const setPrice = (p: number) => { mockMarket.price = p; mockMarket.fail = false; expireCache(); };
 
@@ -27,10 +27,10 @@ beforeEach(async () => {
 });
 
 const market = (uid: string, o: object = {}) =>
-  request(app).post('/api/trades/execute/market').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, ...o });
+  request(app as any).post('/api/trades/execute/market').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, ...o });
 const limit = (uid: string, o: object = {}) =>
-  request(app).post('/api/trades/execute/limit').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, limitPrice: 100, ...o });
-const cancel = (uid: string, id: string) => request(app).post(`/api/trades/orders/${id}/cancel`).set(bearer(uid));
+  request(app as any).post('/api/trades/execute/limit').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, limitPrice: 100, ...o });
+const cancel = (uid: string, id: string) => request(app as any).post(`/api/trades/orders/${id}/cancel`).set(bearer(uid));
 
 describe('Unmocked API: POST /api/trades/execute/market', () => {
   it('TRD-N1 buy debits cash, creates the position, records one trade (UC-09)', async () => {
@@ -104,7 +104,7 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
   it('TRD-N8 limit at or above market → filled immediately, nothing left pending', async () => {
     const res = await limit(A, { limitPrice: 110 });
     expect(res.status).toBe(200);
-    expect((await getOrder(res.body.orderId))!.status).toBe('FILLED');
+    expect((await getOrder(res.body.orderId))?.status).toBe('FILLED');
     expect(await countTrades(A)).toBe(1);
     expect(await db.order.count({ where: { userId: A, status: 'PENDING' } })).toBe(0);
   });
@@ -112,7 +112,7 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
     const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
     setPrice(85);
     await tick();
-    expect((await getOrder(body.orderId))!.status).toBe('FILLED');
+    expect((await getOrder(body.orderId))?.status).toBe('FILLED');
     expect(await countTrades(A)).toBe(1);
     expect(await getQty(A, T)).toBe(2);
   });
@@ -120,7 +120,7 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
     const { body } = await limit(A, { limitPrice: 90 });
     setPrice(95);
     await tick();
-    expect((await getOrder(body.orderId))!.status).toBe('PENDING');
+    expect((await getOrder(body.orderId))?.status).toBe('PENDING');
     expect(await countTrades(A)).toBe(0);
   });
   it('TRD-N11 a second tick does not fill the same order twice', async () => {
@@ -135,7 +135,7 @@ describe('Unmocked API: POST /api/trades/execute/limit', () => {
     await cancel(A, body.orderId);
     setPrice(80);
     await tick();
-    expect((await getOrder(body.orderId))!.status).toBe('CANCELLED');
+    expect((await getOrder(body.orderId))?.status).toBe('CANCELLED');
     expect(await countTrades(A)).toBe(0);
   });
   it('TRD-N13 worker survives a provider outage and fills after recovery', async () => {
@@ -179,7 +179,7 @@ describe('Unmocked API: POST /api/trades/orders/:id/cancel', () => {
     const { body } = await limit(A, { limitPrice: 90, quantity: 2 });
     setPrice(85);
     await Promise.all([cancel(A, body.orderId), tick()]);
-    const status = (await getOrder(body.orderId))!.status;
+    const status = (await getOrder(body.orderId))?.status;
     if (status === 'CANCELLED') {
       expect(await countTrades(A)).toBe(0);
       expect(await getCash(A)).toBe(10000);

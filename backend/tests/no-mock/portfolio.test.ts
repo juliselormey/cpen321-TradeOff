@@ -64,7 +64,7 @@ describe('Unmocked API: GET /api/portfolio', () => {
     await limit(A, { limitPrice: 90 });
     const p = (await portfolio(A)).body.totalValue;
     const lb = await request(app).get('/api/friends/leaderboard').set(bearer(A));
-    expect(Number(lb.body.entries.find((e: any) => e.isYou).totalPortfolioValue)).toBe(p);
+    expect(Number(lb.body.entries.find((e: unknown) => (e as { isYou: boolean }).isYou).totalPortfolioValue)).toBe(p);
   });
   it('PF-N7 cancelling a pending order empties the list and leaves the total unchanged', async () => {
     const { body } = await limit(A, { limitPrice: 90, quantity: 2 });

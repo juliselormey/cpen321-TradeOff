@@ -26,11 +26,11 @@ let app: any, trading: any;
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
   app = l.app; trading = marketService;
-  (db.user.findUnique as any).mockResolvedValue({ id: U });
+  (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
 });
 
 const target = (exists: boolean) =>
-  (db.user.findUnique as any).mockImplementation(async ({ where }: any) =>
+  (db.user.findUnique as unknown as jest.Mock).mockImplementation(async ({ where }: any) =>
     where.id === U || exists ? { id: where.id, name: where.id, username: where.id } : null);
 const as = (id = U) => ({ get: (p: string) => request(app).get(p).set(bearer(id)),
   post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
@@ -43,7 +43,7 @@ describe('Mocked API: friends routes (auth)', () => {
     ['post', '/api/friends/requests/r1/accept'], ['delete', '/api/friends/requests/r1'],
     ['delete', '/api/friends/f1'], ['get', '/api/friends/leaderboard'],
   ])('SOC-01 %s %s without JWT → 401', async (method, path) => {
-    expect((await (request(app) as any)[method](path)).status).toBe(401);
+    expect((await (request(app as any) as any)[method](path)).status).toBe(401);
   });
 });
 
@@ -60,12 +60,12 @@ describe('Mocked API: POST /api/friends/requests', () => {
   });
   it('SOC-07 already friends / pending → 409', async () => {
     target(true);
-    (db.friendship.create as any).mockRejectedValue({ code: 'P2002' });
+    (db.friendship.create as unknown as jest.Mock).mockRejectedValue({ code: 'P2002' });
     expectError(await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000002' }), 409);
   });
   it('SOC-08 valid request → 201 with pending status (UC-14)', async () => {
     target(true);
-    (db.friendship.create as any).mockResolvedValue(reqRow() as any);
+    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(reqRow() as any);
     const res = await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000002' });
     expect(res.status).toBe(201);
     expect(res.body.request).toEqual(expect.objectContaining({ id: 'r1', status: 'PENDING', receiverId: 'u2' }));
@@ -75,11 +75,11 @@ describe('Mocked API: POST /api/friends/requests', () => {
 describe('Mocked API: POST /api/friends/requests/:id/accept', () => {
   const accept = (as_ = U) => as(as_).post('/api/friends/requests/r1/accept');
   it('SOC-09 unknown request → 404', async () => {
-    (db.friendship.updateMany as any).mockResolvedValue({ count: 0 });
+    (db.friendship.updateMany as unknown as jest.Mock).mockResolvedValue({ count: 0 });
     expectError(await accept(), 404);
   });
   it('SOC-12 receiver accepts → 204 (UC-15)', async () => {
-    (db.friendship.updateMany as any).mockResolvedValue({ count: 1 });
+    (db.friendship.updateMany as unknown as jest.Mock).mockResolvedValue({ count: 1 });
     const res = await accept('u2');
     expect(res.status).toBe(204);
     expect(db.friendship.updateMany).toHaveBeenCalled();
@@ -88,11 +88,11 @@ describe('Mocked API: POST /api/friends/requests/:id/accept', () => {
 
 describe('Mocked API: DELETE /api/friends/requests/:id', () => {
   it('SOC-13 unknown request → 404', async () => {
-    (db.friendship.deleteMany as any).mockResolvedValue({ count: 0 });
+    (db.friendship.deleteMany as unknown as jest.Mock).mockResolvedValue({ count: 0 });
     expectError(await as().del('/api/friends/requests/r1'), 404);
   });
   it('SOC-15 receiver declines / sender cancels → 204 each (UC-16, UC-17)', async () => {
-    (db.friendship.deleteMany as any).mockResolvedValue({ count: 1 });
+    (db.friendship.deleteMany as unknown as jest.Mock).mockResolvedValue({ count: 1 });
     expect((await as('u2').del('/api/friends/requests/r1')).status).toBe(204);
     expect((await as(U).del('/api/friends/requests/r1')).status).toBe(204);
   });
@@ -100,16 +100,16 @@ describe('Mocked API: DELETE /api/friends/requests/:id', () => {
 
 describe('Mocked API: DELETE /api/friends/:id', () => {
   it('SOC-17 unknown → 404, participant → 204 (UC-18)', async () => {
-    (db.friendship.deleteMany as any).mockResolvedValue({ count: 0 });
+    (db.friendship.deleteMany as unknown as jest.Mock).mockResolvedValue({ count: 0 });
     expectError(await as().del('/api/friends/f1'), 404);
-    (db.friendship.deleteMany as any).mockResolvedValue({ count: 1 });
+    (db.friendship.deleteMany as unknown as jest.Mock).mockResolvedValue({ count: 1 });
     expect((await as().del('/api/friends/f1')).status).toBe(204);
   });
 });
 
 describe('Mocked API: GET /api/friends and /api/friends/requests', () => {
   it('SOC-18 no relationships → empty arrays; requests split incoming/outgoing', async () => {
-    (db.friendship.findMany as any).mockResolvedValue([]);
+    (db.friendship.findMany as unknown as jest.Mock).mockResolvedValue([]);
     const friends = await as().get('/api/friends');
     expect(friends.body.friends).toEqual([]);
     const reqs = await as().get('/api/friends/requests');
@@ -121,7 +121,7 @@ describe('Mocked API: GET /api/friends and /api/friends/requests', () => {
     const recipient = '00000000-0000-0000-0000-000000000002';
     const incoming = { id: 'one', senderId: recipient, recipientId: sender, status: 'PENDING' };
     const outgoing = { id: 'two', senderId: sender, recipientId: recipient, status: 'PENDING' };
-    (db.friendship.findMany as any).mockResolvedValue([incoming, outgoing]);
+    (db.friendship.findMany as unknown as jest.Mock).mockResolvedValue([incoming, outgoing]);
     const response = await request(app).get('/api/friends/requests').set(bearer(sender)).expect(200);
     expect(response.body).toEqual({ incoming: [incoming], outgoing: [outgoing] });
     expect(db.friendship.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
@@ -135,13 +135,13 @@ describe('Mocked API: GET /api/friends and /api/friends/requests', () => {
     const alice = { id: sender, username: 'alice', name: 'Alice', isBanned: false };
     const bob = { id: recipient, username: 'bob', name: 'Bob', isBanned: false };
     const row = { id: 'stable-request', senderId: sender, recipientId: recipient, pairKey: `${sender}:${recipient}`, status: 'PENDING', sender: alice, recipient: bob };
-    (db.user.findUnique as any).mockImplementation(async (args: any) => {
+    (db.user.findUnique as unknown as jest.Mock).mockImplementation(async (args: any) => {
       const where = args.where;
       return [alice, bob].find(u => where?.id ? u.id === where.id : u.username === where?.username) ?? null;
     });
-    (db.friendship.create as any).mockResolvedValue(row as any);
-    (db.friendship.findMany as any).mockResolvedValue([row] as any);
-    (db.friendship.updateMany as any).mockImplementation(() => {
+    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(row as any);
+    (db.friendship.findMany as unknown as jest.Mock).mockResolvedValue([row] as any);
+    (db.friendship.updateMany as unknown as jest.Mock).mockImplementation(() => {
       row.status = 'ACCEPTED';
       return Promise.resolve({ count: 1 });
     });

@@ -136,7 +136,7 @@ describe('Mocked API: GET /api/market/stocks/:symbol/history', () => {
     const res = await hist(T);
     expect(res.status).toBe(200);
     expect(res.body.points.length).toBeGreaterThan(0);
-    const times = res.body.points.map((p: any) => Date.parse(p.timestamp));
+    const times = res.body.points.map((p: unknown) => Date.parse((p as { timestamp: string }).timestamp));
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(res.body.points[0]).toEqual(expect.objectContaining({ timestamp: expect.any(String), price: expect.any(Number) }));
   });

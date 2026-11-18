@@ -33,31 +33,31 @@ let app: any;
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
   app = l.app;
-  (db.user.findUnique as any).mockResolvedValue({ id: U });
-  (db.$transaction as any).mockImplementation(async (cb: any) => cb(db));
-  (marketService.getStock as any).mockResolvedValue({ currentPrice: '100', status: 'ok' });
-  (db.account.upsert as any).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
-  (db.account.findUnique as any).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
-  (db.account.findUniqueOrThrow as any).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
-  (db.position.findUnique as any).mockResolvedValue({ userId: U, ticker: T, quantity: decimal(2), averageCost: decimal(90) });
-  (db.order.aggregate as any).mockResolvedValue({ _sum: { quantity: decimal(0) } });
-  (db.order.updateMany as any).mockResolvedValue({ count: 1 });
+  (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
+  (db.$transaction as unknown as jest.Mock).mockImplementation(async (cb: any) => cb(db));
+  (marketService.getStock as unknown as jest.Mock).mockResolvedValue({ currentPrice: '100', status: 'ok' });
+  (db.account.upsert as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
+  (db.account.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
+  (db.account.findUniqueOrThrow as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
+  (db.position.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, ticker: T, quantity: decimal(2), averageCost: decimal(90) });
+  (db.order.aggregate as unknown as jest.Mock).mockResolvedValue({ _sum: { quantity: decimal(0) } });
+  (db.order.updateMany as unknown as jest.Mock).mockResolvedValue({ count: 1 });
 });
 
 const cash = (c: number) => {
   const acc = { userId: U, cashBalance: decimal(c), startingBalance: decimal(10000) };
-  (db.account.findUnique as any).mockResolvedValue(acc);
-  (db.account.findUniqueOrThrow as any).mockResolvedValue(acc);
-  (db.account.upsert as any).mockResolvedValue(acc);
+  (db.account.findUnique as unknown as jest.Mock).mockResolvedValue(acc);
+  (db.account.findUniqueOrThrow as unknown as jest.Mock).mockResolvedValue(acc);
+  (db.account.upsert as unknown as jest.Mock).mockResolvedValue(acc);
 };
 const owned = (q: number) =>
-  (db.position.findUnique as any).mockResolvedValue(q ? { userId: U, ticker: T, quantity: decimal(q), averageCost: decimal(90) } : null);
+  (db.position.findUnique as unknown as jest.Mock).mockResolvedValue(q ? { userId: U, ticker: T, quantity: decimal(q), averageCost: decimal(90) } : null);
 const stubWrites = () => {
-  (db.order.create as any).mockResolvedValue({ id: 'o1', status: 'PENDING', quantity: decimal(1), side: 'BUY', type: 'MARKET', ticker: T });
-  (db.trade.create as any).mockResolvedValue({ id: 't1' });
-  (db.account.update as any).mockResolvedValue({ cashBalance: decimal(0) });
-  (db.position.upsert as any).mockResolvedValue({});
-  (db.position.update as any).mockResolvedValue({});
+  (db.order.create as unknown as jest.Mock).mockResolvedValue({ id: 'o1', status: 'PENDING', quantity: decimal(1), side: 'BUY', type: 'MARKET', ticker: T });
+  (db.trade.create as unknown as jest.Mock).mockResolvedValue({ id: 't1' });
+  (db.account.update as unknown as jest.Mock).mockResolvedValue({ cashBalance: decimal(0) });
+  (db.position.upsert as unknown as jest.Mock).mockResolvedValue({});
+  (db.position.update as unknown as jest.Mock).mockResolvedValue({});
 };
 const marketBody = (o: object = {}) => ({ ticker: T, side: 'BUY', quantity: 1, ...o });
 const limitBody = (o: object = {}) => ({ ticker: T, side: 'BUY', quantity: 1, limitPrice: 100, ...o });

@@ -5,7 +5,7 @@ let n = 0;
 
 export async function resetDb() {
   for (const m of ['trade', 'order', 'position', 'friendship', 'account', 'user']) {
-    await (db as any)[m].deleteMany();
+    await (db as unknown as any)[m].deleteMany();
   }
 }
 
@@ -33,7 +33,7 @@ export const getCash = async (id: string) => {
   return acc ? Number(acc.cashBalance) : 0;
 };
 
-export const giveShares = (userId: string, ticker = 'AAPL', quantity: number = 1, avgCost = 100) =>
+export const giveShares = (userId: string, ticker = 'AAPL', quantity = 1, avgCost = 100) =>
   db.position.create({
     data: {
       userId,

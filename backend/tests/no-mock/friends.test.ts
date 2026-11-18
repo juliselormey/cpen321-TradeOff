@@ -10,7 +10,7 @@ var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
   require('../helpers/stubprovider').createStubProvider(mockMarket));
 
-let app: any, A: string, B: string, C: string, D: string, E: string;
+let app: unknown, A: string, B: string, C: string, D: string, E: string;
 
 beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app; });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });
@@ -22,15 +22,15 @@ beforeEach(async () => {
 });
 
 const as = (id: string) => ({
-  get: (p: string) => request(app).get(p).set(bearer(id)),
-  post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
-  patch: (p: string, b: object = {}) => request(app).patch(p).set(bearer(id)).send(b),
-  del: (p: string) => request(app).delete(p).set(bearer(id)),
+  get: (p: string) => request(app as any).get(p).set(bearer(id)),
+  post: (p: string, b: object = {}) => request(app as any).post(p).set(bearer(id)).send(b),
+  patch: (p: string, b: object = {}) => request(app as any).patch(p).set(bearer(id)).send(b),
+  del: (p: string) => request(app as any).delete(p).set(bearer(id)),
 });
 const sendReq = (from: string, to: string) => as(from).post('/api/friends/requests', { userId: to });
 const incoming = async (id: string) => (await as(id).get('/api/friends/requests')).body.incoming;
 const outgoing = async (id: string) => (await as(id).get('/api/friends/requests')).body.outgoing;
-const friendsOf = async (id: string) => (await as(id).get('/api/friends')).body.friends.map((f: any) => f.user.id);
+const friendsOf = async (id: string) => (await as(id).get('/api/friends')).body.friends.map((f: { user: { id: string } }) => f.user.id);
 
 describe('Unmocked API: friend requests', () => {
   it('SOC-N1 send A→B: pending row, visible to both, nobody is a friend yet (UC-14)', async () => {
@@ -120,8 +120,8 @@ describe('Unmocked API: GET /api/friends/leaderboard', () => {
     await befriend(A, C);
     await requestFrom(E, A); // pending only
     const { entries } = await board(A);
-    expect(entries.map((e: any) => e.user.id)).toEqual([A, B, C]);
-    expect(entries.map((e: any) => e.totalPortfolioValue)).toEqual(['1000', '700', '300']);
+    expect(entries.map((e: { user: { id: string } }) => e.user.id)).toEqual([A, B, C]);
+    expect(entries.map((e: { totalPortfolioValue: string }) => e.totalPortfolioValue)).toEqual(['1000', '700', '300']);
     expect(entries.map((e: any) => e.user.id)).toEqual([A, B, C]);
     expect(JSON.stringify(entries)).not.toContain(D);
     expect(JSON.stringify(entries)).not.toContain(E);
@@ -129,11 +129,11 @@ describe('Unmocked API: GET /api/friends/leaderboard', () => {
   it('SOC-N11 the caller’s entry equals GET /api/portfolio totalValue', async () => {
     await giveShares(A, T, 3, 90);
     const total = (await as(A).get('/api/portfolio')).body.totalValue;
-    expect(Number((await board(A)).entries.find((e: any) => e.user.id === A).totalPortfolioValue)).toBe(total);
+    expect(Number((await board(A)).entries.find((e: { user: { id: string } }) => e.user.id === A).totalPortfolioValue)).toBe(total);
   });
   it('SOC-N12 a removed friend disappears from the leaderboard', async () => {
     const f = await befriend(A, B);
     await as(A).del(`/api/friends/${f.id}`);
-    expect((await board(A)).entries.map((e: any) => e.user.id)).toEqual([A]);
+    expect((await board(A)).entries.map((e: { user: { id: string } }) => e.user.id)).toEqual([A]);
   });
 });

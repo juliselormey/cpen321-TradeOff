@@ -63,7 +63,7 @@ describe('Batch market cache shared across all screens and symbols', () => {
     expect(stocks.every(s => s.history?.status === 'ok')).toBe(true);
     f.advance(8_000);
     await f.service.getStocks();
-    expect(f.fetchQuotes.mock.calls[2]?.[0]).not.toContain('MSFT');
+h    expect(f.fetchQuotes.mock.calls[2]?.[0]).toContain('MSFT');
   });
 
   test('a batch outage retains all quotes and suppresses repeat requests until cooldown', async () => {

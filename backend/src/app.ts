@@ -32,13 +32,21 @@ export function createApp(): Express {
   });
 
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-      console.error(err);
       if (res.headersSent) {
         next(err);
         return;
       }
+      // Client errors raised by body-parser (malformed JSON, payload too large) are 4xx, not server faults.
+      const status = typeof err === 'object' && err !== null && 'status' in err ? Number(err.status) : 0;
+      if (status >= 400 && status < 500) {
+        res.status(status).json({ error: status === 413 ? 'Request body too large' : 'Invalid request body' });
+        return;
+      }
+      console.error(err);
       res.status(500).json({ error: "Server error" });
     });
 
   return app;
 }
+
+export default createApp;

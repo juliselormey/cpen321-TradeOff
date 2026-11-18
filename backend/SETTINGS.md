@@ -29,8 +29,8 @@ Google client ID remain supplied by the server's Compose configuration.
 
 ## API
 
-- GET /api/users/me: authenticated profile (id, email, displayName, username).
-- PATCH /api/users/me: authenticated update with displayName and username only.
+- GET /api/auth/me: authenticated profile (id, email, displayName, username).
+- PATCH /api/auth/me: authenticated update with displayName and username only.
 - 400 for invalid input, 401 for missing/expired session, 403 for a banned account,
   409 for a username collision.
 - Existing POST /api/auth/me remains supported.

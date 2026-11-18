@@ -85,13 +85,17 @@ app.use((req, res, next) => {
   next();
 });
 
+import { startLimitOrderWorker, stopLimitOrderWorker } from '../src/market/limitWorker';
+
 app.use(createApp());
 
 const server = app.listen(3002, '127.0.0.1', () => {
   console.log('Portfolio E2E backend listening on port 3002.');
+  startLimitOrderWorker();
 });
 
 process.on('SIGINT', () => {
+  stopLimitOrderWorker();
   server.close(() => {
     db.$disconnect().then(() => {
       process.exitCode = 0;

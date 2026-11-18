@@ -33,7 +33,7 @@ export class MarketProviderError extends Error {
   constructor(
     public readonly code: MarketIssueCode,
     message: string,
-    public readonly retryAfterMs = 30_000,
+    public readonly retryAfterMs = 8_000, // generic outages retry at the normal refresh; rate-limit/auth errors pass their own longer value
   ) {
     super(message);
     this.name = 'MarketProviderError';

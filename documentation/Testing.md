@@ -18,9 +18,33 @@
 
 | **Interface** | **Describe Group Location, No Mocks** | **Describe Group Location, With Mocks** | **Mocked Component** |
 |---|---|---|---|
-| `GET /api/market/stocks` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol/history` | `backend/tests/no-mock/market.test.ts` — `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts` — `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
+| `GET /api/market/stocks` (UC-06) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol` (UC-08) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol/history` (UC-08) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
+| `POST /api/trades/execute/market` (UC-09, UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/market` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/market` | Prisma client, market data lookup |
+| `POST /api/trades/execute/limit` (UC-10, UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/limit` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/limit` | Prisma client, market data lookup |
+| `POST /api/trades/orders/:id/cancel` (UC-12) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/orders/:id/cancel` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/orders/:id/cancel` | Prisma client |
+| `GET /api/portfolio` (UC-13) | `backend/tests/no-mock/portfolio.test.ts`: `Unmocked API: GET /api/portfolio` | `backend/tests/mock/portfolioApi.test.ts`: `Mocked API: GET /api/portfolio` | Prisma client, market data lookup |
+
+**What the suites verify.** Test names follow the use case scenarios (e.g. `UC-09 8b: insufficient cash is rejected`).
+
+- **No-mock suites** use a real MySQL database and real code paths: database transactions (`db.$transaction`), row-level locking and atomic balance updates across the Account, Position, Order and Trade tables, order cancellation and release of reserved cash, and the background limit-order worker filling pending orders.
+    - UC-09 main: a market buy debits cash, updates the position, and records one trade.
+    - UC-09 8b: insufficient cash is rejected and balances are unchanged.
+    - UC-09: concurrent buys cannot overdraw the account.
+    - UC-10 main: a limit price below market creates a pending order and reserves cash.
+    - UC-10: the limit-order worker fills the pending order once the price crosses the limit.
+    - UC-12 main: cancelling releases reserved cash and leaves the position unchanged.
+    - UC-13: the portfolio total includes cash reserved for pending orders.
+- **Mocked suites** run with Jest and need no network or database. They test isolated logic and resilience to external failures.
+    - UC-06 main: a second request within 8 s is served from cache, and the provider is called once.
+    - UC-06 main: a request after 8 s refetches from the provider.
+    - UC-06 2a: cache expired and the provider returns an error → `503` with an error body.
+    - UC-08: the same `503` behavior, and an unsupported symbol → `404`.
+    - UC-09 8a, 7a: invalid quantity and unavailable price are rejected.
+    - UC-13 3a: unavailable prices → `503`.
+
+Authenticated routes are called with a JWT signed with the backend's real secret. The Google ID-token verifier is not exercised in these suites. `[TODO: confirm with TA whether sign-in tests may stub the Google verifier]`
 
 #### 2.1.2. Commit Hash Where Tests Run
 
@@ -70,18 +94,18 @@ _(Placeholder for Jest coverage screenshot without mocks)_
 ### 3.2. Test Verification and Logs
 
 - **Performance (Response Time)**
-  - **Verification:** This test suite simulates multiple concurrent API calls using Jest along with a load-testing utility to mimic real-world user behavior. The focus is on key endpoints such as user login and study group search to ensure that each call completes within the target response time of 2 seconds under normal load. The test logs capture metrics such as average response time, maximum response time, and error rates. These logs are then analyzed to identify any performance bottlenecks, ensuring the system can handle expected traffic without degradation in user experience.
-  - **Log Output**
-    ```
-    [Placeholder for response time test logs]
-    ```
+    - **Verification:** This test suite simulates multiple concurrent API calls using Jest along with a load-testing utility to mimic real-world user behavior. The focus is on key endpoints such as user login and study group search to ensure that each call completes within the target response time of 2 seconds under normal load. The test logs capture metrics such as average response time, maximum response time, and error rates. These logs are then analyzed to identify any performance bottlenecks, ensuring the system can handle expected traffic without degradation in user experience.
+    - **Log Output**
+      ```
+      [Placeholder for response time test logs]
+      ```
 
 - **Chat Data Security**
-  - **Verification:** ...
-  - **Log Output**
-    ```
-    [Placeholder for chat security test logs]
-    ```
+    - **Verification:** ...
+    - **Log Output**
+      ```
+      [Placeholder for chat security test logs]
+      ```
 
 ---
 

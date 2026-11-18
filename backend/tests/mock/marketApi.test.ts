@@ -2,158 +2,136 @@ import express from 'express';
 import request from 'supertest';
 import { createMarketRouter } from '../../src/market/routes';
 import { MarketService } from '../../src/market/service';
-import { LIVE_SYMBOLS } from '../../src/market/catalog';
-import { MarketProviderError, PricePoint, ProviderQuote, QuoteProvider } from '../../src/market/types';
+import { FAKE_DATE, HISTORY, SYMBOLS, T, UNSUPPORTED, expectError, makeQuotes } from '../helpers/testkit';
+import { ProviderQuote, PricePoint } from '../../src/market/types';
 
-const NOW = Date.parse('2026-10-23T15:00:00.000Z');
-const history: PricePoint[] = [
-  { timestamp: '2026-10-21T14:30:00.000Z', price: 99 },
-  { timestamp: '2026-10-22T14:30:00.000Z', price: 100 },
-];
+const START = Date.parse('2026-10-23T15:00:00Z');
+const QUOTE: ProviderQuote = {
+  price: 100, change: 1, percentageChange: 1,
+  quoteAsOf: new Date(START).toISOString(),
+};
 
-function fixture(overrides: Partial<QuoteProvider> = {}) {
-  const quotes = new Map<string, ProviderQuote>(
-    LIVE_SYMBOLS.map((ticker, index) => [ticker, {
-      price: 100 + index,
-      change: 1,
-      percentageChange: 1,
-      quoteAsOf: new Date(NOW).toISOString(),
-    }])
+function fixture() {
+  let clock = START;
+  const fetchQuote = jest.fn<Promise<ProviderQuote>, [string]>().mockResolvedValue(QUOTE);
+  const fetchHistory = jest.fn<Promise<PricePoint[]>, [string]>().mockResolvedValue(HISTORY);
+  const fetchQuotes = jest.fn().mockImplementation(async (symbols: readonly string[]) =>
+    Object.fromEntries(symbols.map(s => [s, QUOTE]))
   );
-
-  const getQuote = (ticker: string): ProviderQuote => {
-    const q = quotes.get(ticker);
-    if (!q) throw new Error(`Missing quote for ${ticker}`);
-    return q;
-  };
-
-  const fetchQuote = jest.fn<Promise<ProviderQuote>, [string]>((ticker: string) => Promise.resolve(getQuote(ticker)));
-  const fetchHistory = jest.fn<Promise<PricePoint[]>, [string]>(() => Promise.resolve(history));
-  const fetchQuotes = jest.fn<Promise<Record<string, ProviderQuote | MarketProviderError>>, [readonly string[]]>(
-    symbols => Promise.resolve(Object.fromEntries(symbols.map(symbol => [symbol, getQuote(symbol)]))),
+  const fetchHistories = jest.fn().mockImplementation(async (symbols: readonly string[]) =>
+    Object.fromEntries(await Promise.all(symbols.map(async s => [s, await fetchHistory(s)])))
   );
-  const fetchHistories = jest.fn<Promise<Record<string, PricePoint[] | MarketProviderError>>, [readonly string[]]>(
-    symbols => Promise.resolve(Object.fromEntries(symbols.map(symbol => [symbol, history]))),
-  );
-  const provider: QuoteProvider = { fetchQuote, fetchHistory, fetchQuotes, fetchHistories, ...overrides };
+  const service = new MarketService({ fetchQuote, fetchHistory, fetchQuotes, fetchHistories }, () => clock);
   const app = express();
-  app.use('/api/market', createMarketRouter(new MarketService(provider, () => NOW)));
-  return { app, provider, fetchQuote, fetchHistory, fetchQuotes, fetchHistories };
+  app.use('/api/market', createMarketRouter(service));
+  return { service, app, fetchQuote, fetchHistory, fetchQuotes, fetchHistories, advance: (ms: number) => { clock += ms; }, now: () => clock };
 }
 
-describe('Mocked API: GET /api/market/stocks', () => {
-  test('Input: GET with no parameters; Output: 100 catalog stocks and refresh metadata (200)', async () => {
-    const f = fixture();
-    const response = await request(f.app).get('/api/market/stocks').expect(200);
+let f: ReturnType<typeof fixture>;
+let provider: any;
+const expireCache = () => f.advance(8_000 + 1);
 
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.body).toMatchObject({ liveSymbols: LIVE_SYMBOLS, refreshIntervalMs: 8_000 });
-    expect(response.body.stocks).toHaveLength(LIVE_SYMBOLS.length);
-    expect(response.body.stocks[0]).toMatchObject({
-      ticker: 'AAPL', companyName: 'Apple Inc.', currentPrice: '100', source: 'alpaca',
-      feed: 'iex', status: 'ok', isFavorite: true,
-    });
-    expect(response.body.stocks[0].history.points).toHaveLength(3);
-    expect(f.fetchQuotes).toHaveBeenCalledTimes(1);
-    expect(f.fetchQuotes).toHaveBeenCalledWith(LIVE_SYMBOLS);
-    expect(f.fetchHistories).toHaveBeenCalledTimes(1);
-    expect(f.fetchHistories).toHaveBeenCalledWith(LIVE_SYMBOLS);
+beforeEach(() => {
+  jest.useFakeTimers(FAKE_DATE);
+  f = fixture();
+  provider = f;
+});
+afterEach(() => jest.useRealTimers());
+
+const list = () => request(f.app).get('/api/market/stocks');
+const one = (s: string) => request(f.app).get(`/api/market/stocks/${s}`);
+const hist = (s: string) => request(f.app).get(`/api/market/stocks/${s}/history`);
+
+describe('Mocked API: GET /api/market/stocks', () => {
+  it('MKT-01 returns all six stocks with name, ticker, price, change', async () => {
+    const res = await list();
+    expect(res.status).toBe(200);
+    expect(res.body.stocks).toHaveLength(6);
+    for (const s of res.body.stocks) {
+      expect(SYMBOLS).toContain(s.ticker);
+      expect(s).toEqual(expect.objectContaining({ companyName: expect.any(String), currentPrice: '100', change: '1' }));
+    }
   });
 
-  test('provider outage returns a partial-availability response (200) without inventing prices', async () => {
-    const providerError = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
-    const f = fixture({
-      fetchQuotes: jest.fn().mockRejectedValue(providerError),
-      fetchHistories: jest.fn().mockRejectedValue(providerError),
-    });
-    const response = await request(f.app).get('/api/market/stocks').expect(200);
+  it('MKT-02 second request within 8 s is served from cache', async () => {
+    await list();
+    await list();
+    expect(f.fetchQuotes).toHaveBeenCalledTimes(1);
+  });
 
-    expect(response.body.stocks).toHaveLength(LIVE_SYMBOLS.length);
-    expect(response.body.stocks.every((stock: { status: string; currentPrice: unknown }) =>
-      stock.status === 'unavailable' && stock.currentPrice === null,
-    )).toBe(true);
-    expect(response.body.stocks[0].error.code).toBe('MARKET_NOT_CONFIGURED');
+  it('MKT-03 request after 8 s refetches from the provider', async () => {
+    await list();
+    f.fetchQuotes.mockResolvedValue(Object.fromEntries(SYMBOLS.map(s => [s, { ...QUOTE, price: 110 }])));
+    f.advance(8_000);
+    const res = await list();
+    expect(f.fetchQuotes).toHaveBeenCalledTimes(2);
+    expect(res.body.stocks[0].currentPrice).toBe('110');
+  });
+
+  it('MKT-04 expired cache + provider error → 503 (UC-06 2a)', async () => {
+    await list();
+    expireCache();
+    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    expectError(await list(), 503);
+  });
+
+  it('MKT-05 fresh cache + provider error → 200 from cache', async () => {
+    await list();
+    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    const res = await list();
+    expect(res.status).toBe(200);
+    expect(provider.fetchQuotes).toHaveBeenCalledTimes(1);
+  });
+
+  it('MKT-06 cold cache + provider error → 503', async () => {
+    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    expectError(await list(), 503);
+  });
+
+  it('MKT-15 after a 503 the provider recovers → fresh data, no restart (NFR-3)', async () => {
+    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    expectError(await list(), 503);
+    provider.fetchQuotes.mockResolvedValue(makeQuotes(120));
+    expireCache(); // 8 s, well inside the 16 s bound
+    const res = await list();
+    expect(res.status).toBe(200);
+    expect(res.body.stocks[0].currentPrice).toBe('120');
   });
 });
 
 describe('Mocked API: GET /api/market/stocks/:symbol', () => {
-  test('Input: supported ticker; Output: quote, company metadata, and history (200)', async () => {
-    const f = fixture();
-    const response = await request(f.app).get('/api/market/stocks/aapl').expect(200);
-
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.body).toMatchObject({
-      ticker: 'AAPL', companyName: 'Apple Inc.', currency: 'USD', currentPrice: '100',
-      change: '1', percentageChange: 1, source: 'alpaca', feed: 'iex', status: 'ok',
-      history: { symbol: 'AAPL', status: 'ok' },
-    });
-    expect(response.body.quoteAsOf).toBe(new Date(NOW).toISOString());
-    expect(f.fetchQuotes).toHaveBeenCalledWith(LIVE_SYMBOLS);
+  it('MKT-08 supported symbol → quote', async () => {
+    const res = await one(T);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.objectContaining({ ticker: T, companyName: expect.any(String), currentPrice: '100', quoteAsOf: expect.any(String) }));
   });
-
-  test('Input: unsupported ticker; Output: UNKNOWN_SYMBOL (404), with no provider call', async () => {
-    const f = fixture();
-    const response = await request(f.app).get('/api/market/stocks/NOTREAL').expect(404);
-
-    expect(response.body).toEqual({
-      error: { code: 'UNKNOWN_SYMBOL', message: 'Unsupported market symbol.' },
-    });
+  it('MKT-10 unsupported symbol → 404 and provider not called', async () => {
+    expectError(await one(UNSUPPORTED), 404);
     expect(f.fetchQuotes).not.toHaveBeenCalled();
-    expect(f.fetchHistories).not.toHaveBeenCalled();
+    expect(f.fetchQuote).not.toHaveBeenCalled();
   });
-
-  test('Input: supported ticker while provider is unavailable; Output: error body (503)', async () => {
-    const f = fixture({
-      fetchQuotes: jest.fn().mockRejectedValue(
-        new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.'),
-      ),
-      fetchHistories: jest.fn().mockResolvedValue({}),
-    });
-    const response = await request(f.app).get('/api/market/stocks/AAPL').expect(503);
-
-    expect(response.body).toMatchObject({
-      ticker: 'AAPL', currentPrice: null, status: 'unavailable',
-      error: { code: 'PROVIDER_UNAVAILABLE' },
-    });
+  it('MKT-11 expired cache + provider error → 503', async () => {
+    await one(T);
+    expireCache();
+    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    expectError(await one(T), 503);
   });
 });
 
 describe('Mocked API: GET /api/market/stocks/:symbol/history', () => {
-  test('Input: live ticker; Output: ordered IEX price points (200)', async () => {
-    const f = fixture();
-    const response = await request(f.app).get('/api/market/stocks/MSFT/history').expect(200);
-
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.body).toMatchObject({ symbol: 'MSFT', feed: 'iex', status: 'ok' });
-    expect(response.body.points).toHaveLength(2);
-    expect(response.body.points.map((point: PricePoint) => point.timestamp)).toEqual(
-      history.map(point => point.timestamp),
-    );
-    expect(f.fetchHistories).toHaveBeenCalledWith(LIVE_SYMBOLS);
+  it('MKT-12 supported symbol → points in ascending time', async () => {
+    const res = await hist(T);
+    expect(res.status).toBe(200);
+    expect(res.body.points.length).toBeGreaterThan(0);
+    const times = res.body.points.map((p: any) => Date.parse(p.timestamp));
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+    expect(res.body.points[0]).toEqual(expect.objectContaining({ timestamp: expect.any(String), price: expect.any(Number) }));
   });
-
-  test('Input: unsupported ticker; Output: UNKNOWN_SYMBOL (404), with no provider call', async () => {
-    const f = fixture();
-    const response = await request(f.app).get('/api/market/stocks/NOTREAL/history').expect(404);
-
-    expect(response.body).toEqual({
-      error: { code: 'UNKNOWN_SYMBOL', message: 'Unsupported market symbol.' },
-    });
-    expect(f.fetchHistories).not.toHaveBeenCalled();
+  it('MKT-13 unsupported symbol → 404', async () => {
+    expectError(await hist(UNSUPPORTED), 404);
   });
-
-  test('Input: live ticker while history provider fails; Output: error body (503)', async () => {
-    const f = fixture({
-      fetchQuotes: jest.fn().mockResolvedValue({}),
-      fetchHistories: jest.fn().mockRejectedValue(
-        new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.'),
-      ),
-    });
-    const response = await request(f.app).get('/api/market/stocks/AAPL/history').expect(503);
-
-    expect(response.body).toMatchObject({
-      symbol: 'AAPL', status: 'unavailable',
-      error: { code: 'PROVIDER_UNAVAILABLE' },
-    });
+  it('MKT-14 provider error → 503', async () => {
+    provider.fetchHistory.mockRejectedValue(new Error('alpaca down'));
+    expectError(await hist(T), 503);
   });
 });

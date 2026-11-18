@@ -1,4 +1,5 @@
 import request from 'supertest';
+import type { Express } from 'express';
 import { loadApp } from '../helpers/loadApp';
 import { bearer, expectError } from '../helpers/testkit';
 import { db } from '../../src/prisma/db';
@@ -23,12 +24,22 @@ jest.mock('../../src/market/service', () => ({
   },
 }));
 
+type PositionIn = { userId: string; ticker: string; quantity: number; averageCost: number };
+type OrderIn = {
+  id: string; userId: string; ticker: string; side: string; type: string; quantity: number;
+  limitPrice?: number | null; status: string; createdAt?: Date | string;
+};
+type TradeIn = {
+  id: string; userId: string; ticker: string; type: string; quantity: number;
+  pricePerShare: number; totalAmount: number; createdAt?: Date | string;
+};
+
 const U = 'u1';
-let app: any;
+let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app;
+  app = l.app as Express;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
   (marketService.getStock as unknown as jest.Mock).mockImplementation(async (t: string) => ({
     symbol: t,
@@ -40,15 +51,15 @@ beforeEach(() => {
   }));
 });
 
-const stub = ({ cash = 1000, positions = [] as unknown[], orders = [] as any[], trades = [] as any[] } = {}) => {
+const stub = ({ cash = 1000, positions = [] as PositionIn[], orders = [] as OrderIn[], trades = [] as TradeIn[] } = {}) => {
   (db.account.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(cash), startingBalance: decimal(1000) });
-  (db.position.findMany as unknown as jest.Mock).mockResolvedValue(positions.map((p: any) => ({ ...p, quantity: decimal(p.quantity), averageCost: decimal(p.averageCost) })));
-  (db.order.findMany as unknown as jest.Mock).mockResolvedValue(orders.map((o: any) => ({ ...o, quantity: decimal(o.quantity), limitPrice: o.limitPrice != null ? decimal(o.limitPrice) : null, createdAt: new Date(o.createdAt || Date.now()) })));
-  (db.trade.findMany as unknown as jest.Mock).mockResolvedValue(trades.map((t: any) => ({ ...t, quantity: decimal(t.quantity), pricePerShare: decimal(t.pricePerShare), totalAmount: decimal(t.totalAmount), createdAt: new Date(t.createdAt || Date.now()) })));
+  (db.position.findMany as unknown as jest.Mock).mockResolvedValue(positions.map((p) => ({ ...p, quantity: decimal(p.quantity), averageCost: decimal(p.averageCost) })));
+  (db.order.findMany as unknown as jest.Mock).mockResolvedValue(orders.map((o) => ({ ...o, quantity: decimal(o.quantity), limitPrice: o.limitPrice != null ? decimal(o.limitPrice) : null, createdAt: new Date(o.createdAt || Date.now()) })));
+  (db.trade.findMany as unknown as jest.Mock).mockResolvedValue(trades.map((t) => ({ ...t, quantity: decimal(t.quantity), pricePerShare: decimal(t.pricePerShare), totalAmount: decimal(t.totalAmount), createdAt: new Date(t.createdAt || Date.now()) })));
 };
 const get = () => request(app).get('/api/portfolio').set(bearer(U));
-const aapl = { userId: U, ticker: 'AAPL', quantity: 2, averageCost: 90 };
-const pendingBuy = { id: 'o1', userId: U, ticker: 'AAPL', side: 'BUY', type: 'LIMIT', quantity: 2, limitPrice: 90, status: 'PENDING', createdAt: new Date() };
+const aapl: PositionIn = { userId: U, ticker: 'AAPL', quantity: 2, averageCost: 90 };
+const pendingBuy: OrderIn = { id: 'o1', userId: U, ticker: 'AAPL', side: 'BUY', type: 'LIMIT', quantity: 2, limitPrice: 90, status: 'PENDING', createdAt: new Date() };
 
 describe('Mocked API: GET /api/portfolio', () => {
   it('PF-01 no JWT → 401', async () => {
@@ -86,7 +97,7 @@ describe('Mocked API: GET /api/portfolio', () => {
     expect(sum).toBeCloseTo(100, 0);
   });
   it('PF-07 trades come back in the order stored; none → [] (UC-14)', async () => {
-    const t = (id: string, at: string) => ({ id, userId: U, ticker: 'AAPL', type: 'BUY', quantity: 1, pricePerShare: 100, totalAmount: 100, createdAt: at });
+    const t = (id: string, at: string): TradeIn => ({ id, userId: U, ticker: 'AAPL', type: 'BUY', quantity: 1, pricePerShare: 100, totalAmount: 100, createdAt: at });
     stub({ trades: [t('t3', '2026-11-17'), t('t2', '2026-11-16'), t('t1', '2026-11-15')] });
     expect((await get()).body.recentTrades.map((x: { id: string }) => x.id)).toEqual(['t3', 't2', 't1']);
     stub({ trades: [] });

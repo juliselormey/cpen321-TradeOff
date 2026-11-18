@@ -1,4 +1,5 @@
 import request from 'supertest';
+import type { Express } from 'express';
 import { loadApp } from '../helpers/loadApp';
 import { T, bearer, expectError, expiredBearer, tamperedBearer } from '../helpers/testkit';
 import { db } from '../../src/prisma/db';
@@ -6,6 +7,7 @@ import { marketService } from '../../src/market/service';
 import { Prisma } from '../../src/generated/prisma/client';
 
 const decimal = (v: number) => new Prisma.Decimal(v);
+const mock = (f: unknown) => f as jest.Mock;
 
 jest.mock('../../src/prisma/db', () => ({
   db: {
@@ -28,13 +30,13 @@ const U = 'u1';
 const MARKET = '/api/trades/execute/market';
 const LIMIT = '/api/trades/execute/limit';
 const CANCEL = (id: string) => `/api/trades/orders/${id}/cancel`;
-let app: any;
+let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app;
+  app = l.app as Express;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
-  (db.$transaction as unknown as jest.Mock).mockImplementation(async (cb: any) => cb(db));
+  (db.$transaction as unknown as jest.Mock).mockImplementation(async (cb: (tx: typeof db) => unknown) => cb(db));
   (marketService.getStock as unknown as jest.Mock).mockResolvedValue({ currentPrice: '100', status: 'ok' });
   (db.account.upsert as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
   (db.account.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
@@ -92,7 +94,7 @@ describe('Mocked API: POST /api/trades/execute/market', () => {
 
   it('TRD-09 price lookup fails → 503, transaction never started (UC-09 7a)', async () => {
     cash(1000);
-    (marketService.getStock as any).mockRejectedValue(new Error('price unavailable'));
+    mock(marketService.getStock).mockRejectedValue(new Error('price unavailable'));
     expectError(await postMarket(), 503);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
@@ -113,17 +115,17 @@ describe('Mocked API: POST /api/trades/execute/market', () => {
   });
   it('TRD-17 sell more than owned → 400 (UC-11)', async () => {
     cash(0); owned(2);
-    (db.order.aggregate as any).mockResolvedValue({ _sum: { quantity: decimal(0) } });
+    mock(db.order.aggregate).mockResolvedValue({ _sum: { quantity: decimal(0) } });
     expectError(await postMarket({ side: 'SELL', quantity: 3 }), 400);
   });
   it('TRD-18 sell a stock never owned → 400', async () => {
     cash(0); owned(0);
-    (db.order.aggregate as any).mockResolvedValue({ _sum: { quantity: decimal(0) } });
+    mock(db.order.aggregate).mockResolvedValue({ _sum: { quantity: decimal(0) } });
     expectError(await postMarket({ side: 'SELL' }), 400);
   });
   it('TRD-19 sell exactly what is owned → 200 (boundary)', async () => {
     cash(0); owned(2); stubWrites();
-    (db.order.aggregate as any).mockResolvedValue({ _sum: { quantity: decimal(0) } });
+    mock(db.order.aggregate).mockResolvedValue({ _sum: { quantity: decimal(0) } });
     expect((await postMarket({ side: 'SELL', quantity: 2 })).status).toBe(200);
   });
 });
@@ -141,7 +143,7 @@ describe('Mocked API: POST /api/trades/execute/limit', () => {
   });
   it('TRD-15 limit below market → pending order', async () => {
     cash(1000); stubWrites();
-    (db.order.create as any).mockResolvedValue({ id: 'o1', status: 'PENDING', quantity: decimal(1), side: 'BUY', type: 'LIMIT', ticker: T, limitPrice: decimal(90) });
+    mock(db.order.create).mockResolvedValue({ id: 'o1', status: 'PENDING', quantity: decimal(1), side: 'BUY', type: 'LIMIT', ticker: T, limitPrice: decimal(90) });
     const res = await postLimit({ limitPrice: 90 });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('PENDING');
@@ -157,18 +159,18 @@ describe('Mocked API: POST /api/trades/orders/:id/cancel', () => {
   const cancel = (id = cancelId) => request(app).post(CANCEL(id)).set(bearer(U));
 
   it('TRD-21 unknown order → 404 (UC-12)', async () => {
-    (db.order.updateMany as any).mockResolvedValue({ count: 0 });
-    (db.order.findFirst as any).mockResolvedValue(null);
+    mock(db.order.updateMany).mockResolvedValue({ count: 0 });
+    mock(db.order.findFirst).mockResolvedValue(null);
     expectError(await cancel(), 404);
   });
   it('TRD-22 another user’s order → 404 (does not reveal it exists)', async () => {
-    (db.order.updateMany as any).mockResolvedValue({ count: 0 });
-    (db.order.findFirst as any).mockResolvedValue(null);
+    mock(db.order.updateMany).mockResolvedValue({ count: 0 });
+    mock(db.order.findFirst).mockResolvedValue(null);
     expectError(await cancel(), 404);
   });
   it.each(['FILLED', 'CANCELLED'])('TRD-23 %s order → 409', async (status) => {
-    (db.order.updateMany as any).mockResolvedValue({ count: 0 });
-    (db.order.findFirst as any).mockResolvedValue({ id: cancelId, userId: U, status });
+    mock(db.order.updateMany).mockResolvedValue({ count: 0 });
+    mock(db.order.findFirst).mockResolvedValue({ id: cancelId, userId: U, status });
     expectError(await cancel(), 409);
   });
   it('TRD-24 malformed order id → 400', async () => {

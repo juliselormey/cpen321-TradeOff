@@ -4,8 +4,9 @@ export { db };
 let n = 0;
 
 export async function resetDb() {
+  const client = db as unknown as Record<string, { deleteMany: () => Promise<unknown> }>;
   for (const m of ['trade', 'order', 'position', 'friendship', 'account', 'user']) {
-    await (db as unknown as any)[m].deleteMany();
+    await client[m]?.deleteMany();
   }
 }
 

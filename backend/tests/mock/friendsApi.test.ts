@@ -1,8 +1,8 @@
 import request from 'supertest';
+import type { Express } from 'express';
 import { loadApp } from '../helpers/loadApp';
 import { bearer, expectError } from '../helpers/testkit';
 import { db } from '../../src/prisma/db';
-import { marketService } from '../../src/market/service';
 
 jest.mock('../../src/prisma/db', () => ({
   db: {
@@ -21,29 +21,31 @@ jest.mock('../../src/market/service', () => ({
 }));
 
 const U = 'u1';
-let app: any, trading: any;
+let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app; trading = marketService;
+  app = l.app as Express;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
 });
 
 const target = (exists: boolean) =>
-  (db.user.findUnique as unknown as jest.Mock).mockImplementation(async ({ where }: any) =>
+  (db.user.findUnique as unknown as jest.Mock).mockImplementation(async ({ where }: { where: { id: string } }) =>
     where.id === U || exists ? { id: where.id, name: where.id, username: where.id } : null);
 const as = (id = U) => ({ get: (p: string) => request(app).get(p).set(bearer(id)),
   post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
   del: (p: string) => request(app).delete(p).set(bearer(id)) });
 const reqRow = (o: object = {}) => ({ id: 'r1', senderId: U, receiverId: 'u2', recipientId: 'u2', status: 'PENDING', ...o });
 
+type Method = 'get' | 'post' | 'delete';
+
 describe('Mocked API: friends routes (auth)', () => {
-  it.each([
+  it.each<[Method, string]>([
     ['get', '/api/friends'], ['get', '/api/friends/requests'], ['post', '/api/friends/requests'],
     ['post', '/api/friends/requests/r1/accept'], ['delete', '/api/friends/requests/r1'],
     ['delete', '/api/friends/f1'], ['get', '/api/friends/leaderboard'],
   ])('SOC-01 %s %s without JWT → 401', async (method, path) => {
-    expect((await (request(app as any) as any)[method](path)).status).toBe(401);
+    expect((await request(app)[method](path)).status).toBe(401);
   });
 });
 
@@ -65,7 +67,7 @@ describe('Mocked API: POST /api/friends/requests', () => {
   });
   it('SOC-08 valid request → 201 with pending status (UC-14)', async () => {
     target(true);
-    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(reqRow() as any);
+    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(reqRow());
     const res = await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000002' });
     expect(res.status).toBe(201);
     expect(res.body.request).toEqual(expect.objectContaining({ id: 'r1', status: 'PENDING', receiverId: 'u2' }));
@@ -135,12 +137,12 @@ describe('Mocked API: GET /api/friends and /api/friends/requests', () => {
     const alice = { id: sender, username: 'alice', name: 'Alice', isBanned: false };
     const bob = { id: recipient, username: 'bob', name: 'Bob', isBanned: false };
     const row = { id: 'stable-request', senderId: sender, recipientId: recipient, pairKey: `${sender}:${recipient}`, status: 'PENDING', sender: alice, recipient: bob };
-    (db.user.findUnique as unknown as jest.Mock).mockImplementation(async (args: any) => {
+    (db.user.findUnique as unknown as jest.Mock).mockImplementation(async (args: { where?: { id?: string; username?: string } }) => {
       const where = args.where;
       return [alice, bob].find(u => where?.id ? u.id === where.id : u.username === where?.username) ?? null;
     });
-    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(row as any);
-    (db.friendship.findMany as unknown as jest.Mock).mockResolvedValue([row] as any);
+    (db.friendship.create as unknown as jest.Mock).mockResolvedValue(row);
+    (db.friendship.findMany as unknown as jest.Mock).mockResolvedValue([row]);
     (db.friendship.updateMany as unknown as jest.Mock).mockImplementation(() => {
       row.status = 'ACCEPTED';
       return Promise.resolve({ count: 1 });

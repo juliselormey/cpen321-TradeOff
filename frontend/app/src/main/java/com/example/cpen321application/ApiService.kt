@@ -2,10 +2,12 @@ package com.example.cpen321application
 
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 
 data class GoogleAuthRequest(val idToken: String)
@@ -107,8 +109,24 @@ data class UserProfile(
 
 data class ProfileResponse(val user: UserProfile)
 data class ProfileUpdate(val displayName: String, val username: String)
+data class StockFavoritesResponse(val tickers: List<String>)
 
 interface ApiService {
+    @GET("api/users/me/favorites")
+    suspend fun getStockFavorites(@Header("Authorization") authorization: String): StockFavoritesResponse
+
+    @PUT("api/users/me/favorites/{ticker}")
+    suspend fun addStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
+    @DELETE("api/users/me/favorites/{ticker}")
+    suspend fun removeStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
 

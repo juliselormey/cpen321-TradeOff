@@ -34,23 +34,24 @@ function fixture() {
 // Market HTTP interfaces, with the external Alpaca component mocked.
 // No credentials, network quota, database, or trade operations are used.
 describe('Mocked: market endpoints and caches', () => {
-  test('list supplies provider quotes and history for all six catalog stocks', async () => {
+  test('list supplies provider quotes and history for all 100 unique catalog stocks', async () => {
     const { app, fetchQuote, fetchHistory } = fixture();
     const response = await request(app).get('/api/market/stocks').expect(200);
     expect(response.body.refreshIntervalMs).toBe(8_000);
-    expect(response.body.stocks).toHaveLength(6);
+    expect(response.body.stocks).toHaveLength(100);
     expect(response.body.stocks[0]).toMatchObject({
       ticker: 'AAPL', source: 'alpaca', feed: 'iex', status: 'ok', currentPrice: '200.25',
       change: '2.25', historySource: 'alpaca', quoteAgeSeconds: 0,
     });
     expect(response.body.stocks[0].history.points).toHaveLength(3);
     expect(response.body.liveSymbols).toEqual(LIVE_SYMBOLS);
+    expect(new Set(LIVE_SYMBOLS).size).toBe(100);
     expect(response.body.stocks.every((s: { source: string }) => s.source === 'alpaca')).toBe(true);
     expect(response.body.stocks[1]).toMatchObject({
       ticker: 'MSFT', currentPrice: '200.25', history: { symbol: 'MSFT', status: 'ok' },
     });
-    expect(fetchQuote).toHaveBeenCalledTimes(6);
-    expect(fetchHistory).toHaveBeenCalledTimes(6);
+    expect(fetchQuote).toHaveBeenCalledTimes(LIVE_SYMBOLS.length);
+    expect(fetchHistory).toHaveBeenCalledTimes(LIVE_SYMBOLS.length);
     expect(fetchQuote).toHaveBeenCalledWith('AAPL');
     expect(fetchHistory).toHaveBeenCalledWith('AAPL');
   });
@@ -74,8 +75,8 @@ describe('Mocked: market endpoints and caches', () => {
     await Promise.all(Array.from({ length: 10 }, async () => {
       await request(app).get('/api/market/stocks').expect(200);
     }));
-    expect(fetchQuote).toHaveBeenCalledTimes(6);
-    expect(fetchHistory).toHaveBeenCalledTimes(6);
+    expect(fetchQuote).toHaveBeenCalledTimes(LIVE_SYMBOLS.length);
+    expect(fetchHistory).toHaveBeenCalledTimes(LIVE_SYMBOLS.length);
   });
 
   test('price expires at eight seconds while daily history stays cached independently', async () => {

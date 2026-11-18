@@ -39,7 +39,8 @@ describe('Batch market cache shared across all screens and symbols', () => {
     expect(f.fetchQuote).not.toHaveBeenCalled();
     expect(f.fetchHistory).not.toHaveBeenCalled();
     const stocks = await f.service.getStocks();
-    expect(stocks.map(s => s.currentPrice)).toEqual(['200', '201', '202', '203', '204', '205']);
+    expect(stocks.map(s => s.ticker)).toEqual(LIVE_SYMBOLS);
+    expect(stocks.map(s => s.currentPrice)).toEqual(LIVE_SYMBOLS.map((_, i) => String(200 + i)));
     expect(stocks.every(s => s.source === 'alpaca' && s.history?.points.length === 3)).toBe(true);
     f.advance(8_000);
     await Promise.all([f.service.getStock('TSLA'), f.service.getStocks()]);
@@ -58,7 +59,7 @@ describe('Batch market cache shared across all screens and symbols', () => {
     f.quotes.MSFT = new MarketProviderError('PROVIDER_INVALID_DATA', 'Missing MSFT snapshot');
     const stocks = await f.service.getStocks();
     expect(stocks.find(s => s.ticker === 'MSFT')).toMatchObject({ status: 'stale', currentPrice: '201' });
-    expect(stocks.filter(s => s.status === 'ok')).toHaveLength(5);
+    expect(stocks.filter(s => s.status === 'ok')).toHaveLength(LIVE_SYMBOLS.length - 1);
     expect(stocks.every(s => s.history?.status === 'ok')).toBe(true);
     f.advance(8_000);
     await f.service.getStocks();

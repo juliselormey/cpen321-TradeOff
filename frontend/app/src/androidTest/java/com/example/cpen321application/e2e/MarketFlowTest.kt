@@ -25,7 +25,7 @@ class MarketFlowTest {
 
     private fun waitForFixtureData() {
         compose.waitUntil(timeoutMillis = 15_000) {
-            compose.onAllNodesWithText("Alpaca IEX connected · 6 stocks")
+            compose.onAllNodesWithText("Alpaca IEX connected · 100 stocks")
                 .fetchSemanticsNodes().isNotEmpty()
         }
     }
@@ -73,5 +73,14 @@ class MarketFlowTest {
         closeSoftKeyboard()
         compose.onNodeWithText("Microsoft Corporation").assertIsDisplayed()
         compose.onNodeWithText("$410.00").assertExists()
+
+        search.performTextReplacement("Costco")
+        closeSoftKeyboard()
+        compose.onNodeWithContentDescription("Costco Wholesale logo").assertIsDisplayed()
+
+        search.performTextReplacement("Caterpillar")
+        closeSoftKeyboard()
+        compose.onNodeWithText("Caterpillar").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Caterpillar logo").assertIsDisplayed()
     }
 }

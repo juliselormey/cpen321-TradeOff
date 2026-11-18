@@ -42,7 +42,7 @@ object ApiClient {
             .addInterceptor { chain ->
                 val original = chain.request()
                 val token = SessionManager.getToken(context)
-                val request = if (!token.isNullOrEmpty()) {
+                val request = if (original.header("Authorization") == null && !token.isNullOrEmpty()) {
                     original.newBuilder()
                         .header("Authorization", "Bearer $token")
                         .build()
@@ -65,7 +65,7 @@ object ApiClient {
                 .addInterceptor { chain ->
                     val original = chain.request()
                     val token = SessionManager.getToken(context)
-                    val request = if (!token.isNullOrEmpty()) {
+                    val request = if (original.header("Authorization") == null && !token.isNullOrEmpty()) {
                         original.newBuilder()
                             .header("Authorization", "Bearer $token")
                             .build()

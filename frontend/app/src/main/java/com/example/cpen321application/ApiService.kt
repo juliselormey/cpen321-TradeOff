@@ -112,16 +112,16 @@ data class ProfileUpdate(val displayName: String, val username: String)
 data class StockFavoritesResponse(val tickers: List<String>)
 
 interface ApiService {
-    @GET("api/users/me/favorites")
+    @GET("api/auth/me/favorites")
     suspend fun getStockFavorites(@Header("Authorization") authorization: String): StockFavoritesResponse
 
-    @PUT("api/users/me/favorites/{ticker}")
+    @PUT("api/auth/me/favorites/{ticker}")
     suspend fun addStockFavorite(
         @Header("Authorization") authorization: String,
         @Path("ticker") ticker: String,
     )
 
-    @DELETE("api/users/me/favorites/{ticker}")
+    @DELETE("api/auth/me/favorites/{ticker}")
     suspend fun removeStockFavorite(
         @Header("Authorization") authorization: String,
         @Path("ticker") ticker: String,

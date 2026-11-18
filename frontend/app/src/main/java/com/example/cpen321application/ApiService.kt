@@ -1,20 +1,162 @@
 package com.example.cpen321application
 
-import retrofit2.Call
-import retrofit2.http.GET
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.PATCH
 import retrofit2.http.POST
-
-
-interface ApiService {
-    @POST("/api/auth/google")
-    suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
-}
-
-data class ServerIpResponse(val ip: String, val clientIp: String)
-data class ServerTimeResponse(val time: String)
-data class NameResponse(val firstName: String, val lastName: String)
+import retrofit2.http.PUT
+import retrofit2.http.Path
 
 data class GoogleAuthRequest(val idToken: String)
 data class GoogleAuthResponse(val accessToken: String)
+
+// Trade & Order API Models
+data class UserPositionResponse(
+    val cashBalance: Double,
+    val ownedQuantity: Double,
+    val averageCost: Double,
+    val availableQuantity: Double
+)
+
+data class ExecuteOrderRequest(
+    val ticker: String,
+    val side: String, // "BUY" or "SELL"
+    val type: String = "MARKET", // "MARKET" or "LIMIT", default is MARKET
+    val quantity: Double,
+    val pricePerShare: Double,
+    val limitPrice: Double? = null
+)
+
+data class ExecuteMarketOrderRequest(
+    val ticker: String,
+    val side: String, // "BUY" or "SELL"
+    val quantity: Double,
+    val pricePerShare: Double
+)
+
+data class ExecuteLimitOrderRequest(
+    val ticker: String,
+    val side: String, // "BUY" or "SELL"
+    val quantity: Double,
+    val pricePerShare: Double,
+    val limitPrice: Double
+)
+
+data class ExecuteOrderResponse(
+    val success: Boolean,
+    val message: String,
+    val status: String, // "FILLED" or "PENDING"
+    val cashBalance: Double,
+    val ownedQuantity: Double,
+    val availableQuantity: Double
+)
+
+data class PendingOrderItem(
+    val id: String,
+    val ticker: String,
+    val side: String,
+    val type: String,
+    val status: String,
+    val quantity: Double,
+    val limitPrice: Double?,
+    val createdAt: String
+)
+
+data class PendingOrdersResponse(
+    val orders: List<PendingOrderItem>
+)
+
+data class CancelOrderResponse(
+    val success: Boolean,
+    val message: String
+)
+
+// Portfolio Models
+data class HoldingItemResponse(
+    val ticker: String,
+    val quantity: Double,
+    val averageCost: Double
+)
+
+data class TradeHistoryItemResponse(
+    val id: String,
+    val ticker: String,
+    val type: String,
+    val quantity: Double,
+    val pricePerShare: Double,
+    val totalAmount: Double,
+    val createdAt: String
+)
+
+data class PortfolioSummaryResponse(
+    val cashBalance: Double,
+    val startingBalance: Double,
+    val holdings: List<HoldingItemResponse>,
+    val recentTrades: List<TradeHistoryItemResponse>,
+    val pendingOrders: List<PendingOrderItem>
+)
+
+// User Profile Models
+data class UserProfile(
+    val id: String,
+    val email: String,
+    val displayName: String?,
+    val username: String?
+)
+
+data class ProfileResponse(val user: UserProfile)
+data class ProfileUpdate(val displayName: String, val username: String)
+data class StockFavoritesResponse(val tickers: List<String>)
+
+interface ApiService {
+    @GET("api/auth/me/favorites")
+    suspend fun getStockFavorites(@Header("Authorization") authorization: String): StockFavoritesResponse
+
+    @PUT("api/auth/me/favorites/{ticker}")
+    suspend fun addStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
+    @DELETE("api/auth/me/favorites/{ticker}")
+    suspend fun removeStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
+    @POST("/api/auth/google")
+    suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
+
+    @GET("api/auth/me")
+    suspend fun profile(@Header("Authorization") authorization: String): Response<ProfileResponse>
+
+    @PATCH("api/auth/me")
+    suspend fun updateProfile(
+        @Header("Authorization") authorization: String,
+        @Body profile: ProfileUpdate
+    ): Response<ProfileResponse>
+
+    @GET("/api/trades/position/{ticker}")
+    suspend fun getPosition(@Path("ticker") ticker: String): Response<UserPositionResponse>
+
+    @POST("/api/trades/execute")
+    suspend fun executeTrade(@Body request: ExecuteOrderRequest): Response<ExecuteOrderResponse>
+
+    @POST("/api/trades/execute/market")
+    suspend fun executeMarketOrder(@Body request: ExecuteMarketOrderRequest): Response<ExecuteOrderResponse>
+
+    @POST("/api/trades/execute/limit")
+    suspend fun executeLimitOrder(@Body request: ExecuteLimitOrderRequest): Response<ExecuteOrderResponse>
+
+    @GET("/api/trades/orders/pending")
+    suspend fun getPendingOrders(): Response<PendingOrdersResponse>
+
+    @POST("/api/trades/orders/{id}/cancel")
+    suspend fun cancelOrder(@Path("id") orderId: String): Response<CancelOrderResponse>
+
+    @GET("/api/portfolio")
+    suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
+}

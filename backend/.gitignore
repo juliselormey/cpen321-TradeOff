@@ -12,5 +12,8 @@ certs/
 *.pem
 *.key
 *.crt
+*.env
 
 src/generated/
+
+.lint-tools/

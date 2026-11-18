@@ -2,9 +2,9 @@
 
 ## 1. Change History
 
-| **Change Date**   | **Modified Sections** | **Rationale** |
-| ----------------- | --------------------- | ------------- |
-| _Nothing to show_ |
+| **Change Date** | **Modified Sections** | **Rationale** |
+|-----------------| --------------------- | ------------- |
+| 2026-11-03      | Automated Code Review Results in response to Codacy information | Filling out the sections for submission to CP2 |
 
 ---
 
@@ -12,28 +12,45 @@
 
 ### 2.1. Commit Hash Where Codacy Ran
 
-`[Insert Commit SHA here]`
+`4785596734333930d23872162073d954b9a2d4d2`
 
 ### 2.2. Unfixed Issues per Codacy Category
 
-_(Placeholder for screenshots of Codacy's Category Breakdown table in Overview)_
+![2.2-1](images/2.2-codacy-1.png)
+![2.2-2](images/2.2-codacy-2.png)
 
 ### 2.3. Unfixed Issues per Codacy Code Pattern
 
-_(Placeholder for screenshots of Codacy's Issues page)_
+![2.3-1](images/2.3-codacy-1.png)
+![2.3-2](images/2.3-codacy-2.png)
 
 ### 2.4. Justifications for Unfixed Issues
 
-- **Code Pattern: [Usage of Deprecated Modules](#)**
-
+- **Code Pattern: Unsafe argument of type `any` assigned to a parameter of type `string`.**
   1. **Issue**
-
-     - **Location in Git:** [`src/services/chatService.js#L31`](#)
-     - **Justification:** ...
-
-  2. ...
-
+     - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L14)
+     - **Justification:** issue regarding line of code that was already fixed
+  2. **Issue**
+     - **Location in Git:** [`../backend/src/routes/friends.ts`](../backend/src/routes/friends.ts#L62)
+     - **Justification:** issue regarding line of code that was already fixed
+- **Code Pattern: Unsafe return of an error typed value.**
+  1. **Issue**
+     - **Location in Git:** [`../backend/src/market/settlement.ts`](../backend/src/market/settlement.ts#L21)
+     - **Justification:** issue regarding line of code that was already fixed
+  2. **Issue**
+     - **Location in Git:** [`../backend/src/market/settlement.ts`](../backend/src/market/settlement.ts#L38)
+     - **Justification:** issue regarding line of code that was already fixed
+- **Code Pattern: 'NodeJS' is not defined.**
+  1. **Issue**
+     - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L14)
+     - **Justification:** issue regarding line of code that was already fixed
+- **Code Pattern: Unexpected empty arrow function.**
+  1. **Issue**
+     - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L54)
+     - **Justification:** issue regarding line of code that was already fixed
 - ...
+
+../backend/src/config/env.ts
 
 ---
 

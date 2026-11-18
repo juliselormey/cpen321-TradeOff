@@ -49,6 +49,7 @@ export function parseAlpacaBars(data: unknown): PricePoint[] {
 }
 
 function failure(error: unknown): MarketProviderError {
+  if (error instanceof MarketProviderError) return error;
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     if (status === 401 || status === 403) {

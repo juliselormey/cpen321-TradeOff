@@ -4,6 +4,8 @@ import { db } from "../prisma/db";
 import { asyncHandler } from "../util/asyncHandler";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 
+import { publishFriendsChanged } from "../realtime/friendEvents";
+
 export const friendsRouter = Router();
 const publicProfile = { id: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
@@ -110,6 +112,7 @@ friendsRouter.post("/requests", asyncHandler(async (req, res) => {
             senderId: userId, recipientId: recipient.id,
             pairKey: [userId.toLowerCase(), recipient.id.toLowerCase()].sort().join(":"),
         }, include: profiles });
+        publishFriendsChanged([userId, recipient.id]);
         res.status(201).json({ request: friendship });
     } catch (error: unknown) {
         // The database constraint also protects simultaneous reciprocal requests.
@@ -125,6 +128,9 @@ friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
     const userId = req.userId;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     // Conditional writes prevent outsiders, senders, and stale requests from changing state.
+    const participants = await db.friendship.findFirst({ where: {
+        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
+    }, select: { senderId: true, recipientId: true } });
     const result = await db.friendship.updateMany({
         where: { id: String(req.params.id), recipientId: userId, status: "PENDING" },
         data: { status: "ACCEPTED" },
@@ -133,12 +139,16 @@ friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
         res.status(404).json({ error: "Incoming request not found" });
         return;
     }
+    if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
     res.status(204).send();
 }));
 
 friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
     const userId = req.userId;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const participants = await db.friendship.findFirst({ where: {
+        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
+    }, select: { senderId: true, recipientId: true } });
     const result = await db.friendship.deleteMany({ where: {
         id: String(req.params.id), status: "PENDING",
         OR: [{ senderId: userId }, { recipientId: userId }],
@@ -147,12 +157,16 @@ friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
         res.status(404).json({ error: "Request not found" });
         return;
     }
+    if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
     res.status(204).send();
 }));
 
 friendsRouter.delete("/:id", asyncHandler(async (req, res) => {
     const userId = req.userId;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+    const participants = await db.friendship.findFirst({ where: {
+        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
+    }, select: { senderId: true, recipientId: true } });
     const result = await db.friendship.deleteMany({ where: {
         id: String(req.params.id), status: "ACCEPTED",
         OR: [{ senderId: userId }, { recipientId: userId }],
@@ -161,5 +175,6 @@ friendsRouter.delete("/:id", asyncHandler(async (req, res) => {
         res.status(404).json({ error: "Friendship not found" });
         return;
     }
+    if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
     res.status(204).send();
 }));

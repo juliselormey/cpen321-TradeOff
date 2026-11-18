@@ -21,8 +21,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,6 +52,8 @@ private fun <T> Response<T>.checked(): Response<T> {
 fun FriendsPanel(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val api = remember(context) { ApiClient.createFriends(context) }
+    val eventsClient = remember(context) { ApiClient.createFriendEventsClient(context) }
+    var live by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val clipboard = LocalClipboardManager.current
@@ -137,10 +137,19 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
 
     LaunchedEffect(context, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                refresh()
-                delay(15_000)
-            }
+            refresh()
+            try {
+                friendUpdates(eventsClient, ApiClient.friendEventsUrl()).collect { update ->
+                    when (update) {
+                        FriendUpdate.REFRESH -> { live = true; refresh() }
+                        FriendUpdate.RECONNECTING -> { live = false }
+                        FriendUpdate.UNAUTHORIZED -> {
+                            live = false
+                            error = friendsError(401)
+                        }
+                    }
+                }
+            } finally { live = false }
         }
     }
 
@@ -161,7 +170,7 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
             onCancel = { id -> mutate("Friend request cancelled.") { api.deleteRequest(it, id) } })
         acceptedFriends(friends, loaded, busy, ascending,
             onSort = { ascending = !ascending }, onRemove = { removing = it })
-        item { Text("Updates automatically every 15 seconds while this screen is open.", color = FriendMuted) }
+        item { Text(if (live) "Live updates connected." else "Live updates disconnected. Reconnecting when possible; you can tap Refresh.", color = FriendMuted) }
     }
 
     if (adding) {

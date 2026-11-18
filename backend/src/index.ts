@@ -1,4 +1,5 @@
 import { createApp } from './app';
+import { attachFriendEvents } from './realtime/friendEvents';
 import { env } from './config/env';
 import fs from 'fs';
 import path from 'path';
@@ -20,6 +21,7 @@ const sslOptions = {
 };
 
 const server = https.createServer(sslOptions, app);
+const closeFriendEvents = attachFriendEvents(server);
 
 server.listen(env.port, () => {
     console.log("Server listening");
@@ -29,6 +31,7 @@ server.listen(env.port, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     stopLimitOrderWorker();
+    closeFriendEvents();
     server.close(() => {
       db.$disconnect().catch((error: unknown) => {
         console.error("Database shutdown failed", error);

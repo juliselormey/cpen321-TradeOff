@@ -176,7 +176,6 @@
           entry.issue = null;
           entry.nextAttemptAt = this.now() + ttl;
         } catch (error: unknown) {
-          entry.value = null;
           const failure = error instanceof MarketProviderError
             ? error
             : new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.');

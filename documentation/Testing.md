@@ -7,6 +7,7 @@
 | 2026-10-20 | Section 4: Front-end test specification | Describe simple user flows through the currently implemented screens and state the sample-data limitations. |
 | 2026-11-03 | Section 2.1: Market API tests | Specify mocked and live integration tests for every Market HTTP interface. |
 | 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
+| 2026-11-04 | Section 2.1: Renumbered Use Cases | Renumber use cases following the removal of delete account (UC-05 to UC-19). |
 
 ---
 
@@ -18,33 +19,33 @@
 
 | **Interface** | **Describe Group Location, No Mocks** | **Describe Group Location, With Mocks** | **Mocked Component** |
 |---|---|---|---|
-| `GET /api/market/stocks` (UC-06) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol` (UC-08) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol/history` (UC-08) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
-| `POST /api/trades/execute/market` (UC-09, UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/market` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/market` | Prisma client, market data lookup |
-| `POST /api/trades/execute/limit` (UC-10, UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/limit` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/limit` | Prisma client, market data lookup |
-| `POST /api/trades/orders/:id/cancel` (UC-12) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/orders/:id/cancel` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/orders/:id/cancel` | Prisma client |
-| `GET /api/portfolio` (UC-13) | `backend/tests/no-mock/portfolio.test.ts`: `Unmocked API: GET /api/portfolio` | `backend/tests/mock/portfolioApi.test.ts`: `Mocked API: GET /api/portfolio` | Prisma client, market data lookup |
+| `GET /api/market/stocks` (UC-05) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol` (UC-07) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
+| `GET /api/market/stocks/:symbol/history` (UC-07) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
+| `POST /api/trades/execute/market` (UC-08, UC-10) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/market` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/market` | Prisma client, market data lookup |
+| `POST /api/trades/execute/limit` (UC-09, UC-10) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/limit` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/limit` | Prisma client, market data lookup |
+| `POST /api/trades/orders/:id/cancel` (UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/orders/:id/cancel` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/orders/:id/cancel` | Prisma client |
+| `GET /api/portfolio` (UC-12) | `backend/tests/no-mock/portfolio.test.ts`: `Unmocked API: GET /api/portfolio` | `backend/tests/mock/portfolioApi.test.ts`: `Mocked API: GET /api/portfolio` | Prisma client, market data lookup |
 
-**What the suites verify.** Test names follow the use case scenarios (e.g. `UC-09 8b: insufficient cash is rejected`).
+**What the suites verify.** Test names follow the use case scenarios (e.g. `UC-08 8b: insufficient cash is rejected`).
 
 - **No-mock suites** use a real MySQL database and real code paths: database transactions (`db.$transaction`), row-level locking and atomic balance updates across the Account, Position, Order and Trade tables, order cancellation and release of reserved cash, and the background limit-order worker filling pending orders.
-    - UC-09 main: a market buy debits cash, updates the position, and records one trade.
-    - UC-09 8b: insufficient cash is rejected and balances are unchanged.
-    - UC-09: concurrent buys cannot overdraw the account.
-    - UC-10 main: a limit price below market creates a pending order and reserves cash.
-    - UC-10: the limit-order worker fills the pending order once the price crosses the limit.
-    - UC-12 main: cancelling releases reserved cash and leaves the position unchanged.
-    - UC-13: the portfolio total includes cash reserved for pending orders.
+    - UC-08 main: a market buy debits cash, updates the position, and records one trade.
+    - UC-08 8b: insufficient cash is rejected and balances are unchanged.
+    - UC-08: concurrent buys cannot overdraw the account.
+    - UC-09 main: a limit price below market creates a pending order and reserves cash.
+    - UC-09: the limit-order worker fills the pending order once the price crosses the limit.
+    - UC-11 main: cancelling releases reserved cash and leaves the position unchanged.
+    - UC-12: the portfolio total includes cash reserved for pending orders.
 - **Mocked suites** run with Jest and need no network or database. They test isolated logic and resilience to external failures.
-    - UC-06 main: a second request within 8 s is served from cache, and the provider is called once.
-    - UC-06 main: a request after 8 s refetches from the provider.
-    - UC-06 2a: cache expired and the provider returns an error → `503` with an error body.
-    - UC-08: the same `503` behavior, and an unsupported symbol → `404`.
-    - UC-09 8a, 7a: invalid quantity and unavailable price are rejected.
-    - UC-13 3a: unavailable prices → `503`.
+    - UC-05 main: a second request within 8 s is served from cache, and the provider is called once.
+    - UC-05 main: a request after 8 s refetches from the provider.
+    - UC-05 2a: cache expired or provider error → returns `200` with per-stock `status: 'stale'` or `'unavailable'`.
+    - UC-07: stock details or history with provider error reports `status: 'stale'` or `'unavailable'`, and an unsupported symbol → `404`.
+    - UC-08 8a, 7a: invalid quantity and unavailable price are rejected.
+    - UC-12 3a: unavailable prices for held tickers → `503`.
 
-Authenticated routes are called with a JWT signed with the backend's real secret. The Google ID-token verifier is not exercised in these suites. `[TODO: confirm with TA whether sign-in tests may stub the Google verifier]`
+Authenticated routes are called with a JWT signed with the backend's real secret. The Google ID-token verifier is not exercised in these suites.
 
 #### 2.1.2. Commit Hash Where Tests Run
 
@@ -66,7 +67,7 @@ npm.cmd run test:market:api:live
 
 The tests cover successful responses and unsupported symbols. The no-mock suite expects Alpaca to return usable data; authentication, network, or provider failures should make it fail rather than silently pass.
 
-**Contract note:** The supplied Market specification says `GET /api/market/stocks` returns `503` when the provider is unavailable. Current implementation instead returns `200` with each affected stock marked `status: "unavailable"` and a `null` price. The mocked API test records current implementation behavior; update the route and corresponding test if the specification's overall `503` is mandatory.
+**Contract note:** Per NFR-3 and UC-05, `GET /api/market/stocks` returns `200` when provider refresh fails, returning each stock with its own `status` (`'ok'`, `'stale'`, or `'unavailable'`). Operations requiring fresh prices (trade execution and portfolio valuation) return `503` when prices cannot be retrieved.
 
 ### 2.2. GitHub Actions Configuration Location
 

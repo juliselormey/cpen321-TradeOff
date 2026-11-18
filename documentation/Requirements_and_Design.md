@@ -30,7 +30,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **3.2. Use Case Diagram**
 
-![3.2-use-case-diagram](images/3.2-use-case-diagram-update.png)
+![3.2-use-case-diagram](images/3.2-updated-use-case-diagram.png)
 
 ### **3.3. Actors Description**
 
@@ -45,27 +45,26 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 2. **[authentication] Sign-in** - A returning user authenticates through the Google Sign-in Interface and is signed in to their existing linked TradeOff account.
 3. **[authentication] Sign-out** - A signed-in user ends their session, and TradeOff returns them to an unauthenticated state.
 4. **[authentication] Manage Profile** - A signed-in user views and edits their profile name and username. TradeOff saves the changes.
-5. **[authentication] Delete Account** - A signed-in user permanently deletes their TradeOff account, and TradeOff removes the account and its associated data.
-6. **[market] Browse Stocks** - View the list of available stocks and their current market information.
-7. **[market] Search Stocks** - Enter a company name or ticker symbol into the search bar to filter the stock list. TradeOff shows the matching stocks.
-8. **[market] View Stock Details** - Select a stock to view its latest quote and price history chart.
-9. **[trading] Place Market Order** - Select a stock and a number of shares, and buy at the current market price using virtual funds. TradeOff updates the user’s cash and shares and records the trade.
-10. **[trading] Place Limit Order** - Select a stock, a number of shares, and a limit price. If the limit allows an immediate fill, TradeOff completes the purchase; otherwise TradeOff creates a pending order and reserves the required cash.
-11. **[trading] Sell Shares** -  Select an owned stock and a number of shares up to the amount owned, and sell at the market price or a limit price. TradeOff updates the user’s cash and shares and records the trade.
-12. **[trading] Cancel Pending Orders** - Cancel a pending limit order. TradeOff removes the order and releases any cash reserved for it.
-13. **[portfolio] View Portfolio** - View cash balance, stock holdings, total value, asset allocation, profit and loss, and pending orders on the Portfolio page.
-14. **[portfolio] View Transaction History** - View the list of the user’s completed trades.
-15. **[social] Send Friend Request** - Send a friend request to another TradeOff user by their friend ID. TradeOff creates a pending request.
-16. **[social] Accept Friend Request** - Accept an incoming pending request. TradeOff creates the friendship and updates both users’ lists.
-17. **[social] Decline Friend Request** - Decline an incoming pending request. TradeOff removes the request.
-18. **[social] Cancel Friend Request** - Cancel a request the user sent that is still pending. TradeOff removes the request.
-19. **[social] Remove Friend** - Remove an existing friend from the friend list. TradeOff removes the friendship for both users.
-20. **[social] View Leaderboard** - View a ranking of the user and their accepted friends by total portfolio value or percentage return, and reorder it by either criterion.
+5. **[market] Browse Stocks** - View the list of available stocks and their current market information.
+6. **[market] Search Stocks** - Enter a company name or ticker symbol into the search bar to filter the stock list. TradeOff shows the matching stocks.
+7. **[market] View Stock Details** - Select a stock to view its latest quote and price history chart.
+8. **[trading] Place Market Order** - Select a stock and a number of shares, and buy at the current market price using virtual funds. TradeOff updates the user’s cash and shares and records the trade.
+9. **[trading] Place Limit Order** - Select a stock, a number of shares, and a limit price. If the limit allows an immediate fill, TradeOff completes the purchase; otherwise TradeOff creates a pending order and reserves the required cash.
+10. **[trading] Sell Shares** -  Select an owned stock and a number of shares up to the amount owned, and sell at the market price or a limit price. TradeOff updates the user’s cash and shares and records the trade.
+11. **[trading] Cancel Pending Orders** - Cancel a pending limit order. TradeOff removes the order and releases any cash reserved for it.
+12. **[portfolio] View Portfolio** - View cash balance, stock holdings, total value, asset allocation, profit and loss, and pending orders on the Portfolio page.
+13. **[portfolio] View Transaction History** - View the list of the user’s completed trades.
+14. **[social] Send Friend Request** - Send a friend request to another TradeOff user by their friend ID. TradeOff creates a pending request.
+15. **[social] Accept Friend Request** - Accept an incoming pending request. TradeOff creates the friendship and updates both users’ lists.
+16. **[social] Decline Friend Request** - Decline an incoming pending request. TradeOff removes the request.
+17. **[social] Cancel Friend Request** - Cancel a request the user sent that is still pending. TradeOff removes the request.
+18. **[social] Remove Friend** - Remove an existing friend from the friend list. TradeOff removes the friendship for both users.
+19. **[social] View Leaderboard** - View a ranking of the user and their accepted friends by total portfolio value or percentage return, and reorder it by either criterion.
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
 <a name="fucs1"></a>
 
-1. **Browse Stocks**
+1. **Browse Stocks (UC-06)**
     - Description: View the list of available stocks and their current market information.
     - Primary Actor(s): Guest, Trader
     - Preconditions:
@@ -79,10 +78,10 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
         - (3) System displays each stock's name, ticker, logo, current price, and price change
         - (4) Actor scrolls through the available stocks
     - Some Failure Scenarios:
-        - (2a) Market information cannot be retrieved.
-            - (2a1) System responds with an error, and the app displays a message that market information could not be loaded, with a Retry button
-            - (2a2) Actor presses Retry
-            - (2a3) System retries the request, returning to step 2
+        - (2a) A stock's quote cannot be retrieved or refreshed.
+            - (2a1) If a previous quote exists, the system retains it and marks that stock's `status` as `stale`; if no quote exists, the system marks that stock's `status` as `unavailable`
+            - (2a2) The system returns the stock list with the status of each stock, and the app indicates which stock data is stale or unavailable while continuing to display the remaining stock information
+            - (2a3) When the data becomes available again, the system refreshes the quote and changes that stock's `status` to `ok`
 
 <a name="fucs2"></a>
 
@@ -137,8 +136,8 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
         - (8) If the Trader owns no stocks, the holdings section is shown empty while the cash balance is still displayed
     - Some Failure Scenarios:
         - (3a) Current stock prices cannot be retrieved.
-            - (3a1) System responds with an error, and the app displays a message that portfolio values could not be loaded, with a Retry button
-            - (3a2) Trader presses Retry
+            - (3a1) System responds with an error, and the app displays a message that portfolio values could not be loaded
+            - (3a2) Trader reloads the page
             - (3a3) System retries the request, returning to step 2
 
 <a name="fucs4"></a>
@@ -218,18 +217,22 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 <a name="nfr3"></a>
 
-3. **External-Service Reliability**
-    - **Description**: After a simulated temporary Alpaca API outage, TradeOff must automatically resume retrieving updated market data within two eligible market-refresh intervals (~16s) after Alpaca becomes available again, without restarting the application or backend.
-    - **Justification**: TradeOff depends on Alpaca for market information, making recovery from temporary provider interruptions VERY important. TradeOff's market refreshes happen every 8 seconds, so two refresh periods allows for some lenience, but a window small enough to ensure TradeOff can reliably come back on time.
-
+3. **External-Service Reliability (NFR-3)**
+    - **Description**: When Alpaca is unavailable, TradeOff must preserve previously retrieved market data and report its freshness using the existing `status` field: `stale` when a previously retrieved quote or history cannot be refreshed, and `unavailable` when no successful data has been retrieved. Stale quotes must not be used for trading or portfolio valuation. After Alpaca becomes available again, TradeOff must retrieve fresh market data on the next eligible request after the provider retry delay, without restarting the application or backend.
+    - **Justification**: TradeOff depends on Alpaca for market data, but a temporary provider outage should not erase information that was already retrieved. Status reporting lets users continue browsing while distinguishing current data from stale or unavailable data. Requiring fresh quotes for trades and portfolio valuation prevents outdated prices from being treated as current, while retry delays avoid repeatedly calling an unavailable provider.
 ---
 
 ## 4. Designs Specification
 
 ### **4.1. Main Components**
 
-All error responses are JSON of the form `{ "error": string }`. Every price-dependent route returns **503** when the cached prices have expired and Alpaca cannot be reached.
+All error responses are JSON of the form { "error": string }. Market data responses distinguish between fresh, stale, and unavailable data using a per-stock status:
+- **ok**: A successfully retrieved quote is within its 8-second cache lifetime.
+- **stale**: A previously retrieved quote exists, but its cache lifetime has expired and the latest refresh attempt failed. The last-known quote may be displayed, but must not be used for trading or portfolio valuation.
+- **unavailable**: No successful quote is available for the stock.
+  The Market Service supports partial results when retrieving quotes for multiple stocks. If some stocks cannot be refreshed, the service retains their last-known quotes when available and returns the status of each stock alongside the available data. This allows the Market screen to display functioning stock information even when data for another stock is unavailable.
 
+Individual stock-detail requests return the stock's available data and status when a current or stale quote exists. They return HTTP 503 when no quote is available. Operations that require a fresh quote, including trade execution and portfolio valuation, return HTTP 503 when a fresh quote cannot be retrieved. Stale quotes must never be treated as current prices for these operations.
 1. **User Service**
    - **Purpose**: Verifies Google identities, creates and finds accounts, and manages profile data and account deletion.
    - **Rationale**: Centralizing identity gives every other component one consistent authenticated user id, and keeps Google-specific code in one place.
@@ -246,22 +249,23 @@ All error responses are JSON of the form `{ "error": string }`. Every price-depe
       5. `verifyIdToken(idToken) → GoogleIdentity` (User Service → Google Authentication Service)
          - **Purpose**: Validates a Google ID token and returns the verified identity.
 2. **Market Service**
-   - **Purpose**: Retrieves quotes and price history from Alpaca, keeps recent quotes in an internal cache (8-second lifetime), serves the market endpoints, and provides a price lookup to other components.
-   - **Rationale**: One component talks to Alpaca, which limits external calls and keeps NFR-1 to NFR-3 testable in one place. The cache is a layer inside this component, not a component of its own.
-   - **Interfaces**:
-      1. `GET /api/market/stocks → StockList`
-         - **Purpose**: Lists the six supported stocks (UC-06, UC-07). Error: 503.
-         - `StockList { stocks: [{ symbol: string, name: string, price: number, change: number, changePercent: number, asOf: string }] }`
-      2. `GET /api/market/stocks/:symbol → StockDetails`
-         - **Purpose**: Returns one stock's latest quote (UC-08). Errors: 404 unsupported symbol, 503.
-         - `StockDetails { symbol, name, price, change, changePercent, asOf }`
-      3. `GET /api/market/stocks/:symbol/history → PriceHistory`
-         - **Purpose**: Returns price history for the chart (UC-08). Errors: 404, 503.
-         - `PriceHistory { symbol: string, points: [{ timestamp: string, price: number }] }`
-      4. `getQuote(ticker) → Quote { symbol, price, asOf }` (Trading Service → Market Service)
-         - **Purpose**: Supplies the current price for validating and executing orders and valuing portfolios. Throws when the price is unavailable.
-      5. `fetchStockQuotes(symbols) → StockQuotes` and `fetchPriceHistory(symbol) → PriceHistory` (Market Service → Alpaca Market Data API)
-         - **Purpose**: Retrieve current quotes and historical prices from Alpaca.
+    - **Purpose**: Retrieves quotes and price history from Alpaca, keeps recent quotes in an internal cache (8-second lifetime), serves the market endpoints, and provides a price lookup to other components.
+    - **Rationale**: One component talks to Alpaca, which limits external calls and keeps NFR-1 to NFR-3 testable in one place. The cache is a layer inside this component, not a component of its own.
+    - **Interfaces**:
+        1. `GET /api/market/stocks → StockList`
+            - **Purpose**: Lists the six supported stocks (UC-06, UC-07). Returns the list even when individual stock data is stale or unavailable; each stock reports its own `status`. This endpoint does not return 503 solely because one or more quotes are unavailable.
+            - `StockList { stocks: [{ ticker: string, companyName: string, currentPrice: number | null, change: number | null, percentageChange: number | null, quoteAsOf: string | null, source: string | null, feed: string | null, status: 'ok' | 'stale' | 'unavailable', quoteAgeSeconds: number | null, historySource: string | null, history: { symbol: string, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp: string, price: number }] } }] }`
+        2. `GET /api/market/stocks/:ticker → StockDetails`
+            - **Purpose**: Returns one stock's latest quote and its data status (UC-08). Errors: 404 unsupported ticker. A stale quote is returned with `status: 'stale'`; if no quote is available, the stock is returned with `status: 'unavailable'`. This endpoint does not return 503 solely because its quote is stale or unavailable.
+            - `StockDetails { ticker, companyName, currentPrice, change, percentageChange, quoteAsOf, source, feed, status: 'ok' | 'stale' | 'unavailable', quoteAgeSeconds, historySource, history: { symbol, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp, price }] } }`
+        3. `GET /api/market/stocks/:ticker/history → PriceHistory`
+            - **Purpose**: Returns price history for the chart (UC-08), with its own status. Errors: 404 unsupported ticker. This endpoint reports stale or unavailable history through `status` rather than returning 503 solely because history cannot be refreshed.
+            - `PriceHistory { symbol: string, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp: string, price: number }] }`
+        4. `getQuote(ticker) → Quote { ticker, currentPrice, quoteAsOf }` (Trading Service → Market Service)
+            - **Purpose**: Supplies a fresh current price for validating and executing orders and valuing portfolios. Throws when a fresh quote is unavailable; a quote with `status: 'stale'` or `status: 'unavailable'` is not accepted for trading or portfolio valuation.
+        5. `fetchStockQuotes(tickers) → StockQuotes` and `fetchPriceHistory(ticker) → PriceHistory` (Market Service → Alpaca Market Data API)
+            - **Purpose**: Retrieve current quotes and historical prices from Alpaca.
+
 3. **Trading Service**
    - **Purpose**: Executes virtual orders, runs the limit-order worker that fills pending orders, and computes portfolio valuations and history.
    - **Rationale**: Orders and the portfolio read and write the same tables and must use one valuation rule. Computing the total value in this component, not on the phone, keeps the portfolio and the leaderboard consistent.
@@ -343,8 +347,10 @@ All error responses are JSON of the form `{ "error": string }`. Every price-depe
 ### **4.7. Design of Non-Functional Requirements**
 
 1. **Response-Time Consistency (NFR-1)**
-    - **Implementation**: `backend/tests/nfr/responseTime.test.ts` warms the cache using a stubbed provider, sends 100 sequential requests to each Market endpoint with Supertest, records every response time, and asserts that the 95th percentile of each endpoint is under 1000 ms. The provider is stubbed so that a cache expiry during the run cannot add Alpaca's latency.
+    - **Implementation**: `backend/tests/nfr/responseTime.test.ts` warms the cache using a stubbed provider, sends 100 sequential requests to each Market endpoint with Supertest, records every response time, and asserts that the 95th percentile of each endpoint is under 1000 ms. 
+        The provider is stubbed so that a cache expiry during the run cannot add Alpaca's latency.
 2. **Concurrent-Load Efficiency (NFR-2)**
     - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that send at least 100 requests in total to cached Market endpoints. It asserts that the 95th percentile is under 1000 ms and that every response is successful.
 3. **External-Service Reliability (NFR-3)**
-    - **Implementation**: `backend/tests/nfr/providerRecovery.test.ts` makes the mocked provider fail until the API returns 503, restores the provider, advances Jest's fake timers past the 8-second cache lifetime, and asserts that the next request returns fresh data within 16 seconds of recovery, with no restart.
+    - **Implementation**: `backend/tests/nfr/providerRecovery.test.ts` simulates provider failures and verifies that previously retrieved quotes and history are retained with `status: 'stale'`, while data that has never been retrieved is reported as `status: 'unavailable'`. 
+        It verifies that stale quotes are rejected by trading and portfolio valuation, then restores the provider, advances Jest's fake timers past the provider retry delay, and asserts that the next eligible market-data request retrieves fresh data and changes the status to `ok` without restarting the application or backend.

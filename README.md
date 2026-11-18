@@ -23,21 +23,14 @@ Complete the one-time setup first; later runs only require starting the backend 
 > - [Alpaca](https://alpaca.markets/) for stock data, [Firebase](https://firebase.google.com/) for push notifs, and a [Google account](https://accounts.google.com/) + [Google Cloud project](https://console.cloud.google.com/) for sign-in
 >   - must be configured; a fresh clone does not contain working credentials for a new tester
 >   - sign up for Alpaca and open a Paper Trading account (choosing Trading API on signup/signin does just fine)
->   - sign in to Firebase, Projec
+>   - sign in to Firebase, create a new project w/ package name `com.example.cpen321application`
+>   - you should also need to download a new `frontend/app/google-services.json` file from Firebase and replace the old one
 > 
 > Commands used assume Windows (PowerShell). On macOS/Linux, use `npm`/`npx`, `cp`, `mkdir -p`, `curl`, and `./gradlew` in place of their Windows equivalents.
 > ```powershell
 > git clone https://github.com/juliselormey/cpen321-TradeOff.git
 > cd cpen321-TradeOff
 > ```
-
-
-1. Obtain an authorized Firebase service account JSON key for the TradeOff Firebase project.
-2. Create the `backend/creds/` directory.
-3. Save the key as `backend/creds/firebase-service-account.json`.
-4. Set `GOOGLE_APPLICATION_CREDENTIALS` in `backend/.env` as shown above.
-
-The `creds/` directory is Git-ignored. Never commit or publicly share service account credentials.
 
 ## Backend Setup
 
@@ -85,10 +78,10 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 - `ALPACA_API_KEY_ID`: from your Alpaca Paper Trading account - namely the API Keys section of the Dashboard
 - `ALPACA_API_SECRET_KEY`: see above
-- `GOOGLE_APPLICATION_CREDENTIALS`: from your Alpaca Paper Trading account - namely the API Keys section of the Dashboard
+- `GOOGLE_APPLICATION_CREDENTIALS`: from Settings => Service accounts => Generate new private key - match the path!
 
 > [!WARNING]
-> NEVER commit or share any secrets (even example ones, which may be generated project-dependently). Includes API keys, `/certs`, `/creds`, `.env`...
+> NEVER commit or share any secrets (even examples, which may be project-dependent). Includes API keys, `/certs`, `/creds`, `.env`...
 
 ### 3. Create the tables and HTTPS certificate
 
@@ -260,7 +253,7 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 > | Certificate / `Trust anchor` error | Copy the backend's current `cert.pem` to the frontend's `app/src/main/res/raw/cert.pem`, then rebuild/reinstall. |
 > | `MARKET_NOT_CONFIGURED` | Set both Alpaca variables in `backend/.env`, start from `backend/`, and restart the backend. |
 > | Alpaca rejects credentials | Check the matching key/secret pair and IEX access; update both values and restart after regenerating keys. |
-> | Portfolio shows an error | Confirm both URLs use `https://10.0.2.2:3000/`, the full backend is running, and `prisma db push` completed. Check the backend terminal for the exact error. |
+> | Portfolio shows an error | Confirm both URLs use `https://10.0.2.2:3000/`, the full backend is running, and `prisma migrate deploy` completed. Check the backend terminal for the exact error. |
 > | Account/Portfolio stops working after being signed in | Tokens expire after 15 minutes; sign out and back in. |
 > | Port 3000 is already in use | Stop the older backend process before starting another one. |
 > | PowerShell blocks `npm.ps1` | Use `npm.cmd` and `npx.cmd` as shown above. |

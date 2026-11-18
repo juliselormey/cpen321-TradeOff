@@ -1,4 +1,5 @@
 import request from 'supertest';
+import type { Express } from 'express';
 import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import {
@@ -10,9 +11,9 @@ var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
   require('../helpers/stubprovider').createStubProvider(mockMarket));
 
-let app: unknown, A: string, B: string, C: string, D: string, E: string;
+let app: Express, A: string, B: string, C: string, D: string, E: string;
 
-beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app; });
+beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app as Express; });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });
 beforeEach(async () => {
   await resetDb();
@@ -22,10 +23,10 @@ beforeEach(async () => {
 });
 
 const as = (id: string) => ({
-  get: (p: string) => request(app as any).get(p).set(bearer(id)),
-  post: (p: string, b: object = {}) => request(app as any).post(p).set(bearer(id)).send(b),
-  patch: (p: string, b: object = {}) => request(app as any).patch(p).set(bearer(id)).send(b),
-  del: (p: string) => request(app as any).delete(p).set(bearer(id)),
+  get: (p: string) => request(app).get(p).set(bearer(id)),
+  post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
+  patch: (p: string, b: object = {}) => request(app).patch(p).set(bearer(id)).send(b),
+  del: (p: string) => request(app).delete(p).set(bearer(id)),
 });
 const sendReq = (from: string, to: string) => as(from).post('/api/friends/requests', { userId: to });
 const incoming = async (id: string) => (await as(id).get('/api/friends/requests')).body.incoming;
@@ -122,7 +123,6 @@ describe('Unmocked API: GET /api/friends/leaderboard', () => {
     const { entries } = await board(A);
     expect(entries.map((e: { user: { id: string } }) => e.user.id)).toEqual([A, B, C]);
     expect(entries.map((e: { totalPortfolioValue: string }) => e.totalPortfolioValue)).toEqual(['1000', '700', '300']);
-    expect(entries.map((e: any) => e.user.id)).toEqual([A, B, C]);
     expect(JSON.stringify(entries)).not.toContain(D);
     expect(JSON.stringify(entries)).not.toContain(E);
   });

@@ -7,7 +7,7 @@ export const T = SYMBOLS[0]!;
 export const UNSUPPORTED = 'ZZZZ';
 export const CACHE_MS = 8000;
 
-export const FAKE_DATE: any = {
+export const FAKE_DATE: Parameters<typeof jest.useFakeTimers>[0] = {
   doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval',
     'setTimeout', 'clearTimeout', 'queueMicrotask', 'performance', 'hrtime'],
 };

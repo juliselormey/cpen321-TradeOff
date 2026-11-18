@@ -43,7 +43,7 @@ describe('Mocked API: POST /api/auth/google', () => {
   it('AUTH-03 new identity → account created, accessToken returned (UC-01)', async () => {
     jest.mocked(verifyGoogleToken).mockResolvedValue(identity);
     jest.mocked(db.user.findUnique).mockResolvedValue(null);
-    jest.mocked(db.user.create).mockResolvedValue(USER as any);
+    jest.mocked(db.user.create).mockResolvedValue(USER as never);
     const res = await signIn();
     expect(res.status).toBe(200);
     expect(typeof res.body.accessToken).toBe('string');
@@ -52,8 +52,8 @@ describe('Mocked API: POST /api/auth/google', () => {
 
   it('AUTH-04 existing identity → same user, no new account (UC-02)', async () => {
     jest.mocked(verifyGoogleToken).mockResolvedValue(identity);
-    jest.mocked(db.user.findUnique).mockResolvedValue(USER as any);
-    jest.mocked(db.user.update).mockResolvedValue(USER as any);
+    jest.mocked(db.user.findUnique).mockResolvedValue(USER as never);
+    jest.mocked(db.user.update).mockResolvedValue(USER as never);
     const res = await signIn();
     expect(res.status).toBe(200);
     expect(typeof res.body.accessToken).toBe('string');

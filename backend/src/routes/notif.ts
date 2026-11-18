@@ -27,11 +27,18 @@ notifRouter.put("/device", asyncHandler(async (req, res) => {
         return;
     }
 
-    await db.notificationDevice.upsert({
+    const device = await db.notificationDevice.upsert({
         where: { installationId },
-        update: { userId },
-        create: { installationId, userId }
+        update: {},
+        create: { installationId, userId },
     });
+
+    if (device.userId !== userId) {
+        res.status(409).json({
+            error: "Installation belongs to another user",
+        });
+        return;
+    }
 
     res.status(204).end();
 }));

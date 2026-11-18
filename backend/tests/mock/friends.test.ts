@@ -3,11 +3,16 @@ import request from "supertest";
 import jwt from "jsonwebtoken";
 import { friendsRouter } from "../../src/routes/friends";
 import { db } from "../../src/prisma/db";
+import { notifyUser } from "../../src/firebase/notifier";
 
 jest.mock("../../src/prisma/db", () => ({ db: {
     user: { findUnique: jest.fn() },
-    friendship: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() },
+    friendship: { findUnique: jest.fn(), create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() },
 } }));
+
+jest.mock("../../src/firebase/notifier", () => ({
+    notifyUser: jest.fn(),
+}));
 
 const sender = "00000000-0000-4000-8000-000000000001";
 const recipient = "00000000-0000-4000-8000-000000000002";
@@ -21,6 +26,7 @@ const users = jest.mocked(db.user.findUnique);
 const friendships = jest.mocked(db.friendship);
 
 beforeEach(() => {
+    jest.mocked(notifyUser).mockResolvedValue(undefined);
     jest.resetAllMocks();
     process.env.JWT_SECRET = secret;
     users.mockResolvedValue({ id: sender, isBanned: false } as never);
@@ -58,7 +64,11 @@ test.each([null, { id: recipient, isBanned: true }])("rejects unavailable target
 test("creates a pending request with a direction-independent pair key and public profiles", async () => {
     users.mockResolvedValueOnce({ id: recipient, isBanned: false } as never)
         .mockResolvedValueOnce({ id: sender, isBanned: false } as never);
-    friendships.create.mockResolvedValue({ id: "one", status: "PENDING" } as never);
+    friendships.create.mockResolvedValue({
+        id: "one",
+        status: "PENDING",
+        sender: { displayName: "Recipient" },
+    } as never);
     const response = await request(app).post("/api/friends/requests").set("Authorization", token(recipient))
         .send({ userId: sender }).expect(201);
     expect(response.body.request.status).toBe("PENDING");
@@ -67,6 +77,12 @@ test("creates a pending request with a direction-independent pair key and public
         include: { sender: { select: { id: true, displayName: true, avatarUrl: true } },
             recipient: { select: { id: true, displayName: true, avatarUrl: true } } },
     });
+    expect(notifyUser).toHaveBeenCalledTimes(1);
+    expect(notifyUser).toHaveBeenCalledWith(
+        sender,
+        "New friend request",
+        "Recipient sent you a friend request.",
+    );
 });
 
 test("duplicate or reciprocal requests return conflict", async () => {
@@ -75,12 +91,17 @@ test("duplicate or reciprocal requests return conflict", async () => {
     friendships.create.mockRejectedValue({ code: "P2002" });
     await request(app).post("/api/friends/requests").set("Authorization", token(sender))
         .send({ userId: recipient }).expect(409);
+    expect(notifyUser).not.toHaveBeenCalled();
 });
 
 test("supports existing numeric user IDs preserved as strings by the migration", async () => {
     users.mockResolvedValueOnce({ id: sender, isBanned: false } as never)
         .mockResolvedValueOnce({ id: "12", isBanned: false } as never);
-    friendships.create.mockResolvedValue({ id: "one", status: "PENDING" } as never);
+    friendships.create.mockResolvedValue({
+        id: "one",
+        status: "PENDING",
+        sender: { displayName: "Sender" },
+    } as never);
     await request(app).post("/api/friends/requests").set("Authorization", token(sender))
         .send({ userId: "12" }).expect(201);
     expect(friendships.create).toHaveBeenCalledWith(expect.objectContaining({ data: {
@@ -89,14 +110,46 @@ test("supports existing numeric user IDs preserved as strings by the migration",
 });
 
 test.each([sender, recipient, outsider])("only the recipient can accept (%s)", async actor => {
-    users.mockResolvedValue({ id: actor, isBanned: false } as never);
-    friendships.updateMany.mockResolvedValue({ count: actor === recipient ? 1 : 0 });
-    await request(app).post("/api/friends/requests/one/accept").set("Authorization", token(actor))
-        .expect(actor === recipient ? 204 : 404);
-    expect(friendships.updateMany).toHaveBeenCalledWith({
-        where: { id: "one", recipientId: actor, status: "PENDING" }, data: { status: "ACCEPTED" },
-    });
-});
+        users.mockResolvedValue({
+            id: actor,
+            isBanned: false,
+        } as never);
+
+        friendships.updateMany.mockResolvedValue({
+            count: actor === recipient ? 1 : 0,
+        });
+
+        friendships.findUnique.mockResolvedValue({
+            senderId: sender,
+            recipient: { displayName: "Recipient" },
+        } as never);
+
+        await request(app)
+            .post("/api/friends/requests/one/accept")
+            .set("Authorization", token(actor))
+            .expect(actor === recipient ? 204 : 404);
+
+        expect(friendships.updateMany).toHaveBeenCalledWith({
+            where: {
+                id: "one",
+                recipientId: actor,
+                status: "PENDING",
+            },
+            data: { status: "ACCEPTED" },
+        });
+
+        if (actor === recipient) {
+            expect(notifyUser).toHaveBeenCalledTimes(1);
+            expect(notifyUser).toHaveBeenCalledWith(
+                sender,
+                "Friend request accepted",
+                "Recipient accepted your friend request.",
+            );
+        } else {
+            expect(notifyUser).not.toHaveBeenCalled();
+        }
+    },
+);
 
 test.each(["/requests/one", "/one"])("deletion is scoped to participants and state: %s", async path => {
     friendships.deleteMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });

@@ -166,8 +166,7 @@ private fun AppDestinations(
 
     val signOut: () -> Unit = {
         scope.launch {
-            if (NotificationRegistration.unregister(context)) {
-                SessionManager.clearSession(context)
+            if (NotificationRegistration.signOut(context)) {
                 navController.navigate(Routes.Settings)
             } else {
                 android.widget.Toast.makeText(

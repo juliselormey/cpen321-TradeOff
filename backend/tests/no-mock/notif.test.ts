@@ -51,7 +51,7 @@ describe("No-Mock Integration Tests: Notifications", () => {
     /* -------------------------------------------------------------------------- */
     /* 1. Notification Device Registration                                        */
     /* -------------------------------------------------------------------------- */
-    describe("Notification Device Registration", () => {
+    describe("Unmocked: PUT /api/notif/device", () => {
         // Input: Valid installation ID and authenticated user
         // Expected status code: 204
         // Expected behavior: Installation is associated with the user
@@ -146,11 +146,56 @@ describe("No-Mock Integration Tests: Notifications", () => {
 
             expect(device).toBeNull();
         });
+        // Input: Installation ID belonging to another user
+        // Expected status code: 409
+        // Expected behavior: Existing ownership remains unchanged
+        // Expected output: Installation ownership conflict error
+        test("PUT /api/notif/device belonging to another user returns 409 Conflict", async () => {
+            const uniqueId = randomUUID();
+            const installationId = "cABCDEFGHIJKLMNOPQRSTU";
+
+            const otherUser = await db.user.create({
+                data: {
+                    googleSub: `test-notif-${uniqueId}`,
+                    email: `test-notif-${uniqueId}@example.com`,
+                    displayName: "Other Notification Test User",
+                },
+            });
+
+            try {
+                await db.notificationDevice.create({
+                    data: {
+                        installationId,
+                        userId: otherUser.id,
+                    },
+                });
+
+                const res = await request(app)
+                    .put("/api/notif/device")
+                    .set("Authorization", `Bearer ${authToken}`)
+                    .send({ installationId });
+
+                expect(res.status).toBe(409);
+                expect(res.body).toEqual({
+                    error: "Installation belongs to another user",
+                });
+
+                const device = await db.notificationDevice.findUnique({
+                    where: { installationId },
+                });
+
+                expect(device?.userId).toBe(otherUser.id);
+            } finally {
+                await db.user.delete({
+                    where: { id: otherUser.id },
+                });
+            }
+        });
     });
     /* -------------------------------------------------------------------------- */
     /* 2. Notification Device Unregistration                                      */
     /* -------------------------------------------------------------------------- */
-    describe("Notification Device Unregistration", () => {
+    describe("Unmocked: DELETE /api/notif/device", () => {
         // Input: Registered installation ID and authenticated user
         // Expected status code: 204
         // Expected behavior: Notification device registration is removed

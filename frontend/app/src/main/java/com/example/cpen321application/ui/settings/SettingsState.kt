@@ -17,6 +17,7 @@ import com.google.gson.JsonParseException
 import java.io.IOException
 import java.util.Locale
 import retrofit2.Response
+import com.example.cpen321application.notif.NotificationRegistration
 
 internal class SettingsState(private val api: ApiService, private val context: Context) {
     var signedIn by mutableStateOf(SessionManager.isLoggedIn(context))
@@ -102,6 +103,11 @@ internal class SettingsState(private val api: ApiService, private val context: C
 
     suspend fun signOut() {
         busy = true
+        if (!NotificationRegistration.unregister(context)) {
+            busy = false
+            error = "Could not unregister notifications. Please try again."
+            return
+        }
         SessionManager.clearSession(context)
         signedIn = false
         profile = null

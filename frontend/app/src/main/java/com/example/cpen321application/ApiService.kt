@@ -7,6 +7,8 @@ import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.PUT
+import retrofit2.http.HTTP
 
 data class GoogleAuthRequest(val idToken: String)
 data class GoogleAuthResponse(val accessToken: String)
@@ -105,6 +107,10 @@ data class UserProfile(
     val username: String?
 )
 
+data class NotificationDeviceRequest(
+    val installationId: String
+)
+
 data class ProfileResponse(val user: UserProfile)
 data class ProfileUpdate(val displayName: String, val username: String)
 
@@ -141,4 +147,14 @@ interface ApiService {
 
     @GET("/api/portfolio")
     suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
+
+    @PUT("/api/notif/device")
+    suspend fun registerNotificationDevice(
+        @Body request: NotificationDeviceRequest
+    ): Response<Unit>
+
+    @HTTP(method = "DELETE", path = "/api/notif/device", hasBody = true)
+    suspend fun unregisterNotificationDevice(
+        @Body request: NotificationDeviceRequest
+    ): Response<Unit>
 }

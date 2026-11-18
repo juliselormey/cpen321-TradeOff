@@ -6,6 +6,7 @@ import { friendsRouter } from "./routes/friends";
 import { createMarketRouter } from './market/routes';
 import { tradesRouter } from "./routes/trades";
 import { portfolioRouter } from "./routes/portfolio";
+import { notifRouter } from "./routes/notif";
 
 export function createApp(): Express {
   const app = express();
@@ -24,6 +25,7 @@ export function createApp(): Express {
   app.use("/api/friends", friendsRouter);
   app.use("/api/trades", tradesRouter);
   app.use("/api/portfolio", portfolioRouter);
+  app.use("/api/notif", notifRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not Found' });

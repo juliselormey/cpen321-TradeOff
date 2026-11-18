@@ -4,6 +4,7 @@ import { db } from "../prisma/db";
 import { asyncHandler } from "../util/asyncHandler";
 import { Prisma } from "../generated/prisma/client";
 import { marketService } from "../market/service";
+import { notifyUser } from "../firebase/notifier";
 
 export const friendsRouter = Router();
 const publicProfile = { id: true, displayName: true, avatarUrl: true } as const;
@@ -127,6 +128,11 @@ friendsRouter.post("/requests", asyncHandler(async (req, res) => {
             pairKey: [userId.toLowerCase(), recipient.id.toLowerCase()].sort().join(":"),
         }, include: profiles });
         res.status(201).json({ request: friendship });
+        void notifyUser(
+            recipient.id,
+            "New friend request",
+            `${friendship.sender.displayName} sent you a friend request.`,
+        );
     } catch (error: unknown) {
         // The database constraint also protects simultaneous reciprocal requests.
         if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
@@ -150,6 +156,20 @@ friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
         return;
     }
     res.status(204).send();
+    void db.friendship.findUnique({
+        where: { id: String(req.params.id) },
+        include: profiles,
+    }).then(friendship => {
+        if (friendship) {
+            return notifyUser(
+                friendship.senderId,
+                "Friend request accepted",
+                `${friendship.recipient.displayName} accepted your friend request.`,
+            );
+        }
+    }).catch(error => {
+        console.error("Friend request notification failed", error);
+    });
 }));
 
 friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {

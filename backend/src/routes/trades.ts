@@ -161,7 +161,7 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
         side: sideRaw,
         type,
         quantity,
-        limitPrice: type === "LIMIT" ? limitPrice : null,
+        limitPrice: type === "LIMIT" && typeof limitPrice === "number" ? limitPrice : null,
     };
 }
 

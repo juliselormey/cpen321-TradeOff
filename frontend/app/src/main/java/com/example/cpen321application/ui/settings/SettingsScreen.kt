@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cpen321application.ApiService
+import com.example.cpen321application.notif.NotificationPermission
 import kotlinx.coroutines.launch
 
 @Composable
@@ -56,6 +57,7 @@ fun SettingsScreen(
         Text("Make TradeOff yours", color = MaterialTheme.colorScheme.onSurfaceVariant)
         AppearanceSettings(darkMode, onDarkModeChange)
         AccountSettings(state, onSignIn)
+        NotificationPermission()
         Text(
             "TradeOff • Practice investing",
             color = MaterialTheme.colorScheme.onSurfaceVariant,

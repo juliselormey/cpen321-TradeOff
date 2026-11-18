@@ -10,7 +10,7 @@ const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/services/alpacaProvider', () =>
   require('../helpers/stubProvider').createStubProvider(mockMarket));
 
-type LimitOrderWorker = { runLimitOrderWorkerOnce: () => Promise<void> };
+interface LimitOrderWorker { runLimitOrderWorkerOnce: () => Promise<void> }
 
 let app: Express, worker: LimitOrderWorker, A: string, B: string;
 const tick = () => worker.runLimitOrderWorkerOnce();
@@ -19,7 +19,7 @@ const setPrice = (p: number) => { mockMarket.price = p; mockMarket.fail = false;
 beforeAll(() => {
   jest.useFakeTimers(FAKE_DATE);
   const l = loadApp('services/limitOrderWorker');
-  app = l.app as Express;
+  app = l.app;
   worker = l.mods[0] as LimitOrderWorker;
 });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });

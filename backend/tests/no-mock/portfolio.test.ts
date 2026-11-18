@@ -10,7 +10,7 @@ jest.mock('../../src/market/alpaca', () =>
 
 let app: Express, A: string, B: string;
 
-beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app as Express; });
+beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app; });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });
 beforeEach(async () => {
   await resetDb();

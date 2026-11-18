@@ -34,7 +34,7 @@ let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app as Express;
+  app = l.app;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
   (db.$transaction as unknown as jest.Mock).mockImplementation(async (cb: (tx: typeof db) => unknown) => cb(db));
   (marketService.getStock as unknown as jest.Mock).mockResolvedValue({ currentPrice: '100', status: 'ok' });

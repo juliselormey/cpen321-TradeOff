@@ -25,7 +25,7 @@ let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app as Express;
+  app = l.app;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
 });
 

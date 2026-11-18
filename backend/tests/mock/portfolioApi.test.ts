@@ -54,7 +54,7 @@ describe('Mocked API: GET /api/portfolio', () => {
   it('PF-01 no JWT → 401', async () => {
     expect((await request(app).get('/api/portfolio')).status).toBe(401);
   });
-  it('PF-02 no holdings → cash only, empty holdings, no error (UC-13 step 8)', async () => {
+  it('PF-02 no holdings → cash only, empty holdings, no error (UC-12 step 8)', async () => {
     stub({ cash: 1000 });
     const res = await get();
     expect(res.status).toBe(200);
@@ -63,7 +63,7 @@ describe('Mocked API: GET /api/portfolio', () => {
     expect(res.body.totalValue).toBe(1000);
     expect(res.body.profitLoss).toBe(0);
   });
-  it('PF-03 prices unavailable → 503 (UC-13 3a)', async () => {
+  it('PF-03 prices unavailable → 503 (UC-12 3a)', async () => {
     stub({ positions: [aapl] });
     (marketService.getStock as any).mockRejectedValue(new Error('down'));
     expectError(await get(), 503);
@@ -85,7 +85,7 @@ describe('Mocked API: GET /api/portfolio', () => {
     const sum = res.body.allocation.reduce((s: number, a: any) => s + a.percent, 0);
     expect(sum).toBeCloseTo(100, 0);
   });
-  it('PF-07 trades come back in the order stored; none → [] (UC-14)', async () => {
+  it('PF-07 trades come back in the order stored; none → [] (UC-13)', async () => {
     const t = (id: string, at: string) => ({ id, userId: U, ticker: 'AAPL', type: 'BUY', quantity: 1, pricePerShare: 100, totalAmount: 100, createdAt: at });
     stub({ trades: [t('t3', '2026-11-17'), t('t2', '2026-11-16'), t('t1', '2026-11-15')] });
     expect((await get()).body.recentTrades.map((x: any) => x.id)).toEqual(['t3', 't2', 't1']);

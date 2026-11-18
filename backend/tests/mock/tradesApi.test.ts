@@ -90,13 +90,13 @@ describe('Mocked API: POST /api/trades/execute/market', () => {
     expectError(await postMarket({ side: 'hold' }), 400);
   });
 
-  it('TRD-09 price lookup fails → 503, transaction never started (UC-09 7a)', async () => {
+  it('TRD-09 price lookup fails → 503, transaction never started (UC-08 7a)', async () => {
     cash(1000);
     (marketService.getStock as any).mockRejectedValue(new Error('price unavailable'));
     expectError(await postMarket(), 503);
     expect(db.$transaction).not.toHaveBeenCalled();
   });
-  it('TRD-10 cash below cost → 400 with no writes (UC-09 8b)', async () => {
+  it('TRD-10 cash below cost → 400 with no writes (UC-08 8b)', async () => {
     cash(50);
     expectError(await postMarket({ quantity: 1 }), 400);
     expect(db.trade.create).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe('Mocked API: POST /api/trades/execute/market', () => {
     expect(res.status).toBe(200);
     expect(res.body.executedPrice).toBe(100);
   });
-  it('TRD-17 sell more than owned → 400 (UC-11)', async () => {
+  it('TRD-17 sell more than owned → 400 (UC-10)', async () => {
     cash(0); owned(2);
     (db.order.aggregate as any).mockResolvedValue({ _sum: { quantity: decimal(0) } });
     expectError(await postMarket({ side: 'SELL', quantity: 3 }), 400);
@@ -156,7 +156,7 @@ describe('Mocked API: POST /api/trades/orders/:id/cancel', () => {
   const cancelId = '00000000-0000-0000-0000-000000000001';
   const cancel = (id = cancelId) => request(app).post(CANCEL(id)).set(bearer(U));
 
-  it('TRD-21 unknown order → 404 (UC-12)', async () => {
+  it('TRD-21 unknown order → 404 (UC-11)', async () => {
     (db.order.updateMany as any).mockResolvedValue({ count: 0 });
     (db.order.findFirst as any).mockResolvedValue(null);
     expectError(await cancel(), 404);

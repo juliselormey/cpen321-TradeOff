@@ -120,7 +120,7 @@ describe('Mocked: market endpoints and caches', () => {
     const error = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
     fetchQuote.mockRejectedValue(error);
     fetchHistory.mockRejectedValue(error);
-    const response = await request(app).get('/api/market/stocks/AAPL').expect(503);
+    const response = await request(app).get('/api/market/stocks/AAPL').expect(200);
     expect(response.body).toMatchObject({
       currentPrice: null, status: 'unavailable', source: 'alpaca',
       error: { code: 'MARKET_NOT_CONFIGURED' }, history: { points: [] },

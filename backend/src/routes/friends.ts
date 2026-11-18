@@ -2,8 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { db } from "../prisma/db";
 import { asyncHandler } from "../util/asyncHandler";
-import { Prisma } from "../generated/prisma/client";
-import { marketService } from "../market/service";
+import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 
 export const friendsRouter = Router();
 const publicProfile = { id: true, displayName: true, avatarUrl: true } as const;
@@ -31,47 +30,32 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
         },
         orderBy: { id: "asc" },
     });
-    // Reuse the shared market cache once per distinct symbol, not once per friend.
-    const rawSymbols: string[] = [];
-    for (const user of users) {
-        for (const pos of user.positions) {
-            if (pos.quantity.greaterThan(0)) {
-                rawSymbols.push(String(pos.ticker));
-            }
-        }
-    }
-    const symbols = Array.from(new Set(rawSymbols));
-    const prices = new Map(await Promise.all(symbols.map(async ticker => {
-        try {
-            const stock = await marketService.getStock(ticker);
-            const price = stock.currentPrice == null ? null : new Prisma.Decimal(stock.currentPrice);
-            return [ticker, price?.isFinite() && price.greaterThan(0) ? price : null] as const;
-        } catch {
-            return [ticker, null] as const;
-        }
-    })));
+    // Same valuation rule as GET /api/portfolio; one market-cache lookup per distinct symbol.
+    const prices = await loadPrices(users.flatMap(user =>
+        user.positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker)));
     res.setHeader("Cache-Control", "no-store");
     res.json({ entries: users.map(user => {
-        let total = user.account?.cashBalance ?? null;
-        for (const order of user.orders) {
-            // Pending buys reserve cash at placement; it still belongs to the user.
-            if (total && order.limitPrice) total = total.plus(order.quantity.times(order.limitPrice));
+        if (!user.account) {
+            return {
+                user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
+                isYou: user.id === userId,
+                cashBalance: null,
+                totalPortfolioValue: null,
+                returnPercent: null,
+            };
         }
-        for (const position of user.positions) {
-            if (!position.quantity.greaterThan(0)) continue;
-            const price = prices.get(position.ticker);
-            if (!price) { total = null; break; }
-            if (total) total = total.plus(position.quantity.times(price));
+        let valuation: ReturnType<typeof valuePortfolio> | null = null;
+        try {
+            valuation = valuePortfolio({ account: user.account, positions: user.positions, pendingBuyOrders: user.orders }, prices);
+        } catch (error) {
+            if (!(error instanceof PriceUnavailableError)) throw error; // entry shows "Unavailable"
         }
         return {
             user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
             isYou: user.id === userId,
             cashBalance: user.account?.cashBalance.toString() ?? null,
-            totalPortfolioValue: total?.toString() ?? null,
-            returnPercent: total && user.account?.startingBalance.greaterThan(0)
-                ? total.minus(user.account.startingBalance)
-                    .dividedBy(user.account.startingBalance).times(100).toNumber()
-                : null,
+            totalPortfolioValue: valuation?.totalValue.toString() ?? null,
+            returnPercent: valuation?.returnPercent?.toNumber() ?? null,
         };
     }) });
 }));

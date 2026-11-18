@@ -4,6 +4,7 @@ module.exports = {
   // Prisma's generated TypeScript uses .js extensions for NodeNext imports.
   moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
   roots: ['<rootDir>/src', '<rootDir>/tests'],
+  setupFiles: ['<rootDir>/tests/setupEnv.ts'],
   collectCoverageFrom: ['src/**/*.ts'],
   collectCoverage: true,
   coverageDirectory: 'coverage',

@@ -2,16 +2,20 @@ import { Router, Request, Response } from "express";
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
 import { requireAuth } from "../middleware/auth";
-import { OrderError, availableShares, fillOrder, getServerPrice, Tx } from "../market/settlement";
+import { LIVE_SYMBOLS } from "../market/catalog";
+import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable, Tx } from "../market/settlement";
+import { STARTING_BALANCE } from "../market/valuation";
 import { asyncHandler } from "../util/asyncHandler";
 
 export const tradesRouter = Router();
 tradesRouter.use(requireAuth);
 
-/**
- * GET /api/trades/position/:ticker
- * Returns cash balance and position info for a ticker
- */
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ZERO = new Prisma.Decimal(0);
+const MAX_QUANTITY = 1_000_000;
+const MAX_PRICE = 1_000_000;
+
+/** GET /api/trades/position/:ticker: cash balance and position info for a ticker */
 tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Response) => {
     const userId = req.userId;
     if (!userId) {
@@ -35,7 +39,7 @@ tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Res
         ]);
 
         res.json({
-            cashBalance: account ? Number(account.cashBalance) : 10000.0,
+            cashBalance: account ? Number(account.cashBalance) : STARTING_BALANCE.toNumber(),
             ownedQuantity: position ? Number(position.quantity) : 0,
             averageCost: position ? Number(position.averageCost) : 0,
             availableQuantity: Math.max(0, Number(availableQuantity)),
@@ -46,10 +50,7 @@ tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Res
     }
 }));
 
-/**
- * GET /api/trades/orders/pending
- * Returns active pending limit orders for the user
- */
+/** GET /api/trades/orders/pending: active pending limit orders for the user */
 tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Response) => {
     const userId = req.userId;
     if (!userId) {
@@ -58,10 +59,7 @@ tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Respo
     }
 
     const pendingOrders = await db.order.findMany({
-        where: {
-            userId,
-            status: "PENDING",
-        },
+        where: { userId, status: "PENDING" },
         orderBy: { createdAt: "desc" },
     });
 
@@ -74,15 +72,13 @@ tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Respo
             status: o.status,
             quantity: Number(o.quantity),
             limitPrice: o.limitPrice ? Number(o.limitPrice) : null,
+            reservedCash: o.side === "BUY" && o.limitPrice ? Number(o.quantity.mul(o.limitPrice)) : 0,
             createdAt: o.createdAt.toISOString(),
         })),
     });
 }));
 
-/**
- * POST /api/trades/orders/:id/cancel
- * Cancels a pending limit order and releases reserved funds/shares
- */
+/** POST /api/trades/orders/:id/cancel: cancels a pending limit order and releases reserved funds/shares */
 tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req: Request, res: Response) => {
     const userId = req.userId;
     if (!userId) {
@@ -91,13 +87,14 @@ tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req: Request, res: R
     }
 
     const orderId = req.params.id;
-    if (typeof orderId !== "string") {
+    if (typeof orderId !== "string" || !uuid.test(orderId)) {
         res.status(400).json({ error: "Invalid order id" });
         return;
     }
 
     try {
-        await db.$transaction(async (tx) => {
+        const releasedCash = await db.$transaction(async (tx) => {
+            // Conditional claim: only one of cancel / worker fill can win a PENDING order.
             const { count } = await tx.order.updateMany({
                 where: { id: orderId, userId, status: "PENDING" },
                 data: { status: "CANCELLED" },
@@ -105,19 +102,19 @@ tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req: Request, res: R
             if (count === 0) {
                 const exists = await tx.order.findFirst({ where: { id: orderId, userId } });
                 throw exists
-                    ? new OrderError(400, "Only pending orders can be cancelled")
+                    ? new OrderError(409, "Only pending orders can be cancelled")
                     : new OrderError(404, "Order not found");
             }
 
             const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
             if (order.side === "BUY" && order.limitPrice) {
-                await tx.account.update({
-                    where: { userId },
-                    data: { cashBalance: { increment: order.quantity.mul(order.limitPrice) } },
-                });
+                const release = order.quantity.mul(order.limitPrice);
+                await tx.account.update({ where: { userId }, data: { cashBalance: { increment: release } } });
+                return release.toNumber();
             }
+            return 0;
         });
-        res.json({ success: true, message: "Order cancelled successfully", orderId });
+        res.json({ success: true, message: "Order cancelled successfully", orderId, status: "CANCELLED", releasedCash });
     } catch (error) {
         if (error instanceof OrderError) {
             res.status(error.status).json({ error: error.message });
@@ -137,8 +134,12 @@ interface OrderInput {
     quantity: number;
     limitPrice: number | null;
 }
-const STARTING_BALANCE = new Prisma.Decimal(10000);
-const ZERO = new Prisma.Decimal(0);
+
+/** Positive, finite, within the cap, and representable by the Decimal(18,4) columns (fractional shares allowed). */
+function validAmount(value: unknown, max: number): value is number {
+    return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= max
+        && new Prisma.Decimal(value).decimalPlaces() <= 4;
+}
 
 function parseOrder(body: unknown, type: OrderType): OrderInput {
     const raw = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
@@ -146,22 +147,26 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
     const sideRaw = (raw.side ?? raw.type)?.toString().toUpperCase();
 
     if (!ticker || typeof ticker !== "string") throw new OrderError(400, "Ticker symbol is required");
+    const symbol = ticker.toUpperCase();
+    if (!LIVE_SYMBOLS.includes(symbol)) throw new OrderError(400, "Unsupported ticker");
     if (sideRaw !== "BUY" && sideRaw !== "SELL") throw new OrderError(400, "Side must be BUY or SELL");
-    if (typeof quantity !== "number" || quantity <= 0) throw new OrderError(400, "Quantity must be a positive number");
+    if (!validAmount(quantity, MAX_QUANTITY)) {
+        throw new OrderError(400, "Quantity must be a positive number with at most 4 decimal places");
+    }
 
     if (type === "MARKET" && limitPrice != null) {
         throw new OrderError(400, "Limit price is forbidden for market orders");
     }
-    if (type === "LIMIT" && (typeof limitPrice !== "number" || limitPrice <= 0)) {
-        throw new OrderError(400, "Limit price is required for limit orders and must be positive");
+    if (type === "LIMIT" && !validAmount(limitPrice, MAX_PRICE)) {
+        throw new OrderError(400, "Limit price is required for limit orders and must be positive with at most 4 decimal places");
     }
 
     return {
-        ticker: ticker.toUpperCase(),
+        ticker: symbol,
         side: sideRaw,
         type,
         quantity,
-        limitPrice: type === "LIMIT" ? limitPrice : null,
+        limitPrice: type === "LIMIT" ? (limitPrice as number) : null,
     };
 }
 
@@ -222,13 +227,15 @@ async function handlePlaceOrder(type: OrderType, req: Request, res: Response): P
     try {
         const input = parseOrder(req.body, type);
         const price = await getServerPrice(input.ticker);
-        const result = await db.$transaction((tx) => placeOrderTx(tx, userId, input, price), {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
+        const result = await runSerializable((tx) => placeOrderTx(tx, userId, input, price));
         res.json({ success: true, ...result });
     } catch (error) {
         if (error instanceof OrderError) {
             res.status(error.status).json({ error: error.message });
+            return;
+        }
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") {
+            res.status(503).json({ error: "The server is busy. Please try again." });
             return;
         }
         console.error(error);
@@ -241,8 +248,3 @@ const placeOrder = (type: OrderType) =>
 
 tradesRouter.post("/execute/market", placeOrder("MARKET"));
 tradesRouter.post("/execute/limit", placeOrder("LIMIT"));
-tradesRouter.post("/execute", asyncHandler(async (req: Request, res: Response) => {
-    const raw = typeof req.body === "object" && req.body !== null ? (req.body as Record<string, unknown>) : {};
-    const type: OrderType = raw.type?.toString().toUpperCase() === "LIMIT" ? "LIMIT" : "MARKET";
-    await handlePlaceOrder(type, req, res);
-}));

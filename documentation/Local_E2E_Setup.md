@@ -212,6 +212,40 @@ current user remain intact. No second Google login is needed.
 Browse Stocks performs no reset or cleanup: it only reads data and checks that
 the account and Favorites have not changed.
 
+## Firebase/NFR integration
+
+The merged normal server attaches authenticated friend WebSockets to both local
+HTTP and deployed HTTPS, and retains Firebase push-notification routes. A Firebase
+service-account file is required to verify actual push delivery; configure
+`GOOGLE_APPLICATION_CREDENTIALS` for that separately. Never commit that file.
+The included Android Firebase project configuration must match the team's setup.
+The five acceptance tests do not claim to verify push delivery or replace Firebase.
+
+Friend requests now use unique usernames, not UUIDs. Fixture participants receive
+unique generated usernames. If the current test user has no username, fixture setup
+temporarily assigns one and cleanup removes that exact generated username; an
+existing chosen username is preserved. Request database records still reference user IDs.
+
+Migration reconciliation keeps the existing
+`20261118082656_stock_expansion_favorites` as the canonical trading-table migration,
+and adds `20261118082734_add_notification_devices`. The duplicate incoming
+`20261118000000_add_trading_tables` is excluded. Before migrating another existing
+deployment, inspect its `_prisma_migrations`: if it already applied that duplicate
+or has trading tables without the canonical migration recorded, stop and reconcile
+the baseline with its operator. Do not drop tables, reset data or blindly mark
+migrations applied. Local validation was against the existing case-insensitive
+MariaDB database; other deployments must be checked separately.
+
+Run NFR tests separately from the Android acceptance tests:
+
+```powershell
+cd backend
+npm.cmd run test:nfr
+```
+
+These use controlled providers and no real database, as documented in
+`backend/tests/nfr/README.md`; this does not introduce mocks into Android E2E.
+
 ## Other tests and old fixtures
 
 The common E2E runner selects `BrowseStocksE2ETest`, `TradingE2ETest`, `PortfolioE2ETest`, `LeaderboardE2ETest` and `SendFriendRequestE2ETest`.

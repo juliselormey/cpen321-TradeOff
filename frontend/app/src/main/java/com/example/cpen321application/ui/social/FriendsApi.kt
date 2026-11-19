@@ -3,7 +3,7 @@ package com.example.cpen321application.ui.social
 import retrofit2.Response
 import retrofit2.http.*
 
-data class FriendProfile(val id: String, val displayName: String?, val avatarUrl: String?) {
+data class FriendProfile(val id: String, val displayName: String?, val avatarUrl: String?, val username: String? = null) {
     val label: String get() = displayName?.takeIf { it.isNotBlank() } ?: "Trader"
 }
 data class Friendship(val friendshipId: String, val user: FriendProfile)
@@ -11,7 +11,7 @@ data class FriendRequest(val id: String, val sender: FriendProfile, val recipien
 data class FriendsResponse(val friends: List<Friendship>)
 data class RequestsResponse(val incoming: List<FriendRequest>, val outgoing: List<FriendRequest>)
 data class MeResponse(val user: FriendProfile)
-data class AddFriendRequest(val userId: String)
+data class AddFriendRequest(val username: String)
 data class SendFriendResponse(val request: FriendRequest)
 data class LeaderboardEntry(val user: FriendProfile, val isYou: Boolean,
     val cashBalance: String?, val returnPercent: Double?, val totalPortfolioValue: String? = null)

@@ -62,14 +62,14 @@ test("values holdings and reserved buy cash; reads each symbol once for all frie
         { ...investor("me", 0, 100), orders: [{ quantity: decimal(2), limitPrice: decimal(150) }] },
         investor("friend", 9000, 1),
     ] as never);
-    jest.mocked(marketService.getStock).mockResolvedValue({ currentPrice: "120" } as never);
+    jest.mocked(marketService.getStock).mockResolvedValue({ currentPrice: "120", status: "ok" } as never);
     const response = await request(app).get("/api/friends/leaderboard").set("Authorization", auth()).expect(200);
     expect(response.body.entries[0]).toMatchObject({ cashBalance: "0", totalPortfolioValue: "12300", returnPercent: 23 });
     expect(response.body.entries[1]).toMatchObject({ totalPortfolioValue: "9120", returnPercent: -8.8 });
     expect(marketService.getStock).toHaveBeenCalledTimes(1);
     expect(marketService.getStock).toHaveBeenCalledWith("AAPL");
     // A price change affects the portfolio without any cash movement.
-    jest.mocked(marketService.getStock).mockResolvedValue({ currentPrice: "130" } as never);
+    jest.mocked(marketService.getStock).mockResolvedValue({ currentPrice: "130", status: "ok" } as never);
     const updated = await request(app).get("/api/friends/leaderboard").set("Authorization", auth()).expect(200);
     expect(updated.body.entries[0].totalPortfolioValue).toBe("13300");
 });

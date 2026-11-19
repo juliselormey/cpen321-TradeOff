@@ -33,9 +33,11 @@ Complete the one-time setup first; later runs only require starting the backend 
 >   - use JDK 17 or a compatible bundled JDK for Gradle
 > - [OpenSSL](https://openssl-library.org/source/)
 >   - on Windows, Git normally includes it at `C:\Program Files\Git\usr\bin\openssl.exe`
-> - A [Google account](https://accounts.google.com/), a [Google Cloud project](https://console.cloud.google.com/) for sign-in, and [Alpaca API credentials](https://alpaca.markets/) for stock data
+> - [Alpaca](https://alpaca.markets/) for stock data, [Firebase](https://firebase.google.com/) for push notifs, and a [Google account](https://accounts.google.com/) + [Google Cloud project](https://console.cloud.google.com/) for sign-in
 >   - must be configured; a fresh clone does not contain working credentials for a new tester
 >   - sign up for Alpaca and open a Paper Trading account (choosing Trading API on signup/signin does just fine)
+>   - sign in to Firebase, create a new project w/ package name `com.example.cpen321application`
+>   - you should also need to download a new `frontend/app/google-services.json` file from Firebase and replace the old one
 > 
 > Commands used assume Windows (PowerShell). On macOS/Linux, use `npm`/`npx`, `cp`, `mkdir -p`, `curl`, and `./gradlew` in place of their Windows equivalents.
 > ```powershell
@@ -79,6 +81,7 @@ GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
 JWT_SECRET=YOUR_RANDOM_SECRET
 ALPACA_API_KEY_ID=YOUR_ALPACA_KEY
 ALPACA_API_SECRET_KEY=YOUR_MATCHING_ALPACA_SECRET
+GOOGLE_APPLICATION_CREDENTIALS=./creds/firebase-service-account.json
 ```
 - `DATABASE_URL`: change `YOUR_PASSWORD` to the password you gave it (NOT the root password!)
 - `GOOGLE_CLIENT_ID`: from the Web application OAuth client you made in Frontend 2
@@ -86,22 +89,26 @@ ALPACA_API_SECRET_KEY=YOUR_MATCHING_ALPACA_SECRET
 ```powershell
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-- `ALPACA_API_KEY_ID` from your Alpaca Paper Trading account - namely the API Keys section of the Dashboard
+- `ALPACA_API_KEY_ID`: from your Alpaca Paper Trading account - namely the API Keys section of the Dashboard
 - `ALPACA_API_SECRET_KEY`: see above
+- `GOOGLE_APPLICATION_CREDENTIALS`: from Settings => Service accounts => Generate new private key - match the path!
 
 > [!WARNING]
-> NEVER commit or share any secrets (even example ones, which may be generated project-dependently). Includes API keys and basically the entire `.env` file.
+> NEVER commit or share any secrets (even examples, which may be project-dependent). Includes API keys, `/certs`, `/creds`, `.env`...
 
 ### 3. Create the tables and HTTPS certificate
 
 Ensure you're still in `cpen321-TradeOff/backend/`, then run some cmds:
 ```powershell
+npx.cmd prisma migrate deploy
 npx.cmd prisma generate
-npx.cmd prisma db push
 New-Item -ItemType Directory -Force certs
 ```
 
-`db push` creates the current tables in your new local database. If using an existing database and Prisma warns about data loss, inspect the changes rather than forcing them.
+`prisma migrate deploy` applies existing migrations to the database. `prisma generate` generates the Prisma client.
+
+> [!NOTE]
+> For existing databases previously initialized using `prisma db push`, verify schema equivalence before reconciling migration history. Do not reset an existing database or mark migrations as applied without verification.
 
 Generate the local certificate, the current directory still `cpen321-TradeOff/backend/`, with OpenSSL (If PowerShell cannot find `openssl`, replace `openssl` in that command with `& "C:\Program Files\Git\usr\bin\openssl.exe"` after confirming that file exists):
 ```powershell
@@ -237,6 +244,18 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 ```
 
 > [!CAUTION]
+> Developers creating new Prisma migrations (i.e. you've built before certain backend features e.g. Firebase push notifs) require a separate shadow database. Create this as soon as possible (else some function of the app map break). Run as MySQL root:
+> ```sql
+> CREATE DATABASE IF NOT EXISTS tradeoff_shadow;
+> GRANT ALL PRIVILEGES ON tradeoff_shadow.* TO 'tradeoff_app'@'localhost';
+> ```
+> Add to `backend/.env`:
+> ```dotenv
+> SHADOW_DATABASE_URL="mysql://tradeoff_app:YOUR_PASSWORD@127.0.0.1:3306/tradeoff_shadow"
+> ```
+> The shadow database is not required for normal application usage or `prisma migrate deploy`.
+
+> [!CAUTION]
 > Troubleshooting table - if you run into one of these issues deal with it (else bad things might happen to your build of the app):
 > | Problem | Fix |
 > | --- | --- |
@@ -247,7 +266,7 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 > | Certificate / `Trust anchor` error | Copy the backend's current `cert.pem` to the frontend's `app/src/main/res/raw/cert.pem`, then rebuild/reinstall. |
 > | `MARKET_NOT_CONFIGURED` | Set both Alpaca variables in `backend/.env`, start from `backend/`, and restart the backend. |
 > | Alpaca rejects credentials | Check the matching key/secret pair and IEX access; update both values and restart after regenerating keys. |
-> | Portfolio shows an error | Confirm both URLs use `https://10.0.2.2:3000/`, the full backend is running, and `prisma db push` completed. Check the backend terminal for the exact error. |
+> | Portfolio shows an error | Confirm both URLs use `https://10.0.2.2:3000/`, the full backend is running, and `prisma migrate deploy` completed. Check the backend terminal for the exact error. |
 > | Account/Portfolio stops working after being signed in | Tokens expire after 15 minutes; sign out and back in. |
 > | Port 3000 is already in use | Stop the older backend process before starting another one. |
 > | PowerShell blocks `npm.ps1` | Use `npm.cmd` and `npx.cmd` as shown above. |

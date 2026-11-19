@@ -1,4 +1,5 @@
 import request from 'supertest';
+import type { Express } from 'express';
 import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import { createUser, db, getCash, giveShares, resetDb } from '../helpers/fixtures';
@@ -7,9 +8,9 @@ const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
   require('../helpers/stubprovider').createStubProvider(mockMarket));
 
-let app: any, A: string, B: string;
+let app: Express, A: string, B: string;
 
-beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app; });
+beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app as Express; });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });
 beforeEach(async () => {
   await resetDb();
@@ -64,7 +65,7 @@ describe('Unmocked API: GET /api/portfolio', () => {
     await limit(A, { limitPrice: 90 });
     const p = (await portfolio(A)).body.totalValue;
     const lb = await request(app).get('/api/friends/leaderboard').set(bearer(A));
-    expect(Number(lb.body.entries.find((e: any) => e.isYou).totalPortfolioValue)).toBe(p);
+    expect(Number(lb.body.entries.find((e: unknown) => (e as { isYou: boolean }).isYou).totalPortfolioValue)).toBe(p);
   });
   it('PF-N7 cancelling a pending order empties the list and leaves the total unchanged', async () => {
     const { body } = await limit(A, { limitPrice: 90, quantity: 2 });

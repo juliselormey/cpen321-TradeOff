@@ -6,6 +6,7 @@ import { requireAuth } from '../src/middleware/auth';
 import { db } from '../src/prisma/db';
 import { marketService } from '../src/market/service';
 import { asyncHandler } from '../src/util/asyncHandler';
+import { startLimitOrderWorker, stopLimitOrderWorker } from '../src/market/limitWorker';
 
 const database = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1);
 if (!/^tradeoff_e2e_[a-z0-9_]+$/.test(database) || !process.env.E2E_USER_EMAIL) {
@@ -84,8 +85,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-import { startLimitOrderWorker, stopLimitOrderWorker } from '../src/market/limitWorker';
 
 app.use(createApp());
 

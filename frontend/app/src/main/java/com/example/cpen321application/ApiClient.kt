@@ -90,6 +90,18 @@ object ApiClient {
         return retrofit.create(ApiService::class.java)
     }
 
+    fun friendEventsUrl(): String {
+        val base = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }.trimEnd('/')
+        return base.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/friends/events"
+    }
+
+    fun createFriendEventsClient(context: Context): OkHttpClient {
+        val base = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }
+        return getOkHttpClient(context, base).newBuilder()
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
+    }
     fun createFriends(context: Context): FriendsApi {
         val rawUrl = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }
         val baseUrl = rawUrl.trimEnd('/') + "/"

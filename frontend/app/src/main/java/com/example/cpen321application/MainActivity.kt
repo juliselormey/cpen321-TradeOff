@@ -72,7 +72,8 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import com.example.cpen321application.util.SessionManager
-
+import com.example.cpen321application.notif.createNotificationChannel
+import com.example.cpen321application.notif.NotificationRegistration
 
 data class BottomNavItem(
     val title: String,
@@ -83,6 +84,8 @@ data class BottomNavItem(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel(this)
+        NotificationRegistration.register(applicationContext)
         val api = ApiClient.create(applicationContext)
         enableEdgeToEdge()
         setContent { TradeOffApp(api) }
@@ -160,16 +163,40 @@ private fun AppDestinations(
     onDarkModeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val openTrade: (String) -> Unit = { ticker -> navController.navigate("Trade/" + ticker) }
+    val scope = rememberCoroutineScope()
+
+    val signOut: () -> Unit = {
+        scope.launch {
+            if (NotificationRegistration.signOut(context)) {
+                navController.navigate(Routes.Settings)
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Sign-out failed. Please try again.",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    val openTrade: (String) -> Unit = { ticker ->
+        navController.navigate("Trade/" + ticker)
+    }
+
     val goBack: () -> Unit = { navController.popBackStack() }
+
     NavHost(navController, startDestination = Routes.Market, modifier = modifier) {
         composable(Routes.Portfolio) {
             ProtectedView(apiService = api, onBack = goBack) {
-                PortfolioScreen(apiService = api, onBack = { navController.showMarket() },
+                PortfolioScreen(
+                    apiService = api,
+                    onBack = { navController.showMarket() },
                     onStockSelected = openTrade,
-                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+                    onSignOut = signOut
+                )
             }
         }
+
         composable(Routes.Market) {
             MarketScreen(
                 api = api,
@@ -177,30 +204,51 @@ private fun AppDestinations(
                 onSignInRequired = { navController.navigate(Routes.Login) },
             )
         }
+
         composable(Routes.Social) {
             ProtectedView(apiService = api, onBack = goBack) {
-                SocialScreen(onBack = { navController.showMarket() },
-                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+                SocialScreen(
+                    onBack = { navController.showMarket() },
+                    onSignOut = signOut
+                )
             }
         }
+
         composable(Routes.Settings) {
-            SettingsScreen(api, darkMode, onDarkModeChange, onSignIn = { navController.navigate(Routes.Login) })
+            SettingsScreen(
+                api,
+                darkMode,
+                onDarkModeChange,
+                onSignIn = { navController.navigate(Routes.Login) }
+            )
         }
+
         composable(Routes.Trade) { entry ->
             ProtectedView(apiService = api, onBack = goBack) {
-                TradeScreen(ticker = entry.arguments?.getString("ticker").orEmpty(), apiService = api,
-                    onBack = goBack)
+                TradeScreen(
+                    ticker = entry.arguments?.getString("ticker").orEmpty(),
+                    apiService = api,
+                    onBack = goBack
+                )
             }
         }
+
         composable(Routes.Login) {
-            LoginView(apiService = api, onBack = goBack, onSuccess = {
-                navController.navigate(Routes.Market) {
-                    popUpTo(Routes.Market) { inclusive = true }
-                    launchSingleTop = true
+            LoginView(
+                apiService = api,
+                onBack = goBack,
+                onSuccess = {
+                    navController.navigate(Routes.Market) {
+                        popUpTo(Routes.Market) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
-            })
+            )
         }
-        composable(Routes.home) { HomeScreen(navController) }
+
+        composable(Routes.home) {
+            HomeScreen(navController)
+        }
     }
 }
 
@@ -280,6 +328,7 @@ private suspend fun attemptLogin(
 
         if (response.isSuccessful && body != null) {
             SessionManager.saveToken(context, body.accessToken)
+            NotificationRegistration.register(context)
             LoginOutcome.Success
         } else {
             val errorBody = response.errorBody()?.string()

@@ -40,13 +40,13 @@ export interface Valuation {
     allocation: { label: string; percent: number }[];
 }
 
-/** One request per distinct ticker, served from the shared market cache. Missing/invalid prices map to null. */
+/** One request per distinct ticker, served from the shared market cache. Only fresh, valid prices are usable; stale/unavailable prices map to null. */
 export async function loadPrices(tickers: Iterable<string>): Promise<Map<string, Decimal | null>> {
     const symbols = Array.from(new Set(tickers));
     return new Map(await Promise.all(symbols.map(async (ticker) => {
         try {
             const stock = await marketService.getStock(ticker);
-            const price = stock.currentPrice == null ? null : new Prisma.Decimal(stock.currentPrice);
+            const price = stock.status !== "ok" || stock.currentPrice == null ? null : new Prisma.Decimal(stock.currentPrice);
             return [ticker, price?.isFinite() && price.greaterThan(0) ? price : null] as const;
         } catch {
             return [ticker, null] as const;

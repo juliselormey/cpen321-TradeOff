@@ -58,6 +58,7 @@ class SendFriendRequestE2ETest {
     }
 
     private fun participant(index: Int) = fixtures.getJSONArray("users").getJSONObject(index).getString("id")
+    private fun participantUsername(index: Int) = fixtures.getJSONArray("users").getJSONObject(index).getString("username")
     private fun snapshot() = fixture("account/snapshot", get = true)
     private fun waitFor(text: String) = compose.waitUntil(30_000) {
         compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
@@ -73,13 +74,13 @@ class SendFriendRequestE2ETest {
     }
 
     private fun addFriend(id: String) {
-        // Success 4-6: open the form, enter the ID and submit through the UI.
+        // Success 4-6: open the form, enter the username and submit through the UI.
         compose.onNodeWithText("Add friend").performScrollTo().performClick()
         enterAndSend(id)
     }
 
     private fun enterAndSend(id: String) {
-        compose.onNodeWithText("Friend ID").performTextReplacement(id)
+        compose.onNodeWithText("Friend username").performTextReplacement(id)
         closeSoftKeyboard()
         compose.waitUntil(30_000) {
             compose.onAllNodes(hasText("Send request") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
@@ -97,7 +98,9 @@ class SendFriendRequestE2ETest {
         val before = snapshot()
         val meResponse = runBlocking { api.me(auth) }
         check(meResponse.isSuccessful)
-        val me = requireNotNull(meResponse.body()).user.id
+        val profile = requireNotNull(meResponse.body()).user
+        val me = profile.id
+        val myUsername = requireNotNull(profile.username)
         openFriends()
         // Success 3: existing accepted friends and pending requests are shown.
         compose.onNodeWithText("Outgoing requests (1)").performScrollTo().assertIsDisplayed()
@@ -106,23 +109,23 @@ class SendFriendRequestE2ETest {
         compose.onNodeWithText("E2E Trader 1").performScrollTo().assertIsDisplayed()
 
         // Failure 7b: an accepted friendship already exists. Return to Friends.
-        addFriend(participant(0))
+        addFriend(participantUsername(0))
         assertRejected("You're already friends or have a pending request. Check incoming requests.", before)
         compose.onNodeWithText("Cancel").performClick()
         // Failure 7b also covers a pending outgoing request, without duplicating it.
-        addFriend(participant(6))
+        addFriend(participantUsername(6))
         assertRejected("You're already friends or have a pending request. Check incoming requests.", before)
         compose.onNodeWithText("Cancel").performClick()
 
-        // Failure 7c-7c2: reject own ID, then cancel the form.
-        addFriend(me)
+        // Failure 7c-7c2: reject own username, then cancel the form.
+        addFriend(myUsername)
         assertRejected("You cannot add yourself.", before)
         compose.onNodeWithText("Cancel").performClick()
 
-        // Failure 7a-7a2: a syntactically valid but unknown ID; correct it in place.
-        addFriend(UUID.randomUUID().toString())
-        assertRejected("This user or request is no longer available. Refresh and try again.", before)
-        enterAndSend(participant(7))
+        // Failure 7a-7a2: a syntactically valid but unknown username; correct it in place.
+        addFriend("missing_" + UUID.randomUUID().toString().replace("-", "").take(16))
+        assertRejected("This username or request was not found. Refresh and try again.", before)
+        enterAndSend(participantUsername(7))
         // Success 7-9: actual production API creates the pending request and reloads UI.
         waitFor("Friend request sent.")
         compose.onNodeWithText("Friend request sent.").performScrollTo().assertIsDisplayed()

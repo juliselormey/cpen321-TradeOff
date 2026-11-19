@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CPEN321 Application"
+rootProject.name = "cpen321-TradeOff-real"
 include(":app")

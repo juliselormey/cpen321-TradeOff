@@ -5,14 +5,15 @@ import { createE2ERouter } from '../../src/routes/e2e';
 import { db } from '../../src/prisma/db';
 
 jest.mock('../../src/prisma/db', () => ({ db: {
-    user: { findUnique: jest.fn(), deleteMany: jest.fn() },
+    user: { findUnique: jest.fn(), deleteMany: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn(),
 } }));
 
 describe('POST /__e2e/account/reset - fixture safeguards (mock database)', () => {
     const original = { ...process.env };
     const tx = {
-        user: { deleteMany: jest.fn(), create: jest.fn(async () => ({ id: 'fixture-user' })) },
+        user: { deleteMany: jest.fn(), create: jest.fn(async () => ({ id: 'fixture-user', username: 'fixture_name' })),
+            findUnique: jest.fn(async () => ({ username: 'existing_name' })), update: jest.fn() },
         friendship: { deleteMany: jest.fn(), create: jest.fn() },
         order: { deleteMany: jest.fn() },
         trade: { deleteMany: jest.fn() },
@@ -69,6 +70,7 @@ describe('POST /__e2e/account/reset - fixture safeguards (mock database)', () =>
             .set('Authorization', `Bearer ${token}`).expect(200);
         expect(tx.user.create).toHaveBeenCalledTimes(8);
         expect(tx.friendship.create).toHaveBeenCalledTimes(7);
+        expect(tx.user.update).not.toHaveBeenCalled(); // Preserve an existing chosen username.
         expect(tx.friendship.create.mock.calls.filter(call =>
             (call as unknown as [{ data: { status: string } }])[0].data.status === 'ACCEPTED')).toHaveLength(6);
         expect(tx.user.deleteMany).toHaveBeenCalledWith({ where: { googleSub: { startsWith: 'e2e-leaderboard:current-user:' } } });
@@ -81,5 +83,19 @@ describe('POST /__e2e/account/reset - fixture safeguards (mock database)', () =>
         await request(app()).post('/__e2e/leaderboard/cleanup').send({ userId: 'other-user' })
             .set('Authorization', `Bearer ${token}`).expect(200);
         expect(db.user.deleteMany).toHaveBeenCalledWith({ where: { googleSub: { startsWith: 'e2e-leaderboard:current-user:' } } });
+    });
+    test('assigns a temporary self username only when missing, then scopes restoration to that exact value', async () => {
+        (tx.user.findUnique as jest.Mock).mockResolvedValueOnce({ username: null });
+        const token = jwt.sign({ sub: 'current-user' }, process.env.JWT_SECRET!);
+        await request(app()).post('/__e2e/leaderboard/setup').send({ empty: true })
+            .set('Authorization', `Bearer ${token}`).expect(200);
+        const update = (tx.user.update as jest.Mock).mock.calls[0][0];
+        expect(update.where).toEqual({ id: 'current-user' });
+        expect(update.data.username).toMatch(/^e2e_[a-f0-9]{12}_self$/);
+        await request(app()).post('/__e2e/leaderboard/cleanup')
+            .set('Authorization', `Bearer ${token}`).expect(200);
+        expect(db.user.updateMany).toHaveBeenCalledWith({
+            where: { id: 'current-user', username: update.data.username }, data: { username: null },
+        });
     });
 });

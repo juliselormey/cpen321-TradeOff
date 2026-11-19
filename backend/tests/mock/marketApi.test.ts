@@ -31,13 +31,11 @@ function fixture() {
 }
 
 let f: ReturnType<typeof fixture>;
-let provider: any;
-const expireCache = () => f.advance(8_000 + 1);
+const expireCache = () => { f.advance(8_000 + 1); };
 
 beforeEach(() => {
   jest.useFakeTimers(FAKE_DATE);
   f = fixture();
-  provider = f;
 });
 afterEach(() => jest.useRealTimers());
 
@@ -74,7 +72,7 @@ describe('Mocked API: GET /api/market/stocks', () => {
   it('MKT-04 expired cache + provider error → 200 with stale status', async () => {
     await list();
     expireCache();
-    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    f.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
     const res = await list();
     expect(res.status).toBe(200);
     expect(res.body.stocks.every((s: { status: string }) => s.status === 'stale')).toBe(true);
@@ -82,26 +80,26 @@ describe('Mocked API: GET /api/market/stocks', () => {
 
   it('MKT-05 fresh cache + provider error → 200 from cache', async () => {
     await list();
-    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    f.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
     const res = await list();
     expect(res.status).toBe(200);
-    expect(provider.fetchQuotes).toHaveBeenCalledTimes(1);
+    expect(f.fetchQuotes).toHaveBeenCalledTimes(1);
   });
 
   it('MKT-06 cold cache + provider error → 200 with unavailable status', async () => {
-    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    f.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
     const res = await list();
     expect(res.status).toBe(200);
     expect(res.body.stocks.every((s: { status: string; currentPrice: unknown }) => s.status === 'unavailable' && s.currentPrice === null)).toBe(true);
   });
 
   it('MKT-15 after a failure the provider recovers → fresh data, no restart (NFR-3)', async () => {
-    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    f.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
     const failedRes = await list();
     expect(failedRes.status).toBe(200);
     expect(failedRes.body.stocks[0].status).toBe('unavailable');
 
-    provider.fetchQuotes.mockResolvedValue(Object.fromEntries(catalogTickers.map(s => [s, { ...QUOTE, price: 120 }])));
+    f.fetchQuotes.mockResolvedValue(Object.fromEntries(catalogTickers.map(s => [s, { ...QUOTE, price: 120 }])));
     expireCache(); // 8 s, well inside the 16 s bound
     const res = await list();
     expect(res.status).toBe(200);
@@ -124,7 +122,7 @@ describe('Mocked API: GET /api/market/stocks/:symbol', () => {
   it('MKT-11 expired cache + provider error → 200 with stale status', async () => {
     await one(T);
     expireCache();
-    provider.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
+    f.fetchQuotes.mockRejectedValue(new Error('alpaca down'));
     const res = await one(T);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('stale');
@@ -136,7 +134,7 @@ describe('Mocked API: GET /api/market/stocks/:symbol/history', () => {
     const res = await hist(T);
     expect(res.status).toBe(200);
     expect(res.body.points.length).toBeGreaterThan(0);
-    const times = res.body.points.map((p: any) => Date.parse(p.timestamp));
+    const times = res.body.points.map((p: { timestamp: string }) => Date.parse(p.timestamp));
     expect(times).toEqual([...times].sort((a, b) => a - b));
     expect(res.body.points[0]).toEqual(expect.objectContaining({ timestamp: expect.any(String), price: expect.any(Number) }));
   });
@@ -144,7 +142,7 @@ describe('Mocked API: GET /api/market/stocks/:symbol/history', () => {
     expectError(await hist(UNSUPPORTED), 404);
   });
   it('MKT-14 provider error → 200 with unavailable status', async () => {
-    provider.fetchHistory.mockRejectedValue(new Error('alpaca down'));
+    f.fetchHistory.mockRejectedValue(new Error('alpaca down'));
     const res = await hist(T);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('unavailable');

@@ -6,6 +6,35 @@ The normal backend runs with `npm run dev`; then use one of the documented test 
 
 ## Commands for the five formal use cases
 
+After integrating `fb-nfr-thing`, Send Friend Request uses **usernames**, not UUID
+friend IDs. The formal use case, test input and generated participant usernames
+have been updated together. Firebase notifications and authenticated friend-event
+WebSockets remain enabled; no notification/WS feature is replaced by test behavior.
+
+Integration checks: backend TypeScript/production build passed; NFR **8/8**;
+targeted Firebase/WebSocket/username/limit-worker/fixture tests **55/55**, followed
+by the expanded fixture-safeguard suite **7/7**. Migration deployment was validated
+in an isolated scratch database; only the additive notification-device migration
+was then applied to the existing local test database. The duplicate trading-table
+migration was excluded; see Local E2E Setup before deploying to another database.
+
+Known broader-suite limitations: the mocked backend run reported **280 passed,
+11 failed, 1 TODO**, with all failures in the legacy `tests/mock/market.test.ts`.
+A comparison using the pre-merge Alpaca adapter also failed (13 cases), so this
+merge does not claim a clean legacy Market suite. The old Android `TradeStateTest`
+still references removed APIs and prevents compiling the full unit-test suite.
+The Settings instrumentation fake now includes the new notification API methods.
+Android application/instrumentation compilation and installation passed. The
+first merged friend-request E2E attempt stopped in setup with HTTP 401 (expired
+login), before any scenario action. After the tester signed in again, the combined
+runner completed **all five E2E tests successfully**, in order: Browse Stocks,
+Market Buy, View Portfolio, View Leaderboard, Send Friend Request (usernames).
+The corresponding Gradle invocations reported success in 3m 4s, 32s, 34s, 27s
+and 36s. Saved HTML reports are under
+`frontend/app/build/reports/e2e-all/20261118-215113-763/<test-class>/index.html`.
+This is local Pixel 9 API 36 verification using the normal merged backend.
+Real Firebase push delivery is not verified by these E2E/fixture checks.
+
 Complete [Local E2E Setup](Local_E2E_Setup.md) once: running MySQL/MariaDB,
 isolated test database with migrations, real Google/Alpaca credentials in
 `backend/.env`, `E2E_ENABLED=true`, and matching Android/backend URLs.
@@ -226,7 +255,7 @@ The combined runner now selects all five formal-use-case suites.
 
 Preparation resets only the signed-in test account's trading state, replaces its
 friendships, and reuses the guarded real database participant setup described for
-Leaderboard. The setup now returns generated participant IDs to the test; it
+Leaderboard. The setup now returns generated participant IDs and usernames to the test; it
 does not supply replacement production responses. Existing accepted friends,
 one pending outgoing request and an unrelated target are independent of old data.
 No second Google login or manually prepared recipient is needed. Cleanup removes
@@ -237,16 +266,16 @@ friendships/trading data are not restored; use only the disposable test database
 | --- | --- |
 | Preconditions | Require actual Google authentication and matching backend URLs; create independent participants automatically. |
 | Success 1–3 | Navigate Market → Social → Friends; verify existing accepted friends and outgoing pending requests are displayed. |
-| Success 4–6 | Open Add friend, enter the unrelated participant's actual generated UUID and submit through the UI. |
+| Success 4–6 | Open Add friend, enter the unrelated participant's actual generated username and submit through the UI. |
 | Success 7–8 | Production API verifies the target and creates the relationship. Inspect actual DB evidence: exactly one additional relationship, PENDING status, correct sender/recipient, and no change to previous relationships. |
 | Success 9 / postcondition | Check sent confirmation and target in outgoing requests; reopen Friends and verify the same request remains pending exactly once through both UI and real API/DB evidence. |
-| Failure 7a–7a2 | Submit a random valid-format UUID with no user; verify the not-found error and unchanged database, then correct the ID in the same form and submit successfully. |
+| Failure 7a–7a2 | Submit a random valid-format username with no user; verify the not-found error and unchanged database, then correct the username in the same form and submit successfully. |
 | Failure 7b–7b2 | Attempt both an already accepted friend and an already pending recipient; verify the relationship-conflict error, no extra records, and Cancel back to Friends. |
-| Failure 7c–7c2 | Submit the current user's actual ID; verify self-add rejection and unchanged database, then cancel. |
+| Failure 7c–7c2 | Submit the current user's actual username; verify self-add rejection and unchanged database, then cancel. |
 | Additional invariants | All participants' balances, positions, trades and orders are unchanged by accepted/rejected friend-request actions. |
 
 All listed formal success/failure scenarios are covered; no failure omission or
-injected provider/server error is needed for this use case. The self-ID rejection
+injected provider/server error is needed for this use case. The self-username rejection
 is performed by the real UI; the conflict/not-found failures use the actual API.
 
 Verified on Pixel 9 API 36 with the normal local backend: **1 test, 0 failures,
@@ -263,6 +292,7 @@ No cloud or physical-device execution is claimed.
 | 2026-11-03 | Section 2.1: Market API tests | Specify mocked and live integration tests for every Market HTTP interface. |
 | 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
 | 2026-11-04 | Section 2.1: Renumbered Use Cases | Renumber use cases following the removal of delete account (UC-05 to UC-19). |
+| 2026-11-18 | Section 3: Non-functional testing | Replace template placeholders with NFR-1/2/3 tests, run instructions, measured results, evidence locations, and the stale-price production fix. |
 
 ---
 
@@ -340,28 +370,129 @@ _(Placeholder for Jest coverage screenshot without mocks)_
 
 ## 3. Tests of Non-Functional Requirements
 
-### 3.1. Test Locations in Git
+### 3.1. Test Locations and Expected Results
 
-| **Non-Functional Requirement**  | **Location in Git**                            |
-| ------------------------------- | ---------------------------------------------- |
-| **Performance (Response Time)** | [`backend/tests/nfr/response_time.test.js`](#) |
-| **Chat Data Security**          | [`backend/tests/nfr/chat_security.test.js`](#) |
+| Requirement | Test file | Workload and pass condition |
+| --- | --- | --- |
+| NFR-1: Response-Time Consistency | [responseTime.test.ts](../backend/tests/nfr/responseTime.test.ts) | Warm the cache, then send 100 sequential requests to each of three Market endpoint shapes (300 total). Each endpoint's p95 must be strictly below 1000 ms; every response must be successful and contain usable data. |
+| NFR-2: Concurrent-Load Efficiency | [concurrentLoad.test.ts](../backend/tests/nfr/concurrentLoad.test.ts) | Start 10 concurrent simulated users, each sending 30 requests (300 total, 100 per endpoint). Each endpoint's p95 must be below 1000 ms, with no failed or invalid responses. |
+| NFR-3: External-Service Reliability | [providerRecovery.test.ts](../backend/tests/nfr/providerRecovery.test.ts) | Verify retained data is stale during an outage, never-retrieved data is unavailable, trading and portfolio valuation reject unusable prices, and the same service instance recovers after the retry delay without restarting. |
 
-### 3.2. Test Verification and Logs
+The endpoint shapes are `GET /api/market/stocks`, `GET /api/market/stocks/:symbol`,
+and `GET /api/market/stocks/:symbol/history`. AAPL represents the parameterized
+routes; this is not a separate load test for every symbol in the catalog.
 
-- **Performance (Response Time)**
-    - **Verification:** This test suite simulates multiple concurrent API calls using Jest along with a load-testing utility to mimic real-world user behavior. The focus is on key endpoints such as user login and study group search to ensure that each call completes within the target response time of 2 seconds under normal load. The test logs capture metrics such as average response time, maximum response time, and error rates. These logs are then analyzed to identify any performance bottlenecks, ensuring the system can handle expected traffic without degradation in user experience.
-    - **Log Output**
-      ```
-      [Placeholder for response time test logs]
-      ```
+### 3.2. How to Run
 
-- **Chat Data Security**
-    - **Verification:** ...
-    - **Log Output**
-      ```
-      [Placeholder for chat security test logs]
-      ```
+From the repository root in PowerShell:
+
+```powershell
+cd backend
+npm.cmd run test:nfr
+```
+
+If Android Studio's terminal starts in `frontend/`, use `cd ../backend` instead.
+The backend dependencies and generated Prisma client must already exist. On a
+fresh checkout, install dependencies as described in the project setup and run
+`npx.cmd prisma generate`. No running backend, MySQL database, emulator, real
+API keys, or cloud configuration is required for these NFR tests.
+
+To run only one requirement from `backend/`:
+
+```powershell
+npm.cmd run test:nfr -- responseTime
+npm.cmd run test:nfr -- concurrentLoad
+npm.cmd run test:nfr -- providerRecovery
+```
+
+The runner uses [jest.nfr.config.js](../backend/jest.nfr.config.js), runs suites
+serially, and exits with a nonzero code if any test fails.
+
+### 3.3. Measurement and Failure-Injection Method
+
+- **NFR-1/2:** Supertest exercises the real HTTP router, market cache, processing,
+  and serialization. Only the external provider is stubbed, so cache expiry
+  cannot introduce live Alpaca latency. Warm-up requests are excluded. Real
+  timers and `performance.now()` measure each request; coverage instrumentation
+  is disabled to avoid distorting timing. p95 is the nearest-rank value at
+  `ceil(0.95 * N)` in sorted durations. Status codes and response contents are
+  checked so fast error or empty responses cannot pass.
+- **NFR-2:** Ten workers start together and each awaits its own response before
+  sending another request, while the other workers continue. Requests rotate
+  across all three endpoint shapes. This is a fixed-load test, not a test of
+  maximum capacity or stress to failure.
+- **NFR-3:** Six cases use fake time and a controllable provider to exercise warm
+  and cold caches, outage retention, rejection by trading and portfolio
+  valuation, retry suppression just before the deadline, and recovery just
+  after it. Production price consumers delegate to the real market service
+  under test. Database access is mocked; no real trades are placed.
+
+These choices follow the supplied lecture notes: W7 L2 Testing I, pages 14 and
+40-45 (test oracles and controlled external failures), and W8 L1 Testing II,
+pages 24-28, 49, and 65 (measured performance, non-functional testing, regression
+tests, and automation). Thresholds and workloads come from the project's NFRs.
+
+### 3.4. Verified Results and Saved Evidence
+
+The verification run after the production stale-price fix passed **3 suites,
+8 tests, 0 failures**. The recorded local measurements are:
+
+| Requirement | Endpoint | Measured requests | p95 (ms) | Failed/invalid responses |
+| --- | --- | --- | --- | --- |
+| NFR-1 | `/api/market/stocks` | 100 | 8.19 | 0 |
+| NFR-1 | `/api/market/stocks/AAPL` | 100 | 1.69 | 0 |
+| NFR-1 | `/api/market/stocks/AAPL/history` | 100 | 1.50 | 0 |
+| NFR-2 | `/api/market/stocks` | 100 | 36.19 | 0 |
+| NFR-2 | `/api/market/stocks/AAPL` | 100 | 33.35 | 0 |
+| NFR-2 | `/api/market/stocks/AAPL/history` | 100 | 33.34 | 0 |
+
+Timing report timestamps (UTC): NFR-1 `2026-11-19T02:00:34.446Z`;
+NFR-2 `2026-11-19T02:00:35.467Z`. Environment: Node
+`v22.23.3`, `win32 10.0.26200`,
+AMD Ryzen 7 9800X3D 8-Core Processor.
+
+These are recorded results, not guaranteed future timings. The run verified the
+working tree containing the NFR additions and fix; no tested commit hash was
+captured. Record the final submitted commit when rerunning for submission.
+
+Generated evidence is saved under `backend/reports/nfr/`:
+
+- `NFR-1.json`: all sequential request timings, endpoint summaries, and environment.
+- `NFR-2.json`: all concurrent request timings, endpoint summaries, and environment.
+- `results.json`: Jest test outcomes and any failure details from the latest run.
+
+These files are ignored by Git. Save copies and a terminal screenshot with the
+submission. Reruns overwrite reports; a single-requirement run replaces
+`results.json` with only that run's outcomes. If a run times out before writing
+timings, do not use an older timing file as evidence for the failed run.
+
+### 3.5. NFR-3 Defect Found and Fixed
+
+The original suite failed because `loadPrices` accepted a positive retained
+price even when its status was `stale`. Portfolio valuation could consequently
+present outdated prices as current during a provider outage.
+
+The production fix in [valuation.ts](../backend/src/market/valuation.ts) requires
+`status === "ok"` before accepting a price. Stale or unavailable quotes map to
+null, causing held positions to raise `PriceUnavailableError`; the portfolio
+API handles that error with HTTP 503. Fresh prices become usable again after
+provider recovery. The NFR assertions were not weakened or changed to pass.
+
+After the fix, all 8 NFR tests, 35 mocked portfolio/trading API tests, and the
+TypeScript typecheck passed. The additional checks were:
+
+```powershell
+npm.cmd run typecheck
+npm.cmd test -- --runInBand --coverage=false tests/mock/portfolioApi.test.ts tests/mock/tradesApi.test.ts
+```
+
+### 3.6. Scope and Limitations
+
+These tests measure local backend behavior with a controlled provider. They do
+not establish deployed-server capacity, real Alpaca reliability or latency,
+database performance, HTTPS/proxy latency, mobile-network latency, or Android
+rendering time. They complement, rather than replace, frontend end-to-end tests.
+
 
 ---
 

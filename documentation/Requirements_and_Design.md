@@ -7,6 +7,7 @@
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 | 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
 | 2026-11-03      | Continuation of changes on 2026-11-01 (3.2, 3.4, 3.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7) | In response to CP2 submission, backend changes, and TA feedback |
+| 2026-11-18 | Section 4.7: NFR design | Align the implemented concurrent workload, freshness enforcement, and testing-document reference. |
 
 ---
 
@@ -54,7 +55,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 11. **[trading] Cancel Pending Orders** - Cancel a pending limit order. TradeOff removes the order and releases any cash reserved for it.
 12. **[portfolio] View Portfolio** - View cash balance, stock holdings, total value, asset allocation, profit and loss, and pending orders on the Portfolio page.
 13. **[portfolio] View Transaction History** - View the list of the user’s completed trades.
-14. **[social] Send Friend Request** - Send a friend request to another TradeOff user by their friend ID. TradeOff creates a pending request.
+14. **[social] Send Friend Request** - Send a friend request to another TradeOff user by their unique username. TradeOff creates a pending request.
 15. **[social] Accept Friend Request** - Accept an incoming pending request. TradeOff creates the friendship and updates both users’ lists.
 16. **[social] Decline Friend Request** - Decline an incoming pending request. TradeOff removes the request.
 17. **[social] Cancel Friend Request** - Cancel a request the user sent that is still pending. TradeOff removes the request.
@@ -143,7 +144,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 <a name="fucs4"></a>
 
 4. **Send Friend Request**
-    - Description: Send a friend request to another TradeOff user by their friend ID. TradeOff creates a pending request.
+    - Description: Send a friend request to another TradeOff user by their unique username. TradeOff creates a pending request.
     - Primary Actor(s): Trader
     - Preconditions:
         - Trader is authenticated and has access to the Social page
@@ -154,21 +155,21 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
         - (2) Trader selects the Friends section
         - (3) System displays the Trader's existing friends and pending friend requests
         - (4) Trader chooses to add a friend
-        - (5) Trader enters the other user's friend ID
+        - (5) Trader enters the other user's username
         - (6) Trader submits the friend request
         - (7) System verifies that the user exists and that no request or friendship with them exists
         - (8) System creates a pending friend request
         - (9) System displays the request in the Trader's outgoing requests
     - Some Failure Scenarios:
-        - (7a) No user has the entered friend ID.
+        - (7a) No user has the entered username.
             - (7a1) System informs the Trader that the user could not be found
-            - (7a2) Trader corrects the friend ID and returns to step 6, or cancels
+            - (7a2) Trader corrects the username and returns to step 6, or cancels
         - (7b) A pending request or friendship with that user already exists.
             - (7b1) System rejects the request and indicates the existing relationship
             - (7b2) Trader returns to the Friends section
-        - (7c) The entered friend ID is the Trader's own.
+        - (7c) The entered username is the Trader's own username.
             - (7c1) System rejects the request and indicates that a user cannot add themselves
-            - (7c2) Trader corrects the friend ID and returns to step 6, or cancels
+            - (7c2) Trader corrects the username and returns to step 6, or cancels
 
 <a name="fucs5"></a>
 
@@ -301,8 +302,8 @@ Individual stock-detail requests return the stock's available data and status wh
       2. `GET /api/friends/requests (JWT) → FriendRequestList`
          - **Purpose**: Lists pending requests.
          - `FriendRequestList { incoming: [FriendRequest], outgoing: [FriendRequest] }`, `FriendRequest { id, senderId, receiverId, status: 'pending' }`
-      3. `POST /api/friends/requests (JWT, { userId }) → FriendRequest`
-         - **Purpose**: Sends a friend request (UC-15). Errors: 400 missing or own id, 404 user not found, 409 request or friendship already exists.
+      3. `POST /api/friends/requests (JWT, { username }) → FriendRequest`
+         - **Purpose**: Sends a friend request (UC-15). Errors: 400 invalid or own username, 404 user not found, 409 request or friendship already exists.
       4. `POST /api/friends/requests/:id/accept (JWT) → Result`
          - **Purpose**: Accepts an incoming request (UC-16). Errors: 403 caller is not the receiver, 404, 409 already accepted.
       5. `DELETE /api/friends/requests/:id (JWT) → Result`
@@ -350,7 +351,10 @@ Individual stock-detail requests return the stock's available data and status wh
     - **Implementation**: `backend/tests/nfr/responseTime.test.ts` warms the cache using a stubbed provider, sends 100 sequential requests to each Market endpoint with Supertest, records every response time, and asserts that the 95th percentile of each endpoint is under 1000 ms. 
         The provider is stubbed so that a cache expiry during the run cannot add Alpaca's latency.
 2. **Concurrent-Load Efficiency (NFR-2)**
-    - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that send at least 100 requests in total to cached Market endpoints. It asserts that the 95th percentile is under 1000 ms and that every response is successful.
+    - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that each send 30 requests (300 total, 100 per endpoint) to cached Market endpoints. It asserts that each endpoint's 95th percentile is under 1000 ms and that every response is successful and contains usable data.
 3. **External-Service Reliability (NFR-3)**
     - **Implementation**: `backend/tests/nfr/providerRecovery.test.ts` simulates provider failures and verifies that previously retrieved quotes and history are retained with `status: 'stale'`, while data that has never been retrieved is reported as `status: 'unavailable'`. 
         It verifies that stale quotes are rejected by trading and portfolio valuation, then restores the provider, advances Jest's fake timers past the provider retry delay, and asserts that the next eligible market-data request retrieves fresh data and changes the status to `ok` without restarting the application or backend.
+
+
+Run all three requirements from `backend/` using `npm.cmd run test:nfr`. See [Testing, section 3](Testing.md#3-tests-of-non-functional-requirements) for the workloads, measurement method, verified results, and saved evidence. Portfolio price loading accepts only quotes with `status: 'ok'`, ensuring stale prices are rejected until recovery.

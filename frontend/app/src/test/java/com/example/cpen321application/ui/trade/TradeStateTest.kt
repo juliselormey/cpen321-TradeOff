@@ -17,33 +17,33 @@ class TradeStateTest {
 
     @Test
     fun quoteRefreshRecalculatesOrderAffordability() = runBlocking {
-        val state = TradeState(getStockInfo("AAPL"), { false }, null, market, this)
+        val state = TradeState("AAPL", { false }, null, market, this)
         state.availableCash = 195.0
         state.updateQuantity("1")
         assertTrue(state.isBuyEnabled)
         state.refreshQuote()
         assertFalse(state.isBuyEnabled)
         assertEquals(200.0, state.totalAmount, 0.001)
-        assertEquals(2.0, state.activeStockInfo.change, 0.001)
+        assertEquals(2.0, state.marketChange!!, 0.001)
     }
 
     @Test
     fun limitPriceValidationAndEstimateFollowFormEdits() = runBlocking {
-        val state = TradeState(getStockInfo("AAPL"), { false }, null, market, this)
+        val state = TradeState("AAPL", { false }, null, market, this)
         state.updateQuantity("2")
         state.selectOrderType("LIMIT")
         state.updateLimitPrice("0")
         assertFalse(state.isBuyEnabled)
-        assertTrue(state.showInvalidLimitPrice)
+        assertNotNull(state.inputError)
         state.updateLimitPrice("150")
         assertTrue(state.isBuyEnabled)
-        assertFalse(state.showInvalidLimitPrice)
+        assertNull(state.inputError)
         assertEquals(300.0, state.totalAmount, 0.001)
     }
 
     @Test
     fun previewBuyAndSellKeepOppositeCashAndShareDirections() = runBlocking {
-        val state = TradeState(getStockInfo("AAPL"), { false }, null, market, this)
+        val state = TradeState("AAPL", { false }, null, market, this)
         state.refreshQuote()
         state.updateQuantity("2")
         state.submit("BUY")
@@ -61,7 +61,7 @@ class TradeStateTest {
         val cancelledMarket = object : MarketApiService {
             override suspend fun getStocks(): MarketResponse = throw CancellationException("stopped")
         }
-        val state = TradeState(getStockInfo("AAPL"), { false }, null, cancelledMarket, this)
+        val state = TradeState("AAPL", { false }, null, cancelledMarket, this)
         try {
             state.refreshQuote()
             fail("Cancellation must propagate to lifecycle polling")

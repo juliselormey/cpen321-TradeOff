@@ -1,8 +1,10 @@
 import { createApp } from './app';
+import { attachFriendEvents } from './realtime/friendEvents';
 import { env } from './config/env';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import http from 'http';
 import { db } from './prisma/db';
 import { startLimitOrderWorker, stopLimitOrderWorker } from './market/limitWorker';
 
@@ -14,14 +16,18 @@ function getCertBuffer(filePath: string): Buffer {
   return fs.readFileSync(resolved);
 }
 
-const sslOptions = {
-  key: getCertBuffer(env.sslKeyPath),
-  cert: getCertBuffer(env.sslCertPath),
-};
+// Local Android emulator development can opt into loopback HTTP. Cloud stays HTTPS.
+const localHttp = process.env.LOCAL_HTTP === 'true';
+const server = localHttp
+  ? http.createServer(app)
+  : https.createServer({
+      key: getCertBuffer(env.sslKeyPath),
+      cert: getCertBuffer(env.sslCertPath),
+    }, app);
 
-const server = https.createServer(sslOptions, app);
+const closeFriendEvents = attachFriendEvents(server);
 
-server.listen(env.port, () => {
+server.listen(env.port, localHttp ? '127.0.0.1' : '0.0.0.0', () => {
     console.log("Server listening");
     startLimitOrderWorker();
 });
@@ -29,6 +35,7 @@ server.listen(env.port, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     stopLimitOrderWorker();
+    closeFriendEvents();
     server.close(() => {
       db.$disconnect().catch((error: unknown) => {
         console.error("Database shutdown failed", error);

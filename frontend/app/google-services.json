@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "286925104352",
+    "project_id": "tradeoffpush",
+    "storage_bucket": "tradeoffpush.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:286925104352:android:fd95d4cdbb0ad1358ddc85",
+        "android_client_info": {
+          "package_name": "com.example.cpen321application"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIyRo07xJqbNJpW-FzQWerD1qVTvr6geU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

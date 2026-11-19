@@ -132,8 +132,7 @@ Official contract references:
 
 All 100 stock logos are bundled locally as user-supplied PNGs. No logo service,
 additional key, network request or image-loading dependency is required.
-GOOGL uses Google's mark for Alphabet's listing. Supplied filenames and
-provenance notes are in frontend/third_party/stock-logos/. Stocks without a
+GOOGL uses Google's mark for Alphabet's listing. Stocks without a
 bundled logo display their ticker in the logo tile.
 
 ## Verification
@@ -164,3 +163,9 @@ real backend connection plus all six symbols' names, logos and charts.
 Manually verify that fetchedAt stays fixed within the cache TTL, advances
 after a successful refresh, and that navigating away stops polling. Stop
 and restart the server to check retained values and automatic recovery.
+# Local acceptance testing
+
+For Browse Stocks, Place Market Buy, View Portfolio, View Leaderboard and Send Friend Request, use the full ordinary backend via
+`npm run dev` and follow [Local E2E Setup](../../../documentation/Local_E2E_Setup.md).
+Market-only servers and deterministic fixtures below are separate development
+tools; they do not replace the authenticated backend for these acceptance tests.

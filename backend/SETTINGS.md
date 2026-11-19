@@ -1,5 +1,9 @@
 # Settings and profile deployment
 
+For local acceptance-test setup with the ordinary backend, see
+[Local E2E Setup](../documentation/Local_E2E_Setup.md). The Compose rollout below
+is separate from local testing and is not required to run the five E2E features.
+
 The Android app has a Settings tab with Google sign-in/sign-out, a persistent
 device-local light/dark preference, and account display-name/username editing.
 
@@ -29,8 +33,8 @@ Google client ID remain supplied by the server's Compose configuration.
 
 ## API
 
-- GET /api/users/me: authenticated profile (id, email, displayName, username).
-- PATCH /api/users/me: authenticated update with displayName and username only.
+- GET /api/auth/me: authenticated profile (id, email, displayName, username).
+- PATCH /api/auth/me: authenticated update with displayName and username only.
 - 400 for invalid input, 401 for missing/expired session, 403 for a banned account,
   409 for a username collision.
 - Existing POST /api/auth/me remains supported.

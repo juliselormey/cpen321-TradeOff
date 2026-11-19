@@ -7,6 +7,7 @@
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 | 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
 | 2026-11-03      | Continuation of changes on 2026-11-01 (3.2, 3.4, 3.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7) | In response to CP2 submission, backend changes, and TA feedback |
+| 2026-11-18 | Section 4.7: NFR design | Align the implemented concurrent workload, freshness enforcement, and testing-document reference. |
 
 ---
 
@@ -30,7 +31,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **3.2. Use Case Diagram**
 
-![3.2-use-case-diagram](images/3.2-use-case-diagram.png)
+![3.2-use-case-diagram](images/3.2-updated-use-case-diagram.png)
 
 ### **3.3. Actors Description**
 
@@ -41,177 +42,160 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **3.4. Use Case Description**
 
-1. **[authentication] Sign-up/Sign-in** - Authenticating through the Google Sign-in Interface. If the account doesn't have a linked TradeOff account, one will be created and linked for them.
-2. **[authentication] Sign-out** - Clears authentication for users who are signed in, clearing the session from their TradeOff account and returning them to an unauthenticated user.
-3. **[authentication] Manage Preferences** - View and edit account and application information, including changing profile name and username, or changing application appearance (e.g. light/dark mode). TradeOff will save the changed info accordingly.
-4. **[market] Browse Stocks** - Move though available stocks or use a search bar to view stocks by their company name or ticker symbol. TradeOff shows matching stocks and available market info.
-5. **[trading] Buy Stocks** - Select a stock, specify how much of that stock, and choose to buy using the virtual funds. User balance and shares are updated and the trade is recorded.
-6. **[trading] Sell Stocks** - Select an owned stock, specify how much of that stock you have, and choose to sell. User balance and shares are updated and the trade is recorded.
-7. **[portfolio] Load Portfolio** - View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
-8. **[social] Manage Friend Requests** - Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
-9. **[social] Remove Friend** - Users can remove an existing friend from their friend list. TradeOff will take notice of the removal request and will remove info regarding that friendship.
-10. **[social] View Leaderboard** - View rankings comparing portfolio value and percentage return between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
-
+1. **[authentication] Sign-up** - A new user authenticates through the Google Sign-in Interface. TradeOff creates a new account linked to that Google account, with starting virtual cash.
+2. **[authentication] Sign-in** - A returning user authenticates through the Google Sign-in Interface and is signed in to their existing linked TradeOff account.
+3. **[authentication] Sign-out** - A signed-in user ends their session, and TradeOff returns them to an unauthenticated state.
+4. **[authentication] Manage Profile** - A signed-in user views and edits their profile name and username. TradeOff saves the changes.
+5. **[market] Browse Stocks** - View the list of available stocks and their current market information.
+6. **[market] Search Stocks** - Enter a company name or ticker symbol into the search bar to filter the stock list. TradeOff shows the matching stocks.
+7. **[market] View Stock Details** - Select a stock to view its latest quote and price history chart.
+8. **[trading] Place Market Order** - Select a stock and a number of shares, and buy at the current market price using virtual funds. TradeOff updates the user’s cash and shares and records the trade.
+9. **[trading] Place Limit Order** - Select a stock, a number of shares, and a limit price. If the limit allows an immediate fill, TradeOff completes the purchase; otherwise TradeOff creates a pending order and reserves the required cash.
+10. **[trading] Sell Shares** -  Select an owned stock and a number of shares up to the amount owned, and sell at the market price or a limit price. TradeOff updates the user’s cash and shares and records the trade.
+11. **[trading] Cancel Pending Orders** - Cancel a pending limit order. TradeOff removes the order and releases any cash reserved for it.
+12. **[portfolio] View Portfolio** - View cash balance, stock holdings, total value, asset allocation, profit and loss, and pending orders on the Portfolio page.
+13. **[portfolio] View Transaction History** - View the list of the user’s completed trades.
+14. **[social] Send Friend Request** - Send a friend request to another TradeOff user by their unique username. TradeOff creates a pending request.
+15. **[social] Accept Friend Request** - Accept an incoming pending request. TradeOff creates the friendship and updates both users’ lists.
+16. **[social] Decline Friend Request** - Decline an incoming pending request. TradeOff removes the request.
+17. **[social] Cancel Friend Request** - Cancel a request the user sent that is still pending. TradeOff removes the request.
+18. **[social] Remove Friend** - Remove an existing friend from the friend list. TradeOff removes the friendship for both users.
+19. **[social] View Leaderboard** - View a ranking of the user and their accepted friends by total portfolio value or percentage return, and reorder it by either criterion.
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
 <a name="fucs1"></a>
 
-1. **Browse Stocks**
-   - Description: Move though available stocks or use a search bar to view stocks by their company name or ticker symbol. TradeOff shows matching stocks and available market info.
-   - Primary Actor(s): Guest, Trader
-   - Preconditions:
-      - Actor(s) are allowed to open the Market page
-   - Postconditions:
-      - Actor(s) have viewed available stock information
-   - Main Success Scenario:
-      - (1) Actor opens the Market page
-      - (2) System displays the available stocks and their market information
-      - (3) Actor scrolls through the available stocks
-      - (4) Actor enters a company name or ticker symbol into the search bar
-      - (5) System filters the stock list according to the search input
-      - (6) Actor views matching stocks and their displayed market information
-   - Some Failure Scenarios:
-      - (2a) Market information is unavailable.
-         - (2a1) System indicates that the stock information could not be loaded.
-         - (2a2) Actor presses Retry to retry loading the market info.
-      - (5a) No stocks match the search input.
-         - (5a1) System displays no matching results.
-         - (5a2) Actor modifies or clears the search input.
-         - (5a3) System updates the displayed stock list, returning to step 5.
+1. **Browse Stocks (UC-06)**
+    - Description: View the list of available stocks and their current market information.
+    - Primary Actor(s): Guest, Trader
+    - Preconditions:
+        - Actor(s) are allowed to open the Market page
+    - Postconditions:
+        - Actor(s) have viewed the available stocks and their market information
+        - No changes have been made to any account data
+    - Main Success Scenario:
+        - (1) Actor opens the Market page
+        - (2) System retrieves the current stock list and quotes
+        - (3) System displays each stock's name, ticker, logo, current price, and price change
+        - (4) Actor scrolls through the available stocks
+    - Some Failure Scenarios:
+        - (2a) A stock's quote cannot be retrieved or refreshed.
+            - (2a1) If a previous quote exists, the system retains it and marks that stock's `status` as `stale`; if no quote exists, the system marks that stock's `status` as `unavailable`
+            - (2a2) The system returns the stock list with the status of each stock, and the app indicates which stock data is stale or unavailable while continuing to display the remaining stock information
+            - (2a3) When the data becomes available again, the system refreshes the quote and changes that stock's `status` to `ok`
 
 <a name="fucs2"></a>
 
-2. **Buy Stocks**
-   - Description: Select a stock, specify how much of that stock, and choose to buy using virtual funds through a market or limit order. User balance and shares are updated when the purchase is completed, and the trade is recorded.
-   - Primary Actor(s): Trader
-   - Preconditions:
-      - Trader is authenticated and has access to the Trading page
-      - Trader has sufficient virtual cash to purchase the selected shares
-   - Postconditions:
-      - Trader's virtual cash balance and stock holdings reflect the completed purchase
-      - The completed purchase is recorded in the Trader's transaction history
-   - Main Success Scenario:
-      - (1) Trader opens the Trading page
-      - (2) Trader selects a stock to trade
-      - (3) System displays the selected stock and its trading information
-      - (4) Trader selects the Buy option
-      - (5) Trader chooses a market order or limit order
-      - (6) Trader enters the number of shares to purchase (and a limit price if needed)
-      - (7) Trader submits the purchase
-      - (8) System validates the quantity and available/needed virtual cash
-      - (9) System executes the purchase and updates the Trader's cash balance and stock holdings
-      - (10) System records the completed transaction and displays the trade result
-   - Some Failure Scenarios:
-      - (8a) Trader has insufficient virtual cash for the purchase.
-         - (8a1) System rejects the purchase and informs the Trader that their available balance is insufficient
-         - (8a2) Trader reduces the purchase quantity and returns to step 7, or cancels the purchase
-      - (8b) Trader enters an invalid quantity.
-         - (8b1) System rejects the purchase and indicates that the entered quantity is invalid
-         - (8b2) Trader corrects the quantity and returns to step 7, or cancels the purchase
-      - (8c) Stock price information is unavailable.
-         - (8c1) System rejects the purchase and informs the Trader that the stock price could not be retrieved
-         - (8c2) Trader retries the purchase later or cancels it
-      - (8d) Trader enters a limit order where the price is lower than the market price.
-         - (5a6) Otherwise, System creates a pending order and reserves the required virtual cash
-         - (5a7) System displays the pending order, which can be completed or cancelled later
+2. **Place Market Buy**
+    - Description: Select a stock and a number of shares, and buy at the current market price using virtual funds. User balance and shares are updated and the trade is recorded.
+    - Primary Actor(s): Trader
+    - Preconditions:
+        - Trader is authenticated and has access to the Trading page
+    - Postconditions:
+        - Trader's virtual cash is reduced by the cost of the purchase, and their holding of the stock is increased by the purchased shares
+        - The completed purchase is recorded in the Trader's transaction history
+    - Main Success Scenario:
+        - (1) Trader opens the Trading page
+        - (2) Trader selects a stock to trade
+        - (3) System displays the selected stock, its current price, and the Trader's available cash
+        - (4) Trader selects the Buy option and chooses a market order
+        - (5) Trader enters the number of shares to purchase
+        - (6) Trader submits the order
+        - (7) System obtains the current price from market data
+        - (8) System validates the quantity and verifies that the Trader has enough virtual cash
+        - (9) System executes the purchase and updates the Trader's cash balance and stock holdings
+        - (10) System records the transaction and displays the trade result
+    - Some Failure Scenarios:
+        - (7a) The current stock price cannot be retrieved.
+            - (7a1) System rejects the order and informs the Trader that the stock price could not be retrieved
+            - (7a2) Trader retries the order, returning to step 6, or cancels it
+        - (8a) The quantity is invalid.
+            - (8a1) System rejects the order and indicates that the entered quantity is invalid
+            - (8a2) Trader corrects the quantity and returns to step 6, or cancels the order
+        - (8b) Trader has insufficient virtual cash for the purchase.
+            - (8b1) System rejects the order and informs the Trader of their available balance
+            - (8b2) Trader reduces the quantity and returns to step 6, or cancels the order
 
 <a name="fucs3"></a>
 
 3. **View Portfolio**
-   - Description: View your cash balance, stock holdings, total value, asset allocations, profits and losses, and transaction history. The Portfolio page of the app will present all this information.
-   - Primary Actor(s): Trader
-   - Preconditions:
-      - Actor(s) are allowed to open the Portfolio page
-   - Postconditions:
-      - Trader has viewed their available portfolio information
-      - No changes have been made to the Trader's cash balance or stock holdings
-   - Main Success Scenario:
-      - (1) Trader opens the Portfolio page
-      - (2) System displays the Trader's virtual cash balance and portfolio summary
-      - (3) Trader examines their displayed stock holdings
-      - (4) System presents the holdings' values and asset allocation
-      - (5) Trader examines the displayed total portfolio value and profit/loss information
-      - (6) Trader navigates to the transaction history section
-      - (7) System displays the Trader's recorded transactions
-      - (8) Trader reviews the transaction history
-   - Some Failure Scenarios:
-      - (3a) Trader does not own any stocks.
-         - (3a1) System displays an empty holdings section while continuing to show the Trader's virtual cash balance
-         - (3a2) Trader continues reviewing their portfolio or navigates to the Trading page to purchase shares
-      - (7a) Trader has no recorded transactions.
-         - (7a1) System indicates that no transaction history is available
-         - (7a2) Trader returns to the portfolio summary or navigates to the Trading page
+    - Description: View cash balance, stock holdings, total value, asset allocation, profit and loss, and pending orders on the Portfolio page.
+    - Primary Actor(s): Trader
+    - Preconditions:
+        - Trader is authenticated and has access to the Portfolio page
+    - Postconditions:
+        - Trader has viewed their portfolio information
+        - No changes have been made to the Trader's cash balance or stock holdings
+    - Main Success Scenario:
+        - (1) Trader opens the Portfolio page
+        - (2) System retrieves the Trader's cash balance, holdings, and pending orders
+        - (3) System retrieves current prices for the stocks the Trader holds
+        - (4) System displays the Trader's cash balance and each holding with its current value
+        - (5) System displays the total portfolio value (including cash reserved for pending orders), asset allocation, and profit and loss
+        - (6) System displays the Trader's pending orders
+        - (7) Trader reviews their portfolio
+        - (8) If the Trader owns no stocks, the holdings section is shown empty while the cash balance is still displayed
+    - Some Failure Scenarios:
+        - (3a) Current stock prices cannot be retrieved.
+            - (3a1) System responds with an error, and the app displays a message that portfolio values could not be loaded
+            - (3a2) Trader reloads the page
+            - (3a3) System retries the request, returning to step 2
 
 <a name="fucs4"></a>
 
-4. **Manage Friend Requests**
-   - Description: Send friend requests to other TradeOff users. One can also accept, decline, or cancel pending requests. TradeOff updates itself depending on the response.
-   - Primary Actor(s): Trader
-   - Preconditions:
-      - Trader is authenticated and has a TradeOff account
-      - Trader has access to the Social page
-   - Postconditions:
-      - A new friend request is pending, or an existing request has been accepted, declined, or cancelled
-      - Friendship info of the involved actor(s) reflect this
-   - Main Success Scenario:
-      - (1) Trader opens the Social page
-      - (2) Trader selects the Friends section
-      - (3) System displays the Trader's existing friends and pending friend requests
-      - (4) Trader chooses to add a friend
-      - (5) Trader identifies another TradeOff user to send a friend request to by friend ID
-      - (6) Trader submits the friend request
-      - (7) System checks whether the receiver exists and a friendship between them doesn't
-      - (8) System creates a pending friend request
-      - (9) System updates the displayed request information
-   - Some Failure Scenarios:
-      - (5a) The requested user does not exist.
-         - (5a1) System informs the Trader that the requested user could not be found
-         - (5a2) Trader corrects the user information and returns to step 5, or cancels the request
-      - (7a) A pending friend request or accepted friendship already exists.
-         - (7a1) System prevents the duplicate request and indicates the existing relationship
-         - (7a2) Trader returns to the Friends section without creating another request
-      - (4a) Trader chooses to accept an incoming friend request instead.
-         - (4a1) Trader selects an incoming pending friend request
-         - (4a2) Trader chooses Accept
-         - (4a3) System updates the relationship to an accepted friendship
-         - (4a4) System updates the friends and pending requests lists
-      - (4b) Trader chooses to decline an incoming friend request instead.
-         - (4b1) Trader selects an incoming pending friend request
-         - (4b2) Trader chooses Decline
-         - (4b3) System removes the pending friend request
-         - (4b4) System updates the pending requests list
-      - (4c) Trader chooses to cancel an outgoing friend request instead.
-         - (4c1) Trader selects an outgoing pending friend request
-         - (4c2) Trader chooses Cancel
-         - (4c3) System removes the pending friend request
-         - (4c4) System updates the pending requests list
+4. **Send Friend Request**
+    - Description: Send a friend request to another TradeOff user by their unique username. TradeOff creates a pending request.
+    - Primary Actor(s): Trader
+    - Preconditions:
+        - Trader is authenticated and has access to the Social page
+    - Postconditions:
+        - A pending friend request from the Trader to the other user exists
+    - Main Success Scenario:
+        - (1) Trader opens the Social page
+        - (2) Trader selects the Friends section
+        - (3) System displays the Trader's existing friends and pending friend requests
+        - (4) Trader chooses to add a friend
+        - (5) Trader enters the other user's username
+        - (6) Trader submits the friend request
+        - (7) System verifies that the user exists and that no request or friendship with them exists
+        - (8) System creates a pending friend request
+        - (9) System displays the request in the Trader's outgoing requests
+    - Some Failure Scenarios:
+        - (7a) No user has the entered username.
+            - (7a1) System informs the Trader that the user could not be found
+            - (7a2) Trader corrects the username and returns to step 6, or cancels
+        - (7b) A pending request or friendship with that user already exists.
+            - (7b1) System rejects the request and indicates the existing relationship
+            - (7b2) Trader returns to the Friends section
+        - (7c) The entered username is the Trader's own username.
+            - (7c1) System rejects the request and indicates that a user cannot add themselves
+            - (7c2) Trader corrects the username and returns to step 6, or cancels
 
 <a name="fucs5"></a>
 
 5. **View Leaderboard**
-   - Description: View rankings comparing portfolio value and percentage return between friends. The leaderboard can be reordered or filtered to emphasize a certain criterion.
-   - Primary Actor(s): Trader
-   - Preconditions:
-      - Actor(s) are allowed to open the Social page
-   - Postconditions:
-      - Trader has viewed the available leaderboard rankings
-   - Main Success Scenario:
-      - (1) Trader opens the Social page
-      - (2) Trader selects the Leaderboard section
-      - (3) System retrieves leaderboard information for the Trader and their accepted friends
-      - (4) System displays users ranked (by default it's total portfolio value)
-      - (5) Trader examines the displayed rankings
-      - (6) Trader selects a different ranking criterion (e.g. % portfolio return)
-      - (7) System reorders the leaderboard according to the selected criterion
-      - (8) Trader reviews the updated rankings
-   - Some Failure Scenarios:
-      - (3a) Trader has no accepted friends.
-         - (3a1) System displays the Trader's own leaderboard information without comparisons to friends
-         - (3a2) Trader continues viewing their information or navigates to the Friends section to send friend requests
-      - (3b) Leaderboard information cannot be retrieved.
-         - (3b1) System indicates that leaderboard information is unavailable
-         - (3b2) Trader revisits or refreshes the Leaderboard section to retry the request
-
+    - Description: View a ranking of the Trader and their accepted friends by total portfolio value or percentage return, and reorder it by either criterion.
+    - Primary Actor(s): Trader
+    - Preconditions:
+        - Trader is authenticated and has access to the Social page
+    - Postconditions:
+        - Trader has viewed the leaderboard rankings
+        - No changes have been made to any account data
+    - Main Success Scenario:
+        - (1) Trader opens the Social page
+        - (2) Trader selects the Leaderboard section
+        - (3) System retrieves the Trader and their accepted friends, and values their portfolios using current prices
+        - (4) System displays the ranking by total portfolio value (the default)
+        - (5) Trader examines the rankings
+        - (6) Trader selects percentage return as the ranking criterion
+        - (7) System reorders the leaderboard by the selected criterion
+        - (8) Trader reviews the updated rankings
+        - (9) If the Trader has no accepted friends, only the Trader's own entry is displayed
+    - Some Failure Scenarios:
+        - (3a) Leaderboard information cannot be retrieved (for example, current prices are unavailable).
+            - (3a1) System responds with an error, and the app displays a message that the leaderboard could not be loaded, with a Retry button
+            - (3a2) Trader presses Retry
+            - (3a3) System retries the request, returning to step 3
 ### **3.6. Screen Mock-ups**
 
 | **Prospective Market screen mockup** | **Prospective Portfolio screen mockup** |
@@ -223,77 +207,119 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 <a name="nfr1"></a>
 
 1. **Response-Time Consistency**
-   - **Description**: When tested by a single user, at least 95% of requests to each of TradeOff's three Market API endpoints must complete within 1 second, measured over at least 100 requests per endpoint with the required data cached.
-   - **Justification**: TradeOff supports multiple market-data operations, including stock browsing, individual stock lookup, and historical price retrieval. Measuring response times separately for each endpoint ensures that acceptable performance is maintained across these operations rather than allowing faster requests to conceal slower ones.
+    - **Description**: When tested by a single user, at least 95% of requests to each of TradeOff's three Market API endpoints must complete within 1 second, measured over at least 100 requests per endpoint with the required data cached.
+    - **Justification**: TradeOff supports multiple market-data operations, including stock browsing, individual stock lookup, and historical price retrieval. Measuring response times separately for each endpoint ensures that acceptable performance is maintained across these operations rather than allowing faster requests to conceal slower ones.
 
 <a name="nfr2"></a>
 
 2. **Concurrent-Load Efficiency**
-   - **Description**: Under a workload of 10 simultaneous simulated users, at least 95% of cached Market API requests must complete within 1 second, with no requests failing due to server overload, measured over at least 100 requests.
-   - **Justification**: TradeOff is a multi-user trading application, so its market-data service must remain responsive when users browse stocks simultaneously. The 1-second limit follows the same usability guideline as NFR 1, while 10 concurrent users defines a manageable initial workload for evaluating this project's shared backend rather than claiming production-scale capacity.
+    - **Description**: Under a workload of 10 simultaneous simulated users, at least 95% of cached Market API requests must complete within 1 second, with no requests failing due to server overload, measured over at least 100 requests.
+    - **Justification**: TradeOff is a multi-user trading application, so its market-data service must remain responsive when users browse stocks simultaneously. The 1-second limit follows the same usability guideline as NFR 1, while 10 concurrent users defines a manageable initial workload for evaluating this project's shared backend rather than claiming production-scale capacity.
 
 <a name="nfr3"></a>
 
-3. **External-Service Reliability**
-   - **Description**: After a simulated temporary Alpaca API outage, TradeOff must automatically resume retrieving updated market data within two eligible market-refresh intervals (~16s) after Alpaca becomes available again, without restarting the application or backend.
-   - **Justification**: TradeOff depends on Alpaca for market information, making recovery from temporary provider interruptions VERY important. TradeOff's market refreshes happen every 8 seconds, so two refresh periods allows for some lenience, but a window small enough to ensure TradeOff can reliably come back on time.
-
+3. **External-Service Reliability (NFR-3)**
+    - **Description**: When Alpaca is unavailable, TradeOff must preserve previously retrieved market data and report its freshness using the existing `status` field: `stale` when a previously retrieved quote or history cannot be refreshed, and `unavailable` when no successful data has been retrieved. Stale quotes must not be used for trading or portfolio valuation. After Alpaca becomes available again, TradeOff must retrieve fresh market data on the next eligible request after the provider retry delay, without restarting the application or backend.
+    - **Justification**: TradeOff depends on Alpaca for market data, but a temporary provider outage should not erase information that was already retrieved. Status reporting lets users continue browsing while distinguishing current data from stale or unavailable data. Requiring fresh quotes for trades and portfolio valuation prevents outdated prices from being treated as current, while retry delays avoid repeatedly calling an unavailable provider.
 ---
 
 ## 4. Designs Specification
 
 ### **4.1. Main Components**
 
-| **Component** | **Documented responsibility or connection** |
-| --- | --- |
-| **User Service** | Handles authentication verification, account creation and retrieval, and user information. Centralizing these responsibilities allows other services to rely on a consistent authenticated user identity. |
-| **Social Service** | Manages friend requests, friendships, and leaderboard information stored in the database. Separating social logic keeps relationship management independent of trade execution and market-data retrieval. |
-| **Portfolio Service** | Retrieves account holdings and transaction information and is intended to calculate portfolio valuations using market prices. Different from the Order Engine, reviewing investments and executing trades are different. |
-| **Order Engine** | Processes virtual buy and sell requests and updates the associated cash balances, holdings, and transaction records. Centralizing trade execution supports consistent validation and database updates. |
-| **Market Service** | Retrieves stock information from Alpaca and provides market-data endpoints to the application. Centralizing market-data access avoids requiring each feature to communicate independently with the external provider. |
-| **Market Cache** | Stores recently retrieved market information to reduce repeated external API requests. Caching the data saves calling costs, and gives safe data to the Market Service and Portfolio Service. |
-| **(extern) Google OAuth Platform** | Provides external identity authentication for TradeOff users. Using Google avoids implementing a separate password-based authentication system while allowing TradeOff to maintain its own application accounts. |
-| **(extern) Alpaca Market Data API** | Supplies external stock-market information used by TradeOff's Market functionality. This service is imperative because TradeOff aims to emulate real market information rather than making fake market data. |
-| **(database) MySQL** | Delivers application notifications through itself. Separating notification delivery from functional services would allow notification behavior to be managed independently when implemented. |
+All error responses are JSON of the form { "error": string }. Market data responses distinguish between fresh, stale, and unavailable data using a per-stock status:
+- **ok**: A successfully retrieved quote is within its 8-second cache lifetime.
+- **stale**: A previously retrieved quote exists, but its cache lifetime has expired and the latest refresh attempt failed. The last-known quote may be displayed, but must not be used for trading or portfolio valuation.
+- **unavailable**: No successful quote is available for the stock.
+  The Market Service supports partial results when retrieving quotes for multiple stocks. If some stocks cannot be refreshed, the service retains their last-known quotes when available and returns the status of each stock alongside the available data. This allows the Market screen to display functioning stock information even when data for another stock is unavailable.
 
-| **Interface** | **From** | **To** | **Purpose** |
-| --- | --- | --- | --- |
-| `POST /api/auth/google (idToken) → AuthResponse` | Frontend (Auth.) | User Service | Verifies Google credentials, retrieves or creates a user account, and issues a TradeOff auth token. |
-| `GET /api/users/me (JWT) → UserProfile` | Frontend (Auth.) | User Service | Retrieves the authenticated user's profile information. |
-| `PATCH /api/users/me (JWT, profileChanges) → UserProfile` | Frontend (Auth.) | User Service | Updates supported user profile fields. |
-| `GET /api/market/stocks → StockList` | Frontend (Market) | Market Service | Retrieves the available stock listings and market information. |
-| `GET /api/market/stocks/:symbol (symbol) → StockDetails` | Frontend (Market) | Market Service | Retrieves stock details and the latest available quote. |
-| `GET /api/market/stocks/:symbol/history (symbol) → PriceHistory` | Frontend (Market) | Market Service | Retrieves historical prices for a selected stock. |
-| `GET /api/market/stocks → StockList` | Frontend (Portfolio) | Market Service | Retrieves stock prices used by the frontend to calculate portfolio valuations. |
-| `POST /api/trades/execute (JWT, ticker, side, type, quantity, limitPrice) → TradeResult` | Frontend (Trading) | Order Engine | Executes a virtual buy or sell order after validating available funds or holdings. |
-| `POST /api/trades/execute/market (JWT, ticker, side, quantity) → TradeResult` | Frontend (Trading) | Order Engine | Executes a market buy or sell order using a server-obtained stock price. |
-| `POST /api/trades/execute/limit (JWT, ticker, side, quantity, limitPrice) → TradeResult` | Frontend (Trading) | Order Engine | Places a limit buy or sell order, which may be completed immediately or remain pending. |
-| `GET /api/trades/position/:ticker (JWT, ticker) → PositionDetails` | Frontend (Trading) | Order Engine | Retrieves the user's available cash and stock holdings for a selected stock. |
-| `GET /api/trades/orders/pending (JWT) → PendingOrders` | Frontend (Trading) | Order Engine | Retrieves the user's pending orders. |
-| `POST /api/trades/orders/:id/cancel (JWT, orderId) → CancelResult` | Frontend (Trading/Portfolio) | Order Engine | Cancels a pending order and releases reserved funds when applicable. |
-| `GET /api/portfolio (JWT) → PortfolioSummary` | Frontend (Portfolio) | Portfolio Service | Retrieves cash balances, holdings, recent trades, and pending orders. |
-| `GET /api/friends (JWT) → FriendList` | Frontend (Social) | Social Service | Retrieves the user's accepted friendships. |
-| `GET /api/friends/requests (JWT) → FriendRequestList` | Frontend (Social) | Social Service | Retrieves pending friend requests. |
-| `POST /api/friends/requests (JWT, userId) → FriendRequest` | Frontend (Social) | Social Service | Sends a friend request to another user. |
-| `POST /api/friends/requests/:id/accept (JWT, requestId) → Result` | Frontend (Social) | Social Service | Accepts a pending friend request. |
-| `DELETE /api/friends/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Declines an incoming friend request. |
-| `DELETE /api/friends/requests/:id (JWT, requestId) → Result` | Frontend (Social) | Social Service | Cancels an outgoing friend request. |
-| `DELETE /api/friends/:id (JWT, friendshipId) → Result` | Frontend (Social) | Social Service | Removes an existing friendship. |
-| `GET /api/friends/leaderboard (JWT) → Leaderboard` | Frontend (Social) | Social Service | Retrieves friends-only rankings based on total portfolio value and percentage returns. |
-| `Stock getStock(String ticker)` | Order Engine | Market Cache | Supplies stock prices for validating and executing virtual orders. |
-| `Stock getStock(String ticker)` | Social Service | Market Cache | Supplies stock prices for calculating leaderboard portfolio values. |
-| `fetchStockQuotes(symbols) → StockQuotes` | Market Service | Alpaca Market Data API | Retrieves current market quotes from Alpaca. |
-| `fetchPriceHistory(symbol) → PriceHistory` | Market Service | Alpaca Market Data API | Retrieves historical market prices from Alpaca. |
-| `verifyIdToken(idToken) → GoogleIdentity` | User Service | Google Authentication | Validates a Google ID token and retrieves the verified identity. |
-| `findOrCreateUser(googleIdentity) → User` | User Service | MySQL | Retrieves or creates an account associated with a verified Google identity. |
-| `readOrUpdateFriendships(userId, operation) → SocialResult` | Social Service | MySQL | Retrieves or updates friendship and friend-request records. |
-| `executeTradeTransaction(userId, order) → TradeResult` | Order Engine | MySQL | Atomically updates virtual cash, holdings, orders, and trade history. |
-| `getPortfolioRecords(userId) → PortfolioRecords` | Portfolio Service | MySQL | Retrieves records needed to display portfolio information. |
+Individual stock-detail requests return the stock's available data and status when a current or stale quote exists. They return HTTP 503 when no quote is available. Operations that require a fresh quote, including trade execution and portfolio valuation, return HTTP 503 when a fresh quote cannot be retrieved. Stale quotes must never be treated as current prices for these operations.
+1. **User Service**
+   - **Purpose**: Verifies Google identities, creates and finds accounts, and manages profile data and account deletion.
+   - **Rationale**: Centralizing identity gives every other component one consistent authenticated user id, and keeps Google-specific code in one place.
+   - **Interfaces**:
+      1. `POST /api/auth/google (idToken) → AuthResponse`
+         - **Purpose**: Verifies the Google ID token, finds or creates the linked account (UC-01, UC-02), and issues a TradeOff JWT. Errors: 400 missing token, 401 invalid token.
+         - `AuthResponse { token: string, user: UserProfile }`, `UserProfile { id: string, name: string, username: string }`
+      2. `GET /api/auth/me (JWT) → UserProfile`
+         - **Purpose**: Returns the signed-in user's profile. Error: 401.
+      3. `PATCH /api/auth/me (JWT, { name?, username? }) → UserProfile`
+         - **Purpose**: Updates the profile (UC-04). Errors: 400 invalid value, 409 username taken.
+      4. `DELETE /api/auth/me (JWT) → { deleted: true }`
+         - **Purpose**: Deletes the account and all of its data (UC-05). Sign-out (UC-03) has no endpoint: the app discards its token.
+      5. `verifyIdToken(idToken) → GoogleIdentity` (User Service → Google Authentication Service)
+         - **Purpose**: Validates a Google ID token and returns the verified identity.
+2. **Market Service**
+    - **Purpose**: Retrieves quotes and price history from Alpaca, keeps recent quotes in an internal cache (8-second lifetime), serves the market endpoints, and provides a price lookup to other components.
+    - **Rationale**: One component talks to Alpaca, which limits external calls and keeps NFR-1 to NFR-3 testable in one place. The cache is a layer inside this component, not a component of its own.
+    - **Interfaces**:
+        1. `GET /api/market/stocks → StockList`
+            - **Purpose**: Lists the six supported stocks (UC-06, UC-07). Returns the list even when individual stock data is stale or unavailable; each stock reports its own `status`. This endpoint does not return 503 solely because one or more quotes are unavailable.
+            - `StockList { stocks: [{ ticker: string, companyName: string, currentPrice: number | null, change: number | null, percentageChange: number | null, quoteAsOf: string | null, source: string | null, feed: string | null, status: 'ok' | 'stale' | 'unavailable', quoteAgeSeconds: number | null, historySource: string | null, history: { symbol: string, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp: string, price: number }] } }] }`
+        2. `GET /api/market/stocks/:ticker → StockDetails`
+            - **Purpose**: Returns one stock's latest quote and its data status (UC-08). Errors: 404 unsupported ticker. A stale quote is returned with `status: 'stale'`; if no quote is available, the stock is returned with `status: 'unavailable'`. This endpoint does not return 503 solely because its quote is stale or unavailable.
+            - `StockDetails { ticker, companyName, currentPrice, change, percentageChange, quoteAsOf, source, feed, status: 'ok' | 'stale' | 'unavailable', quoteAgeSeconds, historySource, history: { symbol, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp, price }] } }`
+        3. `GET /api/market/stocks/:ticker/history → PriceHistory`
+            - **Purpose**: Returns price history for the chart (UC-08), with its own status. Errors: 404 unsupported ticker. This endpoint reports stale or unavailable history through `status` rather than returning 503 solely because history cannot be refreshed.
+            - `PriceHistory { symbol: string, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp: string, price: number }] }`
+        4. `getQuote(ticker) → Quote { ticker, currentPrice, quoteAsOf }` (Trading Service → Market Service)
+            - **Purpose**: Supplies a fresh current price for validating and executing orders and valuing portfolios. Throws when a fresh quote is unavailable; a quote with `status: 'stale'` or `status: 'unavailable'` is not accepted for trading or portfolio valuation.
+        5. `fetchStockQuotes(tickers) → StockQuotes` and `fetchPriceHistory(ticker) → PriceHistory` (Market Service → Alpaca Market Data API)
+            - **Purpose**: Retrieve current quotes and historical prices from Alpaca.
+
+3. **Trading Service**
+   - **Purpose**: Executes virtual orders, runs the limit-order worker that fills pending orders, and computes portfolio valuations and history.
+   - **Rationale**: Orders and the portfolio read and write the same tables and must use one valuation rule. Computing the total value in this component, not on the phone, keeps the portfolio and the leaderboard consistent.
+   - **Interfaces**:
+      1. `POST /api/trades/execute/market (JWT, { ticker, side, quantity }) → TradeResult`
+         - **Purpose**: Executes a market buy or sell at the server's current price (UC-09, UC-11). Any price sent by the client is ignored. Errors: 400 invalid quantity, insufficient cash or shares; 404 unsupported ticker; 503 price unavailable.
+         - `TradeResult { orderId: string, status: 'filled' | 'pending', ticker, side, quantity, price: number, cashBalance: number }`
+      2. `POST /api/trades/execute/limit (JWT, { ticker, side, quantity, limitPrice }) → TradeResult`
+         - **Purpose**: Places a limit order (UC-10, UC-11). It fills immediately if the limit allows, otherwise it becomes pending with cash reserved. Errors as above, plus 400 invalid limit price.
+      3. `POST /api/trades/orders/:id/cancel (JWT) → CancelResult`
+         - **Purpose**: Cancels a pending order and releases its reserved cash (UC-12). Errors: 404 not found or not the caller's, 409 order is no longer pending.
+         - `CancelResult { orderId: string, status: 'cancelled', releasedCash: number }`
+      4. `GET /api/trades/position/:ticker (JWT) → PositionDetails`
+         - **Purpose**: Returns the user's available cash and shares of one stock.
+         - `PositionDetails { ticker: string, quantity: number, availableCash: number }`
+      5. `GET /api/trades/orders/pending (JWT) → PendingOrders`
+         - **Purpose**: Lists the user's pending orders.
+         - `PendingOrders { orders: [{ id, ticker, side, quantity, limitPrice, reservedCash, createdAt }] }`
+      6. `GET /api/portfolio (JWT) → PortfolioSummary`
+         - **Purpose**: Returns the data for the Portfolio page and transaction history (UC-13, UC-14). Error: 503.
+         - `PortfolioSummary { cash, reservedCash, totalValue, profitLoss, holdings: [{ ticker, quantity, avgCost, price, value, profitLoss }], allocation: [{ label, percent }], pendingOrders: [...], trades: [{ id, ticker, side, quantity, price, executedAt }] }`
+      7. `computePortfolioValue(userId) → { totalValue, returnPercent }` (Social Service → Trading Service)
+         - **Purpose**: The single valuation rule (cash + holdings at current prices + reserved cash), shared by the portfolio and the leaderboard.
+      8. `executeTradeTransaction(userId, order) → TradeResult` (Trading Service → MySQL)
+         - **Purpose**: Atomically updates cash, holdings, orders and trade history.
+4. **Social Service**
+   - **Purpose**: Manages friend requests and friendships, and builds the leaderboard.
+   - **Rationale**: Keeps relationship management independent of trading and market-data retrieval.
+   - **Interfaces**:
+      1. `GET /api/friends (JWT) → FriendList`
+         - **Purpose**: Lists accepted friends.
+         - `FriendList { friends: [{ friendshipId: string, userId: string, name: string, username: string }] }`
+      2. `GET /api/friends/requests (JWT) → FriendRequestList`
+         - **Purpose**: Lists pending requests.
+         - `FriendRequestList { incoming: [FriendRequest], outgoing: [FriendRequest] }`, `FriendRequest { id, senderId, receiverId, status: 'pending' }`
+      3. `POST /api/friends/requests (JWT, { username }) → FriendRequest`
+         - **Purpose**: Sends a friend request (UC-15). Errors: 400 invalid or own username, 404 user not found, 409 request or friendship already exists.
+      4. `POST /api/friends/requests/:id/accept (JWT) → Result`
+         - **Purpose**: Accepts an incoming request (UC-16). Errors: 403 caller is not the receiver, 404, 409 already accepted.
+      5. `DELETE /api/friends/requests/:id (JWT) → Result`
+         - **Purpose**: Declines an incoming request (UC-17) when the receiver calls it, and cancels an outgoing request (UC-18) when the sender calls it. Errors: 404, 409 already accepted.
+      6. `DELETE /api/friends/:id (JWT) → Result`
+         - **Purpose**: Removes a friendship for both users (UC-19). Error: 404.
+      7. `GET /api/friends/leaderboard?sortBy=value|return (JWT) → Leaderboard`
+         - **Purpose**: Ranks the caller and their accepted friends (UC-20), by total value by default. Error: 503.
+         - `Leaderboard { sortedBy: 'value' | 'return', entries: [{ rank, userId, name, totalValue, returnPercent }] }`
+      8. `readOrUpdateFriendships(userId, operation) → SocialResult` (Social Service → MySQL)
+         - **Purpose**: Reads or updates friendship and friend-request records.
+
 
 ### **4.2. The Database**
 
-1. **MySQL** - Stores user accounts, virtual cash balances, holdings, trade history, watchlists, social relationships, information for other components, among other data - Chosen as MySQL is popular in supporting the needed data, and in updating said data concurrently, avoiding errors such as partial trades.
-
+1. **MySQL** - Stores users, accounts (cash), positions, orders, trades, friend requests, and friendships (Prisma models User, Account, Position, Order, Trade, FriendRequest, Friendship; check the names against schema.prisma) - Chosen because it supports transactions and row-level locking, which prevent partial trades and overdrawn accounts when several requests arrive at once.
 ### **4.3. External Modules**
 
 1. **Google Authentication** - Allows safe linkage between TradeOff and Google accounts - Chosen so we can authenticate in our app without using Firebase.
@@ -321,17 +347,14 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ### **4.7. Design of Non-Functional Requirements**
 
-<a name="nfrd1"></a>
+1. **Response-Time Consistency (NFR-1)**
+    - **Implementation**: `backend/tests/nfr/responseTime.test.ts` warms the cache using a stubbed provider, sends 100 sequential requests to each Market endpoint with Supertest, records every response time, and asserts that the 95th percentile of each endpoint is under 1000 ms. 
+        The provider is stubbed so that a cache expiry during the run cannot add Alpaca's latency.
+2. **Concurrent-Load Efficiency (NFR-2)**
+    - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that each send 30 requests (300 total, 100 per endpoint) to cached Market endpoints. It asserts that each endpoint's 95th percentile is under 1000 ms and that every response is successful and contains usable data.
+3. **External-Service Reliability (NFR-3)**
+    - **Implementation**: `backend/tests/nfr/providerRecovery.test.ts` simulates provider failures and verifies that previously retrieved quotes and history are retained with `status: 'stale'`, while data that has never been retrieved is reported as `status: 'unavailable'`. 
+        It verifies that stale quotes are rejected by trading and portfolio valuation, then restores the provider, advances Jest's fake timers past the provider retry delay, and asserts that the next eligible market-data request retrieves fresh data and changes the status to `ok` without restarting the application or backend.
 
-1. **Response-Time Consistency**
-   - **Implementation**: A performance test will send at least 100 sequential requests to any relevant API endpoints (e.g. market/stocks, stocks/:symbol, and :symbol/history). Response times will be recorded separately for each endpoint, and each must achieve a 95th-percentile response time (i.e. response time 95% of requests fall under) under one second.
 
-<a name="nfrd2"></a>
-
-2. **Concurrent-Load Efficiency**
-   - **Implementation**: A load test will simulate 10 users issuing at least 100 requests concurrently against cached Market API endpoints. The test will calculate the 95th-percentile response time (i.e. the time 95% of response times fall under) and check for holdups caused by server overload.
-
-<a name="nfrd3"></a>
-
-3. **External-Service Reliability**
-   - **Implementation**: An automated test will simulate an Alpaca outage, restore successful API responses, allow any configured retry cooldown to expire, and verify that updated market data is retrieved within two eligible refresh intervals without restarting either component.
+Run all three requirements from `backend/` using `npm.cmd run test:nfr`. See [Testing, section 3](Testing.md#3-tests-of-non-functional-requirements) for the workloads, measurement method, verified results, and saved evidence. Portfolio price loading accepts only quotes with `status: 'ok'`, ensuring stale prices are rejected until recovery.

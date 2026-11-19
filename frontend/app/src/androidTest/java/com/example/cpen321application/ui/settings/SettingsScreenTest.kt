@@ -21,6 +21,11 @@ class SettingsScreenTest {
     private var loadCode = 200
     private val api = object : ApiService {
         override suspend fun loginWithGoogle(request: GoogleAuthRequest): Response<GoogleAuthResponse> = error("Unused")
+        override suspend fun registerNotificationDevice(request: NotificationDeviceRequest): Response<Unit> = error("Unused")
+        override suspend fun unregisterNotificationDevice(request: NotificationDeviceRequest): Response<Unit> = error("Unused")
+        override suspend fun getStockFavorites(authorization: String): StockFavoritesResponse = error("Unused")
+        override suspend fun addStockFavorite(authorization: String, ticker: String): Unit = error("Unused")
+        override suspend fun removeStockFavorite(authorization: String, ticker: String): Unit = error("Unused")
         // Settings tests do not execute trades, but retain the combined API contract.
         override suspend fun getPosition(ticker: String): Response<UserPositionResponse> = error("Unused")
         override suspend fun executeTrade(request: ExecuteOrderRequest): Response<ExecuteOrderResponse> = error("Unused")

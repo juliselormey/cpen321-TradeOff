@@ -5,6 +5,7 @@ import { asyncHandler } from "../util/asyncHandler";
 
 export const usersRouter = Router();
 
+// TODO: the app should read the profile with GET /me; remove this POST once nothing else calls it.
 usersRouter.post("/me", requireAuth, asyncHandler(async (req, res) => {
         const userId = req.userId;
         if (!userId) {
@@ -57,4 +58,15 @@ usersRouter.patch("/me", requireAuth, asyncHandler(async (req, res) => {
         }
         throw error;
     }
+}));
+
+// UC-05 Delete Account. Account, positions, orders, trades, tokens and friendships are removed by the schema's cascades.
+usersRouter.delete("/me", requireAuth, asyncHandler(async (req, res) => {
+    const userId = req.userId;
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    await db.user.delete({ where: { id: userId } });
+    res.status(204).send();
 }));

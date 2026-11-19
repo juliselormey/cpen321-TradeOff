@@ -1,18 +1,26 @@
 package com.example.cpen321application.ui.market
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,9 +29,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cpen321application.ApiClient
+import com.example.cpen321application.ApiService
 import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
+import com.example.cpen321application.util.SessionManager
+import java.io.IOException
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneOffset
@@ -32,22 +43,107 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import retrofit2.HttpException
 
 private val Green: Color @Composable get() = MaterialTheme.colorScheme.primary
 private val Ink: Color @Composable get() = MaterialTheme.colorScheme.onSurface
 private val Muted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 private val Red: Color @Composable get() = MaterialTheme.colorScheme.error
 
+private data class FavoritesUi(
+    val tickers: Set<String>,
+    val signedIn: Boolean,
+    val busy: Boolean,
+    val error: String?,
+)
+
+private data class MarketActions(
+    val onFavoritesRetry: () -> Unit,
+    val onStockSelected: (String) -> Unit,
+    val onSignInRequired: () -> Unit,
+    val onFavoriteChanged: (String, Boolean) -> Unit,
+    val onOpenFavorites: () -> Unit,
+    val onRefresh: () -> Unit,
+)
+
+@Stable
+private class FavoritesController(
+    private val api: ApiService,
+    private val sessionToken: String?,
+    private val currentToken: () -> String?,
+    private val scope: CoroutineScope,
+) {
+    var tickers by mutableStateOf<Set<String>?>(null)
+        private set
+    var busy by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+    var needsSignIn by mutableStateOf(false)
+        private set
+
+    val signedIn: Boolean get() = !sessionToken.isNullOrEmpty()
+
+    fun load() = request { api.getStockFavorites(it).tickers.toSet() }
+
+    fun change(ticker: String, favorite: Boolean, onSignInRequired: () -> Unit) {
+        val current = tickers
+        when {
+            !signedIn || needsSignIn -> onSignInRequired()
+            current == null -> load()
+            else -> request { authorization ->
+                if (favorite) {
+                    api.addStockFavorite(authorization, ticker)
+                    current + ticker
+                } else {
+                    api.removeStockFavorite(authorization, ticker)
+                    current - ticker
+                }
+            }
+        }
+    }
+
+    private fun request(call: suspend (String) -> Set<String>) {
+        if (sessionToken.isNullOrEmpty() || busy || currentToken() != sessionToken) return
+        busy = true
+        error = null
+        needsSignIn = false
+        scope.launch {
+            try {
+                tickers = call("Bearer $sessionToken")
+            } catch (e: HttpException) {
+                needsSignIn = e.code() == 401
+                error = if (needsSignIn) "Sign in again to access your favorites."
+                else "Favorites request failed (HTTP ${e.code()})."
+            } catch (_: IOException) {
+                error = "Could not reach the favorites server."
+            } catch (_: com.google.gson.JsonParseException) {
+                error = "Could not read your favorites."
+            } finally {
+                busy = false
+            }
+        }
+    }
+}
+
 @Composable
-fun MarketScreen(onStockSelected: (String) -> Unit) {
+fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInRequired: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val factory = remember(context) {
         MarketViewModel.Factory(MarketRepository(ApiClient.createMarket(context)))
     }
     val model: MarketViewModel = viewModel(factory = factory)
     val state by model.state.collectAsState()
+    val tokens = remember(context) { SessionManager.observeToken(context) }
+    val token by tokens.collectAsState(initial = SessionManager.getToken(context))
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
+    val favorites = remember(token, scope) {
+        FavoritesController(api, token, { SessionManager.getToken(context) }, scope)
+    }
+
+    LaunchedEffect(favorites) { favorites.load() }
     LaunchedEffect(model, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
@@ -56,59 +152,131 @@ fun MarketScreen(onStockSelected: (String) -> Unit) {
             }
         }
     }
-    MarketContent(state, onStockSelected, onRetry = { scope.launch { model.refresh() } })
+    MarketContent(
+        state = state,
+        favorites = FavoritesUi(
+            tickers = favorites.tickers.orEmpty(),
+            signedIn = favorites.signedIn,
+            busy = favorites.busy,
+            error = favorites.error,
+        ),
+        actions = MarketActions(
+            onFavoritesRetry = { if (favorites.needsSignIn) onSignInRequired() else favorites.load() },
+            onStockSelected = onStockSelected,
+            onSignInRequired = onSignInRequired,
+            onFavoriteChanged = { ticker, favorite -> favorites.change(ticker, favorite, onSignInRequired) },
+            onOpenFavorites = {
+                if (favorites.needsSignIn) onSignInRequired() else favorites.load()
+                scope.launch { model.refresh() }
+            },
+            onRefresh = { scope.launch { model.refresh() } },
+        ),
+    )
 }
 
 @Composable
-private fun MarketContent(state: MarketUiState, onStockSelected: (String) -> Unit, onRetry: () -> Unit) {
+private fun MarketContent(state: MarketUiState, favorites: FavoritesUi, actions: MarketActions) {
     var query by rememberSaveable { mutableStateOf("") }
+    var showFavorites by rememberSaveable { mutableStateOf(false) }
+    val stocksListState = rememberLazyListState()
+    val favoritesListState = rememberLazyListState()
+    // Stocks keeps every matching stock; Favorites displays only saved tickers.
     val stocks = state.stocks.filter {
-        it.ticker.contains(query, true) || it.companyName.contains(query, true)
+        (!showFavorites || it.ticker in favorites.tickers) &&
+                (it.ticker.contains(query, true) || it.companyName.contains(query, true))
     }
-    val favorites = stocks.filter { it.isFavorite }
     MaterialTheme {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            state = if (showFavorites) favoritesListState else stocksListState,
+            modifier = Modifier.fillMaxSize().testTag("market-list").background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                Text("TradeOff", color = Green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("Market", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
-                Text("Explore stocks. Practice investing.", color = Muted, fontSize = 14.sp)
+            item { MarketHeader() }
+            item { ConnectionCard(state, actions.onRefresh) }
+            item { SearchField(query) { query = it } }
+            stickyHeader {
+                FavoritesTabs(showFavorites) { wantFavorites ->
+                    if (!wantFavorites) {
+                        showFavorites = false
+                    } else if (!favorites.signedIn) {
+                        actions.onSignInRequired()
+                    } else if (!showFavorites) {
+                        showFavorites = true
+                        actions.onOpenFavorites()
+                    }
+                }
             }
-            item { ConnectionCard(state, onRetry) }
-            item {
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true,
-                    label = { Text("Search by company or ticker") },
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
-                )
-            }
-            item {
-                Text("My Favorites", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            }
-            if (favorites.isEmpty()) {
-                item { Text("No matching favorites.", color = Muted, fontSize = 12.sp) }
-            }
-            items(favorites, key = { "favorite:${it.ticker}" }) { stock ->
-                StockCard(stock, onClick = { onStockSelected(stock.ticker) })
-            }
-            item {
-                Text("All Stocks", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("${stocks.size} stocks • USD", color = Muted, fontSize = 12.sp)
+            if (favorites.error != null) {
+                item { FavoritesErrorRow(favorites.error, actions.onFavoritesRetry) }
             }
             if (stocks.isEmpty()) {
-                item { Text("No stocks match your search.", color = Muted, modifier = Modifier.padding(16.dp)) }
+                item {
+                    emptyMessage(showFavorites, favorites)?.let {
+                        Text(it, color = Muted, modifier = Modifier.padding(16.dp))
+                    }
+                }
             }
-            items(stocks, key = { "all:${it.ticker}" }) { stock ->
-                StockCard(stock, onClick = { onStockSelected(stock.ticker) })
+            items(stocks, key = { it.ticker }) { stock ->
+                StockCard(
+                    stock = stock,
+                    isFavorite = stock.ticker in favorites.tickers,
+                    signedIn = favorites.signedIn,
+                    favoritesBusy = favorites.busy,
+                    onClick = { actions.onStockSelected(stock.ticker) },
+                    onFavoriteChanged = { actions.onFavoriteChanged(stock.ticker, it) },
+                )
             }
-            item {
-                Text("Virtual investing • Prices and charts from Alpaca IEX.\nIEX is one exchange, not the full US market.", color = Muted, fontSize = 12.sp)
-            }
+            item { MarketFooter() }
         }
     }
+}
+
+@Composable
+private fun MarketHeader() {
+    Text("TradeOff", color = Green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+    Text("Market", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Ink)
+    Text("Explore stocks. Practice investing.", color = Muted, fontSize = 14.sp)
+}
+
+@Composable
+private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query, onValueChange = onQueryChange, singleLine = true,
+        label = { Text("Search by company or ticker") },
+        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+    )
+}
+
+@Composable
+private fun FavoritesTabs(showFavorites: Boolean, onSelect: (Boolean) -> Unit) {
+    TabRow(selectedTabIndex = if (showFavorites) 1 else 0) {
+        Tab(selected = !showFavorites, onClick = { onSelect(false) }, text = { Text("Stocks") })
+        Tab(selected = showFavorites, onClick = { onSelect(true) }, text = { Text("Favorites") })
+    }
+}
+
+@Composable
+private fun FavoritesErrorRow(message: String, onRetry: () -> Unit) {
+    Text(message, color = Red)
+    TextButton(onClick = onRetry) { Text("Retry favorites") }
+}
+
+@Composable
+private fun MarketFooter() {
+    Text(
+        "Virtual investing • Prices and charts from Alpaca IEX.\nIEX is one exchange, not the full US market.",
+        color = Muted, fontSize = 12.sp,
+    )
+}
+
+private fun emptyMessage(showFavorites: Boolean, favorites: FavoritesUi): String? = when {
+    showFavorites && !favorites.signedIn -> "Sign in to save your favorite stocks."
+    showFavorites && favorites.busy -> "Loading favorites…"
+    showFavorites && favorites.error != null -> null
+    showFavorites && favorites.tickers.isEmpty() -> "Tap a star in Stocks to add a favorite."
+    showFavorites -> "No favorites match your search."
+    else -> "No stocks match your search."
 }
 
 @Composable
@@ -139,27 +307,64 @@ private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun StockCard(stock: MarketStock, onClick: () -> Unit) {
+private fun FavoriteToggle(
+    ticker: String,
+    isFavorite: Boolean,
+    signedIn: Boolean,
+    busy: Boolean,
+    onChanged: (Boolean) -> Unit,
+) {
+    val favoriteAction = when {
+        !signedIn -> "Sign in to add $ticker to favorites"
+        isFavorite -> "Remove $ticker from favorites"
+        else -> "Add $ticker to favorites"
+    }
+    IconToggleButton(
+        checked = isFavorite,
+        enabled = !busy,
+        onCheckedChange = onChanged,
+        modifier = Modifier.semantics { contentDescription = favoriteAction },
+    ) {
+        val tint by animateColorAsState(
+            targetValue = if (isFavorite) Green else Muted.copy(alpha = 0.45f),
+            animationSpec = tween(durationMillis = 180),
+            label = "Favorite star tint",
+        )
+        Icon(Icons.Rounded.Star, contentDescription = null, tint = tint)
+    }
+}
+
+@Composable
+private fun StockCard(
+    stock: MarketStock,
+    isFavorite: Boolean,
+    signedIn: Boolean,
+    favoritesBusy: Boolean,
+    onClick: () -> Unit,
+    onFavoriteChanged: (Boolean) -> Unit,
+) {
     val provider = stock.source == "alpaca"
     val positive = (stock.percentageChange ?: 0.0) >= 0
     val accent = if (positive) Green else Red
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().testTag("stock-${stock.ticker}").clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StockLogo(stock.ticker)
+                StockLogo(stock.ticker, companyName = stock.companyName)
                 Column(Modifier.weight(1f)) {
                     Text(stock.ticker, fontWeight = FontWeight.Bold, color = Ink, fontSize = 18.sp)
                     Text(stock.companyName, color = Muted, fontSize = 12.sp)
+                    Text(if (provider) "ALPACA · IEX" else "SAMPLE", color = if (provider) Green else Muted,
+                        fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(if (provider) "ALPACA · IEX" else "SAMPLE", color = if (provider) Green else Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                FavoriteToggle(stock.ticker, isFavorite, signedIn, favoritesBusy, onFavoriteChanged)
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(price(stock.currentPrice), color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-                Text(stock.percentageChange?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "—", color = accent, fontWeight = FontWeight.SemiBold)
+                Text(price(stock.currentPrice), modifier = Modifier.testTag("stock-price-${stock.ticker}"), color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                Text(stock.percentageChange?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "—", modifier = Modifier.testTag("stock-change-${stock.ticker}"), color = accent, fontWeight = FontWeight.SemiBold)
             }
             if (provider) {
                 stock.change?.toBigDecimalOrNull()?.let { change ->

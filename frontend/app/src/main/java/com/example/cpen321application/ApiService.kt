@@ -2,11 +2,14 @@ package com.example.cpen321application
 
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.HTTP
 
 data class GoogleAuthRequest(val idToken: String)
 data class GoogleAuthResponse(val accessToken: String)
@@ -94,7 +97,8 @@ data class PortfolioSummaryResponse(
     val startingBalance: Double,
     val holdings: List<HoldingItemResponse>,
     val recentTrades: List<TradeHistoryItemResponse>,
-    val pendingOrders: List<PendingOrderItem>
+    val pendingOrders: List<PendingOrderItem>,
+    val reservedCash: Double = 0.0
 )
 
 // User Profile Models
@@ -105,10 +109,30 @@ data class UserProfile(
     val username: String?
 )
 
+data class NotificationDeviceRequest(
+    val installationId: String
+)
+
 data class ProfileResponse(val user: UserProfile)
 data class ProfileUpdate(val displayName: String, val username: String)
+data class StockFavoritesResponse(val tickers: List<String>)
 
 interface ApiService {
+    @GET("api/auth/me/favorites")
+    suspend fun getStockFavorites(@Header("Authorization") authorization: String): StockFavoritesResponse
+
+    @PUT("api/auth/me/favorites/{ticker}")
+    suspend fun addStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
+    @DELETE("api/auth/me/favorites/{ticker}")
+    suspend fun removeStockFavorite(
+        @Header("Authorization") authorization: String,
+        @Path("ticker") ticker: String,
+    )
+
     @POST("/api/auth/google")
     suspend fun loginWithGoogle(@Body request: GoogleAuthRequest): Response<GoogleAuthResponse>
 
@@ -141,4 +165,14 @@ interface ApiService {
 
     @GET("/api/portfolio")
     suspend fun getPortfolio(): Response<PortfolioSummaryResponse>
+
+    @PUT("/api/notif/device")
+    suspend fun registerNotificationDevice(
+        @Body request: NotificationDeviceRequest
+    ): Response<Unit>
+
+    @HTTP(method = "DELETE", path = "/api/notif/device", hasBody = true)
+    suspend fun unregisterNotificationDevice(
+        @Body request: NotificationDeviceRequest
+    ): Response<Unit>
 }

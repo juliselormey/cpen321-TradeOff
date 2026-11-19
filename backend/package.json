@@ -14,6 +14,9 @@
     "test": "jest",
     "test:market:api:mock": "jest tests/mock/marketApi.test.ts --runInBand",
     "test:market:api:live": "jest tests/no-mock/market.test.ts --runInBand",
+    "test:api:mock": "jest tests/mock --coverageDirectory=coverage/mock",
+    "test:api:nomock": "jest tests/no-mock --runInBand --coverageDirectory=coverage/no-mock",
+    "test:nfr": "jest --config jest.nfr.config.js --runInBand --json --outputFile=reports/nfr/results.json",
     "lint": "tsc -p tsconfig.lint.json && node .lint-tools/lint.js"
   },
   "engines": {
@@ -29,12 +32,15 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "firebase-admin": "^14.5.1",
     "google-auth-library": "^11.3.1",
     "jsonwebtoken": "^9.0.3",
     "socket.io": "^4.8.3",
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@types/cors": "^2.8.19",
     "@types/eslint": "^8.56.12",
     "@types/express": "^5.0.6",

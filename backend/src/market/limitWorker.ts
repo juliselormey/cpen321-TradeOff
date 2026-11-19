@@ -1,6 +1,7 @@
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
 import { fillOrder, getServerPrice } from "./settlement";
+import { notifyUser } from "../firebase/notifier";
 
 let running = false;
 
@@ -31,7 +32,14 @@ export async function processPendingLimitOrders() {
                     const filled = await db.$transaction((tx) => fillOrder(tx, order, price), {
                         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
                     });
-                    if (filled) filledCount++;
+                    if (filled) {
+                        filledCount++;
+                        void notifyUser(
+                            order.userId,
+                            "Limit order filled",
+                            `Your ${order.side.toLowerCase()} order for ${order.ticker} has been filled.`,
+                        );
+                    }
                 } catch (err) {
                     console.error(`Fill failed for order ${order.id}`, err); // next tick retries
                 }

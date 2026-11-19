@@ -141,10 +141,10 @@ describe('Mocked API: GET /api/market/stocks/:symbol/history', () => {
   it('MKT-13 unsupported symbol → 404', async () => {
     expectError(await hist(UNSUPPORTED), 404);
   });
-  it('MKT-14 provider error → 200 with unavailable status', async () => {
+  it('MKT-14 provider error without cached points → 503 with unavailable status', async () => {
     f.fetchHistory.mockRejectedValue(new Error('alpaca down'));
     const res = await hist(T);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
     expect(res.body.status).toBe('unavailable');
   });
 });

@@ -103,7 +103,7 @@
         }
         let entry = this.histories.get(symbol);
         if (!entry) { entry = emptyEntry<PricePoint[]>(); this.histories.set(symbol, entry); }
-        await this.load(entry, HISTORY_TTL_MS, async () => {
+        await this.refresh(`history:${symbol}`, entry, HISTORY_TTL_MS, async () => {
           const points = await this.provider.fetchHistory(symbol);
           return [...points].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-MAX_DAILY_POINTS);
         });

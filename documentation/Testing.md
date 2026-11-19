@@ -18,10 +18,11 @@ in an isolated scratch database; only the additive notification-device migration
 was then applied to the existing local test database. The duplicate trading-table
 migration was excluded; see Local E2E Setup before deploying to another database.
 
-Known broader-suite limitations: the mocked backend run reported **280 passed,
+Historical merge-check limitations: the mocked backend run reported **280 passed,
 11 failed, 1 TODO**, with all failures in the legacy `tests/mock/market.test.ts`.
 A comparison using the pre-merge Alpaca adapter also failed (13 cases), so this
-merge does not claim a clean legacy Market suite. The old Android `TradeStateTest`
+merge initially did not have a clean legacy Market suite. The Market failures
+have since been resolved as recorded below. The old Android `TradeStateTest`
 still references removed APIs and prevents compiling the full unit-test suite.
 The Settings instrumentation fake now includes the new notification API methods.
 Android application/instrumentation compilation and installation passed. The
@@ -34,6 +35,28 @@ and 36s. Saved HTML reports are under
 `frontend/app/build/reports/e2e-all/20261118-215113-763/<test-class>/index.html`.
 This is local Pixel 9 API 36 verification using the normal merged backend.
 Real Firebase push delivery is not verified by these E2E/fixture checks.
+
+### Market backend regression fixes
+
+After fixing the 11 Market failures, the complete mocked backend run reported
+**16 suites passed, 292 tests passed, 0 failed, 1 TODO**. The NFR suite also passed
+all **8 tests**; TypeScript checking and the production build passed.
+The no-mock backend suite was not rerun as part of this fix.
+
+- The single-symbol history fallback now uses the shared cache/refresh helper:
+  TTLs, in-flight deduplication and provider-wide cooldown are respected.
+- Single-stock requests without a quote return 503. History failures without any
+  cached points return 503. Catalog lists, retained history/quotes and successfully
+  empty history retain their intended responses.
+- History responses missing the `bars` field are rejected as malformed; explicit
+  empty/null bars remain valid. The internal batch representation still permits
+  an explicitly absent symbol's history without inventing points.
+- Snapshot tests expect the adapter's four-decimal percentage normalization.
+- Generic HTTP failure tests expect the existing 8-second retry interval; rate-limit
+  and authentication-specific longer delays are preserved.
+
+Command (from `backend`):
+`npm.cmd run test:api:mock -- --runInBand`; NFR: `npm.cmd run test:nfr`.
 
 Complete [Local E2E Setup](Local_E2E_Setup.md) once: running MySQL/MariaDB,
 isolated test database with migrations, real Google/Alpaca credentials in

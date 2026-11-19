@@ -17,3 +17,6 @@ certs/
 src/generated/
 
 .lint-tools/
+
+# Generated local NFR measurements
+reports/nfr/

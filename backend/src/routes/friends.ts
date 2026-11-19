@@ -7,11 +7,8 @@ import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/val
 import { publishFriendsChanged } from "../realtime/friendEvents";
 
 export const friendsRouter = Router();
-const publicProfile = { id: true, displayName: true, avatarUrl: true } as const;
+const publicProfile = { id: true, username: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const legacyUserId = /^[1-9][0-9]{0,9}$/;
-
 friendsRouter.use(requireAuth);
 
 friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
@@ -53,7 +50,7 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
             if (!(error instanceof PriceUnavailableError)) throw error; // entry shows "Unavailable"
         }
         return {
-            user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
+            user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
             isYou: user.id === userId,
             cashBalance: user.account?.cashBalance.toString() ?? null,
             totalPortfolioValue: valuation?.totalValue.toString() ?? null,
@@ -91,20 +88,20 @@ friendsRouter.get("/requests", asyncHandler(async (req, res) => {
 friendsRouter.post("/requests", asyncHandler(async (req, res) => {
     const userId = req.userId;
     if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-    const target: unknown = req.body?.userId;
-    if (typeof target !== "string" || (!uuid.test(target) && !legacyUserId.test(target))) {
-        res.status(400).json({ error: "userId must be a UUID or a legacy numeric ID string" });
+    const target: unknown = req.body?.username;
+    const username = typeof target === "string" ? target.trim().toLowerCase() : "";
+    if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+        res.status(400).json({ error: "Username must be 3–24 letters, numbers or underscores" });
         return;
     }
-    const recipientId = target.toLowerCase();
-    if (recipientId === userId.toLowerCase()) {
-        res.status(400).json({ error: "You cannot add yourself" });
-        return;
-    }
-    const recipient = await db.user.findUnique({ where: { id: recipientId },
+    const recipient = await db.user.findUnique({ where: { username },
         select: { id: true, isBanned: true } });
     if (!recipient || recipient.isBanned) {
-        res.status(404).json({ error: "User not found" });
+        res.status(404).json({ error: "Username not found" });
+        return;
+    }
+    if (recipient.id === userId) {
+        res.status(400).json({ error: "You cannot add yourself" });
         return;
     }
     try {

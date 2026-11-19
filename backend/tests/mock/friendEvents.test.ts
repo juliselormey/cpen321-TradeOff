@@ -22,7 +22,7 @@ const token = (id: string): string => jwt.sign({}, process.env.JWT_SECRET!, { su
 
 beforeEach(async () => {
     jest.resetAllMocks();
-    (db.user.findUnique as jest.Mock).mockImplementation(async ({ where }) => ({ id: where.id, isBanned: false }));
+    (db.user.findUnique as jest.Mock).mockImplementation(async ({ where }) => ({ id: where.id ?? (where.username === 'recipient_user' ? recipient : undefined), isBanned: false }));
     (db.friendship.findFirst as jest.Mock).mockResolvedValue({ senderId: sender, recipientId: recipient });
     clients = [];
     server = http.createServer(createApp());
@@ -58,7 +58,7 @@ async function connect(id: string): Promise<{ socket: WebSocket; messages: strin
 }
 
 test.each([
-    ['post', '/api/friends/requests', { userId: recipient }, sender],
+    ['post', '/api/friends/requests', { username: 'recipient_user' }, sender],
     ['post', '/api/friends/requests/request-id/accept', {}, recipient],
     ['delete', '/api/friends/requests/request-id', {}, sender],
     ['delete', '/api/friends/requests/request-id', {}, recipient],

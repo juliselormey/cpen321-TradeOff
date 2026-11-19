@@ -28,7 +28,10 @@ const as = (id: string) => ({
   patch: (p: string, b: object = {}) => request(app).patch(p).set(bearer(id)).send(b),
   del: (p: string) => request(app).delete(p).set(bearer(id)),
 });
-const sendReq = (from: string, to: string) => as(from).post('/api/friends/requests', { userId: to });
+const sendReq = async (from: string, to: string) => {
+  const user = await db.user.findUniqueOrThrow({ where: { id: to }, select: { username: true } });
+  return as(from).post('/api/friends/requests', { username: user.username });
+};
 const incoming = async (id: string) => (await as(id).get('/api/friends/requests')).body.incoming;
 const outgoing = async (id: string) => (await as(id).get('/api/friends/requests')).body.outgoing;
 const friendsOf = async (id: string) => (await as(id).get('/api/friends')).body.friends.map((f: { user: { id: string } }) => f.user.id);

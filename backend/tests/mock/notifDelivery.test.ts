@@ -86,7 +86,8 @@ describe("Mocked: notifyUser", () => {
         expect(send).toHaveBeenCalledTimes(1);
         expect(send).toHaveBeenCalledWith({
             fid: firstDevice.installationId,
-            notification: { title, body },
+            data: { title, body, userId },
+            android: { priority: "high" },
         });
     });
 
@@ -108,12 +109,14 @@ describe("Mocked: notifyUser", () => {
 
         expect(send).toHaveBeenCalledWith({
             fid: firstDevice.installationId,
-            notification: { title, body },
+            data: { title, body, userId },
+            android: { priority: "high" },
         });
 
         expect(send).toHaveBeenCalledWith({
             fid: secondDevice.installationId,
-            notification: { title, body },
+            data: { title, body, userId },
+            android: { priority: "high" },
         });
     });
 
@@ -175,7 +178,8 @@ describe("Mocked: notifyUser", () => {
 
         expect(send).toHaveBeenCalledWith({
             fid: secondDevice.installationId,
-            notification: { title, body },
+            data: { title, body, userId },
+            android: { priority: "high" },
         });
 
         expect(devices.deleteMany).not.toHaveBeenCalled();

@@ -4,14 +4,19 @@ import { db } from "../prisma/db";
 export async function sendNotification(
     installationId: string,
     title: string,
-    body: string
+    body: string,
+    userId: string
 ): Promise<string> {
     return getFirebaseMessaging().send({
         fid: installationId,
-        notification: {
+        data: {
             title,
-            body
-        }
+            body,
+            userId,
+        },
+        android: {
+            priority: "high",
+        },
     });
 }
 
@@ -27,11 +32,7 @@ export async function notifyUser(
 
         await Promise.all(devices.map(async (device) => {
             try {
-                await sendNotification(
-                    device.installationId,
-                    title,
-                    body,
-                );
+                await sendNotification(device.installationId, title, body, userId);
             } catch (error) {
                 if (
                     error instanceof Error &&

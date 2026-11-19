@@ -56,8 +56,8 @@ fun SettingsScreen(
         Text("Settings", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Make TradeOff yours", color = MaterialTheme.colorScheme.onSurfaceVariant)
         AppearanceSettings(darkMode, onDarkModeChange)
+        NotificationSettings()
         AccountSettings(state, onSignIn)
-        NotificationPermission()
         Text(
             "TradeOff • Practice investing",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -80,6 +80,18 @@ private fun AppearanceSettings(darkMode: Boolean, onDarkModeChange: (Boolean) ->
             }
             Switch(checked = darkMode, onCheckedChange = onDarkModeChange)
         }
+        Text(
+            "Saved on this device.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun NotificationSettings() {
+    SettingsCard {
+        Text("Notifications", style = MaterialTheme.typography.titleLarge)
+        NotificationPermission()
         Text(
             "Saved on this device.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant

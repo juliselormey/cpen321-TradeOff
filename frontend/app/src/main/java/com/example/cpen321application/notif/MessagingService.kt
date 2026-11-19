@@ -32,11 +32,18 @@ class MessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
 
-        val notification = message.notification ?: return
-        val title = notification.title ?: getString(R.string.app_name)
-        val body = notification.body ?: return
+        val userId = message.data["userId"] ?: return
+        val title = message.data["title"] ?: return
+        val body = message.data["body"] ?: return
 
-        showNotification(title, body)
+        runBlocking(Dispatchers.IO) {
+            NotificationRegistration.displayIfAllowed(
+                applicationContext,
+                userId
+            ) {
+                showNotification(title, body)
+            }
+        }
     }
 
     private fun showNotification(title: String, body: String) {

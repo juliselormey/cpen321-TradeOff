@@ -1,4 +1,6 @@
 import { Prisma } from "../generated/prisma/client";
+import { db } from "../prisma/db";
+import { LIVE_SYMBOLS } from "./catalog";
 import { marketService } from "./service";
 
 export type Tx = Prisma.TransactionClient;
@@ -11,17 +13,33 @@ export class OrderError extends Error {
     }
 }
 
-/** Server-side price from Alpaca. Call this BEFORE opening a transaction. */
+/**
+ * Server-side price from Alpaca. Call this BEFORE opening a transaction.
+ * Only fresh quotes (status "ok") are tradable: a stale quote means Alpaca refreshes are failing.
+ */
 export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
+    if (!LIVE_SYMBOLS.includes(ticker)) throw new OrderError(400, "Unsupported ticker");
     try {
         const stock = await marketService.getStock(ticker);
-        if (!stock.currentPrice || stock.status === "unavailable") {
+        if (!stock.currentPrice || stock.status !== "ok") {
             throw new OrderError(503, `Price unavailable for ${ticker}`);
         }
         return new Prisma.Decimal(stock.currentPrice);
     } catch (err) {
         if (err instanceof OrderError) throw err;
         throw new OrderError(503, `Price unavailable for ${ticker}`);
+    }
+}
+
+/** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */
+export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 3): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await db.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        } catch (error) {
+            const conflict = typeof error === "object" && error !== null && "code" in error && error.code === "P2034";
+            if (!conflict || attempt >= attempts) throw error;
+        }
     }
 }
 

@@ -48,6 +48,15 @@ model User {
   positions Position[]
   trades    Trade[]
   orders    Order[]
+  favorites StockFavorite[]
+}
+
+model StockFavorite {
+  userId String
+  ticker String @db.VarChar(16)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, ticker])
 }
 
 enum FriendshipStatus {

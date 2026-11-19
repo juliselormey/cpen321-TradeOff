@@ -14,6 +14,9 @@
     "test": "jest",
     "test:market:api:mock": "jest tests/mock/marketApi.test.ts --runInBand",
     "test:market:api:live": "jest tests/no-mock/market.test.ts --runInBand",
+    "test:api:mock": "jest tests/mock --coverageDirectory=coverage/mock",
+    "test:api:nomock": "jest tests/no-mock --runInBand --coverageDirectory=coverage/no-mock",
+    "test:nfr": "jest --config jest.nfr.config.js --runInBand --json --outputFile=reports/nfr/results.json",
     "lint": "tsc -p tsconfig.lint.json && node .lint-tools/lint.js"
   },
   "engines": {

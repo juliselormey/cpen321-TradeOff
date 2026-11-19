@@ -29,6 +29,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -182,9 +183,11 @@ private fun AppDestinations(
         navController.navigate("Trade/" + ticker)
     }
 
+    val goBack: () -> Unit = { navController.popBackStack() }
+
     NavHost(navController, startDestination = Routes.Market, modifier = modifier) {
         composable(Routes.Portfolio) {
-            ProtectedView(apiService = api) {
+            ProtectedView(apiService = api, onBack = goBack) {
                 PortfolioScreen(
                     apiService = api,
                     onBack = { navController.showMarket() },
@@ -195,11 +198,15 @@ private fun AppDestinations(
         }
 
         composable(Routes.Market) {
-            MarketScreen(onStockSelected = openTrade)
+            MarketScreen(
+                api = api,
+                onStockSelected = openTrade,
+                onSignInRequired = { navController.navigate(Routes.Login) },
+            )
         }
 
         composable(Routes.Social) {
-            ProtectedView(apiService = api) {
+            ProtectedView(apiService = api, onBack = goBack) {
                 SocialScreen(
                     onBack = { navController.showMarket() },
                     onSignOut = signOut
@@ -217,11 +224,11 @@ private fun AppDestinations(
         }
 
         composable(Routes.Trade) { entry ->
-            ProtectedView(apiService = api) {
+            ProtectedView(apiService = api, onBack = goBack) {
                 TradeScreen(
                     ticker = entry.arguments?.getString("ticker").orEmpty(),
                     apiService = api,
-                    onBack = { navController.popBackStack() }
+                    onBack = goBack
                 )
             }
         }
@@ -229,6 +236,7 @@ private fun AppDestinations(
         composable(Routes.Login) {
             LoginView(
                 apiService = api,
+                onBack = goBack,
                 onSuccess = {
                     navController.navigate(Routes.Market) {
                         popUpTo(Routes.Market) { inclusive = true }
@@ -273,6 +281,7 @@ fun HomeScreen(navController: NavController) {
 @Composable
 fun ProtectedView(
     apiService: ApiService,
+    onBack: () -> Unit,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -290,6 +299,7 @@ fun ProtectedView(
     if (!isUserLoggedIn) {
         LoginView(
             apiService = apiService,
+            onBack = onBack,
             onSuccess = {
                 isUserLoggedIn = true
             }
@@ -344,7 +354,8 @@ private suspend fun attemptLogin(
 fun LoginView(
     apiService: ApiService,
     onSuccess: () -> Unit = {},
-    signIn: suspend (Context) -> GoogleSignInResult = ::googleSignIn
+    signIn: suspend (Context) -> GoogleSignInResult = ::googleSignIn,
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -383,6 +394,10 @@ fun LoginView(
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = msg, color = Color.Red, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
+
+        TextButton(onClick = onBack) {
+            Text("Go back")
+        }
     }
 }
 
@@ -395,7 +410,7 @@ private fun LoginHeader() {
     )
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-        text = "Please log in to view your portfolio and social leaderboards.",
+        text = "Sign in to trade, view your portfolio, and see social leaderboards.",
         color = Color.Gray,
         fontSize = 14.sp,
         textAlign = TextAlign.Center

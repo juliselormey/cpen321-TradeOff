@@ -191,7 +191,7 @@ curl.exe --cacert certs/cert.pem https://localhost:3000/api/market/stocks
 ```
 
 > [!NOTE]
-> The first request should return `{"status":"ok"}` (if you've judged by the command, it's general backend (connection) health!), the second should return Alpaca's wall of text (should be six stocks with price data, connection health, and other relevant stuff).
+> The first request should return `{"status":"ok"}` (if you've judged by the command, it's general backend (connection) health!), the second should return Alpaca's wall of text (should contain 100 stocks with price data, connection health, and other relevant stuff).
 
 ### 2. Run the app
 

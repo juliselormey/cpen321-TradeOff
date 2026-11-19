@@ -147,7 +147,7 @@ private fun ProfileEditor(state: SettingsState, onSave: () -> Unit) {
         value = state.username, onValueChange = state::updateUsername,
         label = { Text("Username") }, prefix = { Text("@") }, enabled = !state.busy && !state.expired,
         singleLine = true, modifier = Modifier.fillMaxWidth(),
-        supportingText = { Text("3–24 letters, numbers or underscores") }
+        supportingText = { Text("Your friend ID; 3–24 letters, numbers or underscores") }
     )
     Button(enabled = state.canSave, onClick = onSave) {
         Text(if (state.busy) "Please wait…" else "Save profile")

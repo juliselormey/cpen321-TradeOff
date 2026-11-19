@@ -1,9 +1,16 @@
-# Market API: six Alpaca IEX stocks
+# Market API: 100 Alpaca IEX stocks
 
-AAPL (Apple), MSFT (Microsoft), TSLA (Tesla), NVDA (NVIDIA), GOOGL
-(Alphabet), and AMZN (Amazon) all use real Alpaca IEX quotes and history.
+The 100 U.S.-listed stocks in `catalog.ts` use Alpaca IEX quotes and history.
 There are no mock prices/charts or fabricated offline prices. Company names
-and default favorites are catalog metadata, not user-persisted favorites.
+and default favorites are catalog metadata. The authenticated favorites API
+stores each user's selections in MySQL. Signed-out users can browse the catalog
+and are prompted to sign in when they tap a star or open Favorites.
+
+The full backend serves `GET /api/users/me/favorites` and
+`PUT`/`DELETE /api/users/me/favorites/:ticker`. Apply the Prisma
+`20261117000000_stock_favorites` migration and regenerate the Prisma client
+before running the updated backend. The Market-only development server
+serves public quotes and history.
 Android calls our backend; Alpaca credentials never leave the backend.
 Trading/order execution and Portfolio integration remain separate features.
 
@@ -52,7 +59,7 @@ The override affects Market only, not authentication.
 | GET /api/market/stocks/:symbol | One supported stock, case-insensitive symbol |
 | GET /api/market/stocks/:symbol/history | That stock's real chart history |
 
-Only the six catalog symbols are allowed; unknown symbols return 404. All
+Only catalog symbols are allowed. Unknown symbols return 404. All
 responses have Cache-Control: no-store, so HTTP intermediaries do not hide
 our current health status. Backend caches still apply.
 
@@ -81,7 +88,7 @@ MarketApiService, MarketRepository and MarketStock in ui/market/data/.
 Keep screen state in each feature's ViewModel; use lifecycle-aware polling
 only while visible. The list already includes histories: do not fetch all
 histories again every eight seconds. MarketSparkline accepts points, color
-and a symbol; company logos are bundled in res/drawable/ic_stock_*.png.
+and a symbol. Company logos are bundled in Android drawable resources.
 Backend features should reuse the exported marketService singleton from
 service.ts, e.g. await marketService.getStock('MSFT'). Do not create a new
 service/cache per request or implement a second Alpaca client. Order
@@ -94,9 +101,9 @@ execution still needs separate server-side freshness and business checks.
 - History: GET /v2/stocks/bars?symbols=...&timeframe=1Day&feed=iex&... . A
   separate batch cached for 15 minutes. Queries cover 45 calendar days and
   exclude today's incomplete New York daily bar; keep 30 daily closes per
-  stock. Page size 1000 is TOTAL across symbols, not per symbol. Follow
-  next_page_token (at most ten pages); repeated/incomplete pagination fails
-  honestly rather than losing later symbols. Six stocks normally fit one page.
+  stock. Each page contains up to 1000 bars across all symbols. The provider
+  follows next_page_token for up to ten pages and reports an error if
+  pagination repeats or reaches the page cap before the final page.
 - Concurrent list/individual/history requests share in-flight batch promises.
   Even a cold single-symbol request warms every due catalog symbol. No
   recurring backend timers: no client demand means no Alpaca polling.
@@ -106,9 +113,8 @@ execution still needs separate server-side freshness and business checks.
   Combined chart is sorted, deduplicated and capped at 30+120 points per stock.
   Repeated closed-market quotes do not fabricate movement. Fewer than two
   valid timestamps draws no line; flat prices draw a horizontal line.
-- Normally about 7.5 snapshot batches/minute plus history every 15 minutes,
-  not six independent quote requests per poll. Separate backend processes
-  have separate in-memory caches; restart clears them.
+- Normally about 7.5 snapshot batches/minute plus history every 15 minutes.
+  Each backend process has its own in-memory cache, which clears on restart.
 - Each HTTP request has a four-second timeout, a response-size limit and no
   redirects. No immediate retry loops. Generic errors cool down 30 seconds;
   config/auth errors 60 seconds. HTTP 429 waits at least 60 seconds and honors
@@ -124,12 +130,11 @@ Official contract references:
 
 ## Logos
 
-Six user-supplied PNG logos are bundled locally. No logo service,
+All 100 stock logos are bundled locally as user-supplied PNGs. No logo service,
 additional key, network request or image-loading dependency is required.
 GOOGL uses Google's mark for Alphabet's listing. Supplied filenames and
-provenance notes are in frontend/third_party/stock-logos/. Replace a drawable and
-rebuild if the team wants a different logo treatment. An unknown ticker has
-a letter fallback. Logos identify the companies and do not imply endorsement.
+provenance notes are in frontend/third_party/stock-logos/. Stocks without a
+bundled logo display their ticker in the logo tile.
 
 ## Verification
 

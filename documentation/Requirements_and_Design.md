@@ -7,6 +7,7 @@
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 | 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
 | 2026-11-03      | Continuation of changes on 2026-11-01 (3.2, 3.4, 3.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7) | In response to CP2 submission, backend changes, and TA feedback |
+| 2026-11-18 | Section 4.7: NFR design | Align the implemented concurrent workload, freshness enforcement, and testing-document reference. |
 
 ---
 
@@ -350,7 +351,10 @@ Individual stock-detail requests return the stock's available data and status wh
     - **Implementation**: `backend/tests/nfr/responseTime.test.ts` warms the cache using a stubbed provider, sends 100 sequential requests to each Market endpoint with Supertest, records every response time, and asserts that the 95th percentile of each endpoint is under 1000 ms. 
         The provider is stubbed so that a cache expiry during the run cannot add Alpaca's latency.
 2. **Concurrent-Load Efficiency (NFR-2)**
-    - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that send at least 100 requests in total to cached Market endpoints. It asserts that the 95th percentile is under 1000 ms and that every response is successful.
+    - **Implementation**: `backend/tests/nfr/concurrentLoad.test.ts` runs 10 concurrent simulated users that each send 30 requests (300 total, 100 per endpoint) to cached Market endpoints. It asserts that each endpoint's 95th percentile is under 1000 ms and that every response is successful and contains usable data.
 3. **External-Service Reliability (NFR-3)**
     - **Implementation**: `backend/tests/nfr/providerRecovery.test.ts` simulates provider failures and verifies that previously retrieved quotes and history are retained with `status: 'stale'`, while data that has never been retrieved is reported as `status: 'unavailable'`. 
         It verifies that stale quotes are rejected by trading and portfolio valuation, then restores the provider, advances Jest's fake timers past the provider retry delay, and asserts that the next eligible market-data request retrieves fresh data and changes the status to `ok` without restarting the application or backend.
+
+
+Run all three requirements from `backend/` using `npm.cmd run test:nfr`. See [Testing, section 3](Testing.md#3-tests-of-non-functional-requirements) for the workloads, measurement method, verified results, and saved evidence. Portfolio price loading accepts only quotes with `status: 'ok'`, ensuring stale prices are rejected until recovery.

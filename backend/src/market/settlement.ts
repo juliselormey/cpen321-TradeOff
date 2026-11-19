@@ -33,19 +33,19 @@ export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
 
 /** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */
 export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 3): Promise<T> {
-    const maxAttempts = Math.max(1, attempts);
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const run = async () =>
+        (await db.$transaction(work, {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        })) as T;
+    const retries = Math.max(1, attempts) - 1;
+    for (let attempt = 0; attempt < retries; attempt++) {
         try {
-            return (await db.$transaction(work, {
-                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-            })) as T;
+            return await run();
         } catch (error) {
             if (!isWriteConflict(error)) throw error;
-            lastError = error;
         }
     }
-    throw lastError;
+    return run();
 }
 
 function isWriteConflict(error: unknown): boolean {

@@ -1,6 +1,6 @@
 import request from 'supertest';
 import type { Express } from 'express';
-import type * as StubProvider from '../helpers/stubProvider';
+import type * as StubProvider from '../helpers/stubprovider';
 import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import {
@@ -9,7 +9,7 @@ import {
 
 const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/services/alpacaProvider', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubProvider').createStubProvider(mockMarket));
+  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
 
 interface LimitOrderWorker { runLimitOrderWorkerOnce: () => Promise<void> }
 

@@ -1,0 +1,57 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ "main", "master", "dev" ]
+  pull_request:
+    branches: [ "main", "master", "dev" ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: tradeoff_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h localhost" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Typecheck
+        working-directory: ./backend
+        run: npm run typecheck
+
+      - name: Run Database Push and Tests
+        working-directory: ./backend
+        env:
+          PORT: 3002
+          DATABASE_URL: "mysql://root:rootpassword@127.0.0.1:3306/tradeoff_test"
+          JWT_SECRET: "ci-secret-key-12345-mock-fallback"
+          ALPACA_API_KEY_ID: "mock-key-id"
+          ALPACA_API_SECRET_KEY: "mock-secret-key"
+          NODE_ENV: "test"
+        run: |
+          npx prisma db push --accept-data-loss
+          npx jest tests/mock/

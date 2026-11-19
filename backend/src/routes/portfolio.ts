@@ -27,7 +27,10 @@ portfolioRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
             db.order.findMany({ where: { userId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
         ]);
 
-        const prices = await loadPrices(positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker));
+        const heldTickers = positions
+            .filter(p => p.quantity.greaterThan(0))
+            .map(p => String(p.ticker)) as string[];
+        const prices = await loadPrices(heldTickers);
         const valuation = valuePortfolio({
             account, positions,
             pendingBuyOrders: pendingOrders.filter(o => o.side === "BUY" && o.type === "LIMIT"),

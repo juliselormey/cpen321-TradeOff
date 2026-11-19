@@ -42,6 +42,7 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import retrofit2.HttpException
 
 private val Green: Color @Composable get() = MaterialTheme.colorScheme.primary
@@ -65,6 +66,66 @@ private data class MarketActions(
     val onRefresh: () -> Unit,
 )
 
+@Stable
+private class FavoritesController(
+    private val api: ApiService,
+    private val sessionToken: String?,
+    private val currentToken: () -> String?,
+    private val scope: CoroutineScope,
+) {
+    var tickers by mutableStateOf<Set<String>?>(null)
+        private set
+    var busy by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+    var needsSignIn by mutableStateOf(false)
+        private set
+
+    val signedIn: Boolean get() = !sessionToken.isNullOrEmpty()
+
+    fun load() = request { api.getStockFavorites(it).tickers.toSet() }
+
+    fun change(ticker: String, favorite: Boolean, onSignInRequired: () -> Unit) {
+        val current = tickers
+        when {
+            !signedIn || needsSignIn -> onSignInRequired()
+            current == null -> load()
+            else -> request { authorization ->
+                if (favorite) {
+                    api.addStockFavorite(authorization, ticker)
+                    current + ticker
+                } else {
+                    api.removeStockFavorite(authorization, ticker)
+                    current - ticker
+                }
+            }
+        }
+    }
+
+    private fun request(call: suspend (String) -> Set<String>) {
+        if (sessionToken.isNullOrEmpty() || busy || currentToken() != sessionToken) return
+        busy = true
+        error = null
+        needsSignIn = false
+        scope.launch {
+            try {
+                tickers = call("Bearer $sessionToken")
+            } catch (e: HttpException) {
+                needsSignIn = e.code() == 401
+                error = if (needsSignIn) "Sign in again to access your favorites."
+                else "Favorites request failed (HTTP ${e.code()})."
+            } catch (_: IOException) {
+                error = "Could not reach the favorites server."
+            } catch (_: com.google.gson.JsonParseException) {
+                error = "Could not read your favorites."
+            } finally {
+                busy = false
+            }
+        }
+    }
+}
+
 @Composable
 fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInRequired: () -> Unit) {
     val context = LocalContext.current.applicationContext
@@ -75,37 +136,13 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
     val state by model.state.collectAsState()
     val tokens = remember(context) { SessionManager.observeToken(context) }
     val token by tokens.collectAsState(initial = SessionManager.getToken(context))
-    val sessionToken = token
-    var favorites by remember(sessionToken) { mutableStateOf<Set<String>?>(null) }
-    var favoritesBusy by remember(sessionToken) { mutableStateOf(false) }
-    var favoritesError by remember(sessionToken) { mutableStateOf<String?>(null) }
-    var needsSignIn by remember(sessionToken) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val scope = rememberCoroutineScope()
-    fun requestFavorites(request: suspend (String) -> Set<String>) {
-        if (sessionToken.isNullOrEmpty() || favoritesBusy || SessionManager.getToken(context) != sessionToken) return
-        favoritesBusy = true
-        favoritesError = null
-        needsSignIn = false
-        scope.launch {
-            try {
-                favorites = request("Bearer $sessionToken")
-            } catch (error: HttpException) {
-                needsSignIn = error.code() == 401
-                favoritesError = if (needsSignIn) "Sign in again to access your favorites."
-                else "Favorites request failed (HTTP ${error.code()})."
-            } catch (_: IOException) {
-                favoritesError = "Could not reach the favorites server."
-            } catch (_: com.google.gson.JsonParseException) {
-                favoritesError = "Could not read your favorites."
-            } finally {
-                favoritesBusy = false
-            }
-        }
+    val favorites = remember(token, scope) {
+        FavoritesController(api, token, { SessionManager.getToken(context) }, scope)
     }
-    fun loadFavorites() = requestFavorites { api.getStockFavorites(it).tickers.toSet() }
 
-    LaunchedEffect(sessionToken) { loadFavorites() }
+    LaunchedEffect(favorites) { favorites.load() }
     LaunchedEffect(model, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
@@ -117,35 +154,18 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
     MarketContent(
         state = state,
         favorites = FavoritesUi(
-            tickers = favorites.orEmpty(),
-            signedIn = !sessionToken.isNullOrEmpty(),
-            busy = favoritesBusy,
-            error = favoritesError,
+            tickers = favorites.tickers.orEmpty(),
+            signedIn = favorites.signedIn,
+            busy = favorites.busy,
+            error = favorites.error,
         ),
         actions = MarketActions(
-            onFavoritesRetry = { if (needsSignIn) onSignInRequired() else loadFavorites() },
+            onFavoritesRetry = { if (favorites.needsSignIn) onSignInRequired() else favorites.load() },
             onStockSelected = onStockSelected,
             onSignInRequired = onSignInRequired,
-            onFavoriteChanged = { ticker, favorite ->
-                val current = favorites
-                if (sessionToken.isNullOrEmpty() || needsSignIn) {
-                    onSignInRequired()
-                } else if (current == null) {
-                    loadFavorites()
-                } else {
-                    requestFavorites { authorization ->
-                        if (favorite) {
-                            api.addStockFavorite(authorization, ticker)
-                            current + ticker
-                        } else {
-                            api.removeStockFavorite(authorization, ticker)
-                            current - ticker
-                        }
-                    }
-                }
-            },
+            onFavoriteChanged = { ticker, favorite -> favorites.change(ticker, favorite, onSignInRequired) },
             onOpenFavorites = {
-                if (needsSignIn) onSignInRequired() else loadFavorites()
+                if (favorites.needsSignIn) onSignInRequired() else favorites.load()
                 scope.launch { model.refresh() }
             },
             onRefresh = { scope.launch { model.refresh() } },

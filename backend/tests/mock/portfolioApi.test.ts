@@ -41,7 +41,7 @@ beforeEach(() => {
   const l = loadApp('db', 'market/service');
   app = l.app;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
-  (marketService.getStock as unknown as jest.Mock).mockImplementation(async (t: string) => ({
+  (marketService.getStock as unknown as jest.Mock).mockImplementation((t: string) => Promise.resolve({
     symbol: t,
     ticker: t,
     companyName: `${t} Inc`,

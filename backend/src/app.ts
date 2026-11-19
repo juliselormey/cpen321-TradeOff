@@ -7,6 +7,7 @@ import { favoritesRouter } from "./routes/favorites";
 import { createMarketRouter } from './market/routes';
 import { tradesRouter } from "./routes/trades";
 import { portfolioRouter } from "./routes/portfolio";
+import { createE2ERouter } from './routes/e2e';
 
 export function createApp(): Express {
   const app = express();
@@ -25,6 +26,7 @@ export function createApp(): Express {
   app.use("/api/friends", friendsRouter);
   app.use("/api/trades", tradesRouter);
   app.use("/api/portfolio", portfolioRouter);
+  app.use('/__e2e', createE2ERouter());
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not Found' });

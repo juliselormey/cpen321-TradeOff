@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -87,6 +88,7 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
             }
         }
     }
+    // Load favorites from the database through the authenticated user's API.
     fun loadFavorites() = requestFavorites { api.getStockFavorites(it).tickers.toSet() }
 
     LaunchedEffect(sessionToken) { loadFavorites() }
@@ -108,6 +110,7 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
         onStockSelected = onStockSelected,
         onSignInRequired = onSignInRequired,
         onFavoriteChanged = { ticker, favorite ->
+            // A guest or expired session opens sign-in; a signed-in user saves the star on the server.
             val current = favorites
             if (sessionToken.isNullOrEmpty() || needsSignIn) {
                 onSignInRequired()
@@ -151,6 +154,7 @@ private fun MarketContent(
     var showFavorites by rememberSaveable { mutableStateOf(false) }
     val stocksListState = rememberLazyListState()
     val favoritesListState = rememberLazyListState()
+    // Stocks keeps every matching stock; Favorites displays only saved tickers.
     val stocks = state.stocks.filter {
         (!showFavorites || it.ticker in favoriteTickers) &&
             (it.ticker.contains(query, true) || it.companyName.contains(query, true))
@@ -158,7 +162,7 @@ private fun MarketContent(
     MaterialTheme {
         LazyColumn(
             state = if (showFavorites) favoritesListState else stocksListState,
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxSize().testTag("market-list").background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -182,6 +186,7 @@ private fun MarketContent(
                     Tab(
                         selected = showFavorites,
                         onClick = {
+                            // Opening Favorites requires sign-in and refreshes the user's saved list.
                             if (!signedIn) {
                                 onSignInRequired()
                             } else if (!showFavorites) {
@@ -269,7 +274,7 @@ private fun StockCard(
     val positive = (stock.percentageChange ?: 0.0) >= 0
     val accent = if (positive) Green else Red
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth().testTag("stock-${stock.ticker}").clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
@@ -302,8 +307,8 @@ private fun StockCard(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(price(stock.currentPrice), color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-                Text(stock.percentageChange?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "—", color = accent, fontWeight = FontWeight.SemiBold)
+                Text(price(stock.currentPrice), modifier = Modifier.testTag("stock-price-${stock.ticker}"), color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+                Text(stock.percentageChange?.let { String.format(Locale.US, "%+.2f%%", it) } ?: "—", modifier = Modifier.testTag("stock-change-${stock.ticker}"), color = accent, fontWeight = FontWeight.SemiBold)
             }
             if (provider) {
                 stock.change?.toBigDecimalOrNull()?.let { change ->

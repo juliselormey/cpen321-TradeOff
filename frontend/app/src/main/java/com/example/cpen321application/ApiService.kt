@@ -96,7 +96,8 @@ data class PortfolioSummaryResponse(
     val startingBalance: Double,
     val holdings: List<HoldingItemResponse>,
     val recentTrades: List<TradeHistoryItemResponse>,
-    val pendingOrders: List<PendingOrderItem>
+    val pendingOrders: List<PendingOrderItem>,
+    val reservedCash: Double = 0.0
 )
 
 // User Profile Models

@@ -142,8 +142,10 @@ private class PortfolioState(
     } ?: emptyList()
 
     val cashBalance get() = summary?.cashBalance ?: 10000.0
+    // Pending BUY orders reserve cash; it remains part of the user's assets.
+    val totalCash get() = cashBalance + (summary?.reservedCash ?: 0.0)
     val investedValue get() = evaluatedHoldings.sumOf { it.currentValue }
-    val totalPortfolioValue get() = investedValue + cashBalance
+    val totalPortfolioValue get() = investedValue + totalCash
     val totalProfitLoss get() = evaluatedHoldings.sumOf { it.profitLoss }
     val totalCostBasis get() = evaluatedHoldings.sumOf { it.costBasis }
     val totalReturnPercent get() = if (totalCostBasis > 0) (totalProfitLoss / totalCostBasis) * 100 else 0.0
@@ -259,7 +261,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.portfolioOverview(sta
             item {
                 AssetAllocationCard(
                     holdings = evaluatedHoldings,
-                    cashBalance = cashBalance,
+                    cashBalance = totalCash,
                     totalValue = totalPortfolioValue
                 )
             }

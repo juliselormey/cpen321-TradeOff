@@ -1,5 +1,18 @@
 # README: TradeOff installation guide
 
+For automated Browse Stocks, Place Market Buy, View Portfolio, View Leaderboard and Send Friend Request acceptance tests, follow
+[Local E2E Setup](documentation/Local_E2E_Setup.md). It documents the one-time
+MySQL/MariaDB, Google and Alpaca setup, then ordinary `npm run dev` plus a test
+runner. No Docker or special E2E server is required. The general application
+setup below uses the main database and HTTPS; do not mix its URLs/database with
+the isolated local test configuration.
+
+After that setup, keep `npm run dev` running from `backend`, sign in on the Pixel 9
+app and return to Market. From the repository root run
+`.\scripts\run-frontend-e2e-tests.ps1` to execute all five use-case tests one by one.
+Individual commands and saved report locations are listed in
+[Testing](documentation/Testing.md#commands-for-the-five-formal-use-cases).
+
 ## Introduction
 
 TradeOff is an Android investment-practice app w/ Google sign-in, live market data, virtual trading, portfolios, and a friends leaderboard.

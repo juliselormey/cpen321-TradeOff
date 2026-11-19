@@ -1,5 +1,6 @@
 import request from 'supertest';
 import type { Express } from 'express';
+import type * as StubProvider from '../helpers/stubprovider';
 import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import {
@@ -9,11 +10,11 @@ import {
 // eslint-disable-next-line no-var
 var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  require('../helpers/stubprovider').createStubProvider(mockMarket));
+  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
 
 let app: Express, A: string, B: string, C: string, D: string, E: string;
 
-beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app as Express; });
+beforeAll(() => { jest.useFakeTimers(FAKE_DATE); app = loadApp().app; });
 afterAll(async () => { jest.useRealTimers(); await db.$disconnect(); });
 beforeEach(async () => {
   await resetDb();

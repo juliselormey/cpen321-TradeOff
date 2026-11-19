@@ -3,11 +3,14 @@ export { db };
 
 let n = 0;
 
+// Children before parents so foreign keys never block the deletes.
 export async function resetDb() {
-  const client = db as unknown as Record<string, { deleteMany: () => Promise<unknown> }>;
-  for (const m of ['trade', 'order', 'position', 'friendship', 'account', 'user']) {
-    await client[m]?.deleteMany();
-  }
+  await db.trade.deleteMany();
+  await db.order.deleteMany();
+  await db.position.deleteMany();
+  await db.friendship.deleteMany();
+  await db.account.deleteMany();
+  await db.user.deleteMany();
 }
 
 export async function createUser(o: { cash?: number; name?: string; username?: string } = {}) {
@@ -26,7 +29,7 @@ export async function createUser(o: { cash?: number; name?: string; username?: s
       },
     },
   });
-  return u.id as string;
+  return u.id;
 }
 
 export const getCash = async (id: string) => {
@@ -38,14 +41,14 @@ export const giveShares = (userId: string, ticker = 'AAPL', quantity = 1, avgCos
   db.position.create({
     data: {
       userId,
-      ticker: (ticker ?? 'AAPL').toUpperCase(),
+      ticker: ticker.toUpperCase(),
       quantity,
       averageCost: avgCost,
     },
   });
 
 export const getQty = async (userId: string, ticker = 'AAPL') => {
-  const t = (ticker ?? 'AAPL').toUpperCase();
+  const t = ticker.toUpperCase();
   const p = await db.position.findUnique({
     where: { userId_ticker: { userId, ticker: t } },
   });
@@ -53,7 +56,7 @@ export const getQty = async (userId: string, ticker = 'AAPL') => {
 };
 
 export const getAvgCost = async (userId: string, ticker = 'AAPL') => {
-  const t = (ticker ?? 'AAPL').toUpperCase();
+  const t = ticker.toUpperCase();
   const p = await db.position.findUnique({
     where: { userId_ticker: { userId, ticker: t } },
   });
@@ -63,7 +66,7 @@ export const getAvgCost = async (userId: string, ticker = 'AAPL') => {
 export const countTrades = (userId: string) => db.trade.count({ where: { userId } });
 export const getOrder = (id: string) => db.order.findUnique({ where: { id } });
 
-export const befriend = async (a: string, b: string) => {
+export const befriend = (a: string, b: string) => {
   const pairKey = [a.toLowerCase(), b.toLowerCase()].sort().join(":");
   return db.friendship.create({
     data: {
@@ -75,7 +78,7 @@ export const befriend = async (a: string, b: string) => {
   });
 };
 
-export const requestFrom = async (senderId: string, receiverId: string) => {
+export const requestFrom = (senderId: string, receiverId: string) => {
   const pairKey = [senderId.toLowerCase(), receiverId.toLowerCase()].sort().join(":");
   return db.friendship.create({
     data: {

@@ -1,5 +1,6 @@
 import request from 'supertest';
 import type { Express } from 'express';
+import type * as MarketServiceModule from '../../src/market/service';
 import { loadApp } from '../helpers/loadApp';
 import { T, bearer, expectError, expiredBearer, tamperedBearer } from '../helpers/testkit';
 import { db } from '../../src/prisma/db';
@@ -16,11 +17,11 @@ jest.mock('../../src/prisma/db', () => ({
     position: { findUnique: jest.fn(), findFirst: jest.fn(), upsert: jest.fn(), update: jest.fn() },
     order: { create: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn(), updateMany: jest.fn(), aggregate: jest.fn() },
     trade: { create: jest.fn() },
-    $transaction: jest.fn((cb) => cb(db)),
+    $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(db)),
   },
 }));
 jest.mock('../../src/market/service', () => ({
-  ...jest.requireActual('../../src/market/service'),
+  ...jest.requireActual<typeof MarketServiceModule>('../../src/market/service'),
   marketService: {
     getStock: jest.fn(),
   },
@@ -34,9 +35,9 @@ let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app as Express;
+  app = l.app;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
-  (db.$transaction as unknown as jest.Mock).mockImplementation(async (cb: (tx: typeof db) => unknown) => cb(db));
+  (db.$transaction as unknown as jest.Mock).mockImplementation((cb: (tx: typeof db) => unknown) => Promise.resolve(cb(db)));
   (marketService.getStock as unknown as jest.Mock).mockResolvedValue({ currentPrice: '100', status: 'ok' });
   (db.account.upsert as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
   (db.account.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(10000), startingBalance: decimal(10000) });
@@ -94,7 +95,7 @@ describe('Mocked API: POST /api/trades/execute/market', () => {
 
   it('TRD-09 price lookup fails → 503, transaction never started (UC-09 7a)', async () => {
     cash(1000);
-    mock(marketService.getStock).mockRejectedValue(new Error('price unavailable'));
+    jest.mocked(marketService).getStock.mockRejectedValue(new Error('price unavailable'));
     expectError(await postMarket(), 503);
     expect(db.$transaction).not.toHaveBeenCalled();
   });

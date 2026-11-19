@@ -1,30 +1,29 @@
-import { HISTORY, SYMBOLS } from './testkit';
+import { HISTORY } from './testkit';
+
+const DOWN = () => new Error('provider down');
+
+const quote = (price: number) => ({
+  price,
+  change: 1,
+  percentageChange: 1,
+  quoteAsOf: new Date().toISOString(),
+});
 
 export const createStubProvider = (state: { price: number; fail: boolean }) => ({
-  fetchQuote: async (symbol: string) => {
-    if (state.fail) throw new Error('provider down');
-    return {
-      price: state.price,
-      change: 1,
-      percentageChange: 1,
-      quoteAsOf: new Date().toISOString(),
-    };
+  fetchQuote: () => {
+    if (state.fail) return Promise.reject(DOWN());
+    return Promise.resolve(quote(state.price));
   },
-  fetchHistory: async () => {
-    if (state.fail) throw new Error('provider down');
-    return HISTORY;
+  fetchHistory: () => {
+    if (state.fail) return Promise.reject(DOWN());
+    return Promise.resolve(HISTORY);
   },
-  fetchQuotes: async (symbols: readonly string[]) => {
-    if (state.fail) throw new Error('provider down');
-    return Object.fromEntries(symbols.map(s => [s, {
-      price: state.price,
-      change: 1,
-      percentageChange: 1,
-      quoteAsOf: new Date().toISOString(),
-    }]));
+  fetchQuotes: (symbols: readonly string[]) => {
+    if (state.fail) return Promise.reject(DOWN());
+    return Promise.resolve(Object.fromEntries(symbols.map(s => [s, quote(state.price)])));
   },
-  fetchHistories: async (symbols: readonly string[]) => {
-    if (state.fail) throw new Error('provider down');
-    return Object.fromEntries(symbols.map(s => [s, HISTORY]));
+  fetchHistories: (symbols: readonly string[]) => {
+    if (state.fail) return Promise.reject(DOWN());
+    return Promise.resolve(Object.fromEntries(symbols.map(s => [s, HISTORY])));
   },
 });

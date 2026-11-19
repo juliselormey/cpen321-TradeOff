@@ -16,8 +16,9 @@ describe("Stock favorites", () => {
         const user = await db.user.create({
             data: { googleSub: `favorites-${suffix}`, email: `favorites-${suffix}@example.com` },
         });
-        userIds.push(user.id);
-        return `Bearer ${jwt.sign({ sub: user.id }, requireEnv("JWT_SECRET"), { expiresIn: "5m" })}`;
+        const userId = user.id as string;
+        userIds.push(userId);
+        return `Bearer ${jwt.sign({ sub: userId }, requireEnv("JWT_SECRET"), { expiresIn: "5m" })}`;
     }
 
     afterAll(async () => {

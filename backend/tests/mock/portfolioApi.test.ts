@@ -24,24 +24,24 @@ jest.mock('../../src/market/service', () => ({
   },
 }));
 
-type PositionIn = { userId: string; ticker: string; quantity: number; averageCost: number };
-type OrderIn = {
+interface PositionIn { userId: string; ticker: string; quantity: number; averageCost: number }
+interface OrderIn {
   id: string; userId: string; ticker: string; side: string; type: string; quantity: number;
   limitPrice?: number | null; status: string; createdAt?: Date | string;
-};
-type TradeIn = {
+}
+interface TradeIn {
   id: string; userId: string; ticker: string; type: string; quantity: number;
   pricePerShare: number; totalAmount: number; createdAt?: Date | string;
-};
+}
 
 const U = 'u1';
 let app: Express;
 
 beforeEach(() => {
   const l = loadApp('db', 'market/service');
-  app = l.app as Express;
+  app = l.app;
   (db.user.findUnique as unknown as jest.Mock).mockResolvedValue({ id: U });
-  (marketService.getStock as unknown as jest.Mock).mockImplementation(async (t: string) => ({
+  (marketService.getStock as unknown as jest.Mock).mockImplementation((t: string) => Promise.resolve({
     symbol: t,
     ticker: t,
     companyName: `${t} Inc`,
@@ -54,8 +54,8 @@ beforeEach(() => {
 const stub = ({ cash = 1000, positions = [] as PositionIn[], orders = [] as OrderIn[], trades = [] as TradeIn[] } = {}) => {
   (db.account.findUnique as unknown as jest.Mock).mockResolvedValue({ userId: U, cashBalance: decimal(cash), startingBalance: decimal(1000) });
   (db.position.findMany as unknown as jest.Mock).mockResolvedValue(positions.map((p) => ({ ...p, quantity: decimal(p.quantity), averageCost: decimal(p.averageCost) })));
-  (db.order.findMany as unknown as jest.Mock).mockResolvedValue(orders.map((o) => ({ ...o, quantity: decimal(o.quantity), limitPrice: o.limitPrice != null ? decimal(o.limitPrice) : null, createdAt: new Date(o.createdAt || Date.now()) })));
-  (db.trade.findMany as unknown as jest.Mock).mockResolvedValue(trades.map((t) => ({ ...t, quantity: decimal(t.quantity), pricePerShare: decimal(t.pricePerShare), totalAmount: decimal(t.totalAmount), createdAt: new Date(t.createdAt || Date.now()) })));
+  (db.order.findMany as unknown as jest.Mock).mockResolvedValue(orders.map((o) => ({ ...o, quantity: decimal(o.quantity), limitPrice: o.limitPrice != null ? decimal(o.limitPrice) : null, createdAt: new Date(o.createdAt ?? Date.now()) })));
+  (db.trade.findMany as unknown as jest.Mock).mockResolvedValue(trades.map((t) => ({ ...t, quantity: decimal(t.quantity), pricePerShare: decimal(t.pricePerShare), totalAmount: decimal(t.totalAmount), createdAt: new Date(t.createdAt ?? Date.now()) })));
 };
 const get = () => request(app).get('/api/portfolio').set(bearer(U));
 const aapl: PositionIn = { userId: U, ticker: 'AAPL', quantity: 2, averageCost: 90 };

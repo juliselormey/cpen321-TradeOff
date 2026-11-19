@@ -83,8 +83,7 @@ private fun Double.usd() = "$${fmt()}"
 
 private fun <T> Response<T>.bodyOrNull(): T? = if (isSuccessful) body() else null
 
-/** Runs [block]; reports network/parse failures to [onError] and returns null. Cancellation is rethrown. */
-private inline fun <T> safely(onError: (Exception) -> Unit, block: () -> T): T? = try {
+private inline fun <T> runOrReportNetworkFailure(onError: (Exception) -> Unit, block: () -> T): T? = try {
     block()
 } catch (e: CancellationException) {
     throw e
@@ -165,7 +164,7 @@ internal class TradeState(
     // Refresh
 
     suspend fun refreshQuote() {
-        safely({
+        runOrReportNetworkFailure({
             Log.e(TAG, "Failed to fetch live market price", it)
             quoteFailed = true
         }) {
@@ -185,7 +184,7 @@ internal class TradeState(
         val api = apiService ?: return
         if (!isLoggedIn()) return
         accountRefreshLock.withLock {
-            safely({ Log.e(TAG, "Error refreshing data", it) }) {
+            runOrReportNetworkFailure({ Log.e(TAG, "Error refreshing data", it) }) {
                 api.getPosition(ticker).bodyOrNull()?.let {
                     availableCash = it.cashBalance
                     ownedShares = it.ownedQuantity
@@ -228,7 +227,7 @@ internal class TradeState(
     private suspend fun executeOrder(side: String) {
         val api = apiService ?: return
         val price = currentMarketPrice ?: return
-        safely({
+        runOrReportNetworkFailure({
             Log.e(TAG, "Order execution error", it)
             errorMessage = "Network error executing order"
         }) {
@@ -272,7 +271,7 @@ internal class TradeState(
     fun cancelOrder(orderId: String) {
         val api = apiService ?: return
         scope.launch {
-            safely({
+            runOrReportNetworkFailure({
                 Log.e(TAG, "Failed to cancel order", it)
                 errorMessage = "Failed to cancel order"
             }) {

@@ -39,6 +39,8 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@types/cors": "^2.8.19",
     "@types/eslint": "^8.56.12",
     "@types/express": "^5.0.6",

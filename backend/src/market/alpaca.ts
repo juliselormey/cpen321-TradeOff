@@ -5,6 +5,12 @@ function object(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
+// Dynamic, ticker-keyed lookups go through a Map built from own enumerable
+// properties only, so keys like "constructor" or "__proto__" can't reach the prototype.
+function entries(value: unknown): Map<string, unknown> {
+  return new Map(Object.entries(object(value)));
+}
+
 function timestamp(value: unknown): string | null {
   const str = typeof value === 'string' ? value : '';
   const ms = Date.parse(str);
@@ -149,21 +155,21 @@ export class AlpacaProvider implements QuoteProvider {
         timeout: 4_000,
         maxRedirects: 0,
       });
-      const data = object(res.data);
-      const result: Record<string, ProviderQuote | MarketProviderError> = {};
+      const data = entries(res.data);
+      const result = new Map<string, ProviderQuote | MarketProviderError>();
       for (const ticker of tickers) {
-        const item = data[ticker] ?? data[ticker.toUpperCase()] ?? data[ticker.toLowerCase()];
+        const item = data.get(ticker) ?? data.get(ticker.toUpperCase()) ?? data.get(ticker.toLowerCase());
         if (!item) {
-          result[ticker] = new MarketProviderError('PROVIDER_INVALID_DATA', `No snapshot returned for ${ticker}`);
+          result.set(ticker, new MarketProviderError('PROVIDER_INVALID_DATA', `No snapshot returned for ${ticker}`));
         } else {
           try {
-            result[ticker] = parseAlpacaSnapshot(item);
+            result.set(ticker, parseAlpacaSnapshot(item));
           } catch (err: unknown) {
-            result[ticker] = err instanceof MarketProviderError ? err : failure(err);
+            result.set(ticker, err instanceof MarketProviderError ? err : failure(err));
           }
         }
       }
-      return result;
+      return Object.fromEntries(result);
     } catch (error: unknown) {
       throw failure(error);
     }
@@ -179,8 +185,8 @@ export class AlpacaProvider implements QuoteProvider {
     const end = new Date(this.now());
     end.setUTCHours(0, 0, 0, 0);
     const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
-    const barsBySymbol: Record<string, unknown> = {};
-    for (const t of tickers) barsBySymbol[t] = undefined;
+    // A ticker with no entry here parses as "no bars" (empty history), same as before.
+    const barsBySymbol = new Map<string, unknown>();
     let pageToken: string | null = null;
     const seenTokens = new Set<string>();
 
@@ -204,15 +210,16 @@ export class AlpacaProvider implements QuoteProvider {
           maxRedirects: 0,
         });
         const root = object(res.data);
-        const barsMap = object(root.bars);
+        const barsMap = entries(root.bars);
         for (const ticker of tickers) {
-          const raw = barsMap[ticker] ?? barsMap[ticker.toUpperCase()];
+          const raw = barsMap.get(ticker) ?? barsMap.get(ticker.toUpperCase());
           if (raw !== undefined) {
             if (Array.isArray(raw)) {
-              const current = Array.isArray(barsBySymbol[ticker]) ? (barsBySymbol[ticker] as unknown[]) : [];
-              barsBySymbol[ticker] = current.concat(raw);
+              const previous = barsBySymbol.get(ticker);
+              const current: unknown[] = Array.isArray(previous) ? previous : [];
+              barsBySymbol.set(ticker, current.concat(raw));
             } else {
-              barsBySymbol[ticker] = raw;
+              barsBySymbol.set(ticker, raw);
             }
           }
         }
@@ -224,15 +231,15 @@ export class AlpacaProvider implements QuoteProvider {
         pageToken = nextToken;
       } while (pageToken);
 
-      const result: Record<string, PricePoint[] | MarketProviderError> = {};
+      const result = new Map<string, PricePoint[] | MarketProviderError>();
       for (const ticker of tickers) {
         try {
-          result[ticker] = parseAlpacaBars({ bars: barsBySymbol[ticker] });
+          result.set(ticker, parseAlpacaBars({ bars: barsBySymbol.get(ticker) }));
         } catch (err: unknown) {
-          result[ticker] = err instanceof MarketProviderError ? err : failure(err);
+          result.set(ticker, err instanceof MarketProviderError ? err : failure(err));
         }
       }
-      return result;
+      return Object.fromEntries(result);
     } catch (error: unknown) {
       throw failure(error);
     }

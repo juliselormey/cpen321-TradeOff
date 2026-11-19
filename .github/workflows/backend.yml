@@ -1,0 +1,62 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ "main", "master", "dev" ]
+  pull_request:
+    branches: [ "main", "master", "dev" ]
+  workflow_dispatch:
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+
+    # Job-level so every step (including `prisma generate`) can read them.
+    # These are throwaway values for the CI container, not real secrets.
+    env:
+      PORT: 3002
+      DATABASE_URL: "mysql://root:rootpassword@127.0.0.1:3306/tradeoff_test"
+      JWT_SECRET: "ci-secret-key-12345-mock-fallback"
+      GOOGLE_CLIENT_ID: "ci-google-client-id"
+      ALPACA_API_KEY_ID: "mock-key-id"
+      ALPACA_API_SECRET_KEY: "mock-secret-key"
+      NODE_ENV: "test"
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: tradeoff_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h localhost" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (Node 22)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run Typecheck
+        working-directory: ./backend
+        run: npm run typecheck
+
+      - name: Run Database Push and Tests
+        working-directory: ./backend
+        run: |
+          npx prisma db push --accept-data-loss
+          npx jest tests/mock/

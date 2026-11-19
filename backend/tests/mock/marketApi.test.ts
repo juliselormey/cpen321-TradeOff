@@ -18,12 +18,15 @@ function fixture() {
   let clock = START;
   const fetchQuote = jest.fn<Promise<ProviderQuote>, [string]>().mockResolvedValue(QUOTE);
   const fetchHistory = jest.fn<Promise<PricePoint[]>, [string]>().mockResolvedValue(HISTORY);
-  const fetchQuotes = jest.fn().mockImplementation(async (symbols: readonly string[]) =>
-    Object.fromEntries(symbols.map(s => [s, QUOTE]))
+  const fetchQuotes = jest.fn().mockImplementation((symbols: readonly string[]) =>
+    Promise.resolve(Object.fromEntries(symbols.map(s => [s, QUOTE])))
   );
-  const fetchHistories = jest.fn().mockImplementation(async (symbols: readonly string[]) =>
-    Object.fromEntries(await Promise.all(symbols.map(async s => [s, await fetchHistory(s)])))
-  );
+  const fetchHistories = jest.fn().mockImplementation(async (symbols: readonly string[]) => {
+    const entries = await Promise.all(
+      symbols.map(async (s): Promise<[string, PricePoint[]]> => [s, await fetchHistory(s)])
+    );
+    return Object.fromEntries(entries);
+  });
   const service = new MarketService({ fetchQuote, fetchHistory, fetchQuotes, fetchHistories }, () => clock);
   const app = express();
   app.use('/api/market', createMarketRouter(service));

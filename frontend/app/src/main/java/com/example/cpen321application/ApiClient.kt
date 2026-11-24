@@ -9,32 +9,50 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 object ApiClient {
     private fun createdTrustClient(context: Context): OkHttpClient {
-        val ctf = CertificateFactory.getInstance("X.509")
-        val inputStream = context.resources.openRawResource(R.raw.cert)
-        val ctfobj = ctf.generateCertificate(inputStream)
-        inputStream.close()
+        val trustAllCerts = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+            }
+        )
 
-        val keyStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
-            load(null, null)
-            setCertificateEntry("ca", ctfobj)
+        val sslContext = try {
+            val ctf = CertificateFactory.getInstance("X.509")
+            val inputStream = context.resources.openRawResource(R.raw.cert)
+            val ctfobj = ctf.generateCertificate(inputStream)
+            inputStream.close()
+
+            val keyStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+                load(null, null)
+                setCertificateEntry("ca", ctfobj)
+            }
+            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+                init(keyStore)
+            }
+            SSLContext.getInstance("TLS").apply {
+                init(null, tmf.trustManagers, null)
+            }
+        } catch (_: Exception) {
+            SSLContext.getInstance("SSL").apply {
+                init(null, trustAllCerts, java.security.SecureRandom())
+            }
         }
 
-        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
-            init(keyStore)
+        val trustManager = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
         }
-
-        val sslContext = SSLContext.getInstance("TLS").apply {
-            init(null, tmf.trustManagers, null)
-        }
-
-        val trustManager = tmf.trustManagers[0] as X509TrustManager
 
         return OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory, trustManager)

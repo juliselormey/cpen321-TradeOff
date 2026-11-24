@@ -341,8 +341,9 @@ private suspend fun attemptLogin(
         LoginOutcome.Failure("Could not read the Google credential. Please try signing in again.")
     } catch (e: GetCredentialException) {
         LoginOutcome.Failure(e.message ?: "Sign-in cancelled or failed")
-    } catch (_: java.io.IOException) {
-        LoginOutcome.Failure("Could not connect. Please try again.")
+    } catch (e: java.io.IOException) {
+        Log.e("AUTH_ERROR", "Network connection error during sign-in", e)
+        LoginOutcome.Failure("Could not connect to ${BuildConfig.API_BASE_URL}: ${e.message ?: "Connection failed"}")
     } catch (_: com.google.gson.JsonParseException) {
         LoginOutcome.Failure("Could not read the sign-in response.")
     } catch (e: IllegalStateException) {

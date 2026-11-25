@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import express from 'express';
 import request from 'supertest';
 import { AlpacaProvider } from '../../src/market/alpaca';
@@ -137,5 +137,73 @@ describe('Alpaca multi-symbol adapter', () => {
   test('repeated pagination token fails instead of presenting incomplete history as success', async () => {
     jest.spyOn(axios, 'get').mockResolvedValue({ data: { bars: {}, next_page_token: 'loop' } });
     await expect(provider().fetchHistories(LIVE_SYMBOLS)).rejects.toMatchObject({ code: 'PROVIDER_INVALID_DATA' });
+  });
+});
+
+describe('Batch market service edge cases', () => {
+  test('a symbol the provider leaves out is marked invalid, not silently empty', async () => {
+    const provider = {
+      fetchQuote: jest.fn(), fetchHistory: jest.fn(),
+      fetchQuotes: jest.fn().mockResolvedValue({}), fetchHistories: jest.fn().mockResolvedValue({}),
+    };
+    const service = new MarketService(provider as never, () => START);
+    const symbol = LIVE_SYMBOLS[0] as string;
+    const stock = await service.getStock(symbol);
+    expect(stock).toMatchObject({ currentPrice: null, status: 'unavailable', error: { code: 'PROVIDER_INVALID_DATA' } });
+    expect(stock.error?.message).toBe(`No Alpaca data for ${symbol}.`);
+    expect(stock.history).toMatchObject({ status: 'unavailable', error: { code: 'PROVIDER_INVALID_DATA' } });
+    expect(provider.fetchQuote).not.toHaveBeenCalled();
+  });
+});
+
+describe('Alpaca batch adapter edge cases', () => {
+  afterEach(() => jest.restoreAllMocks());
+  const alpaca = (credentials = () => ({ key: 'test-key', secret: 'test-secret' })) => new AlpacaProvider(credentials, () => START);
+  const noCredentials = () => alpaca(() => ({ key: '', secret: 'test-secret' }));
+  const httpError = (status: number) =>
+    new AxiosError('http', 'ERR_BAD_RESPONSE', undefined, undefined,
+      { status, statusText: '', headers: {}, data: {}, config: {} } as never);
+
+  test('empty input makes no request', async () => {
+    const get = jest.spyOn(axios, 'get');
+    await expect(alpaca().fetchQuotes([])).resolves.toEqual({});
+    await expect(alpaca().fetchHistories([])).resolves.toEqual({});
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  test('missing credentials become a per-ticker error without calling Alpaca', async () => {
+    const get = jest.spyOn(axios, 'get');
+    const quotes = await noCredentials().fetchQuotes(['AAPL', 'MSFT']);
+    const histories = await noCredentials().fetchHistories(['AAPL']);
+    expect(quotes.AAPL).toMatchObject({ code: 'MARKET_NOT_CONFIGURED' });
+    expect(quotes.MSFT).toBeInstanceOf(MarketProviderError);
+    expect(histories.AAPL).toMatchObject({ code: 'MARKET_NOT_CONFIGURED' });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  test('a provider-level failure rejects the whole batch', async () => {
+    jest.spyOn(axios, 'get').mockRejectedValue(httpError(401));
+    await expect(alpaca().fetchQuotes(['AAPL'])).rejects.toMatchObject({ code: 'PROVIDER_AUTH_ERROR' });
+    await expect(alpaca().fetchHistories(['AAPL'])).rejects.toMatchObject({ code: 'PROVIDER_AUTH_ERROR' });
+  });
+
+  test('an empty snapshot response marks every symbol as missing', async () => {
+    jest.spyOn(axios, 'get').mockResolvedValue({ data: null });
+    const quotes = await alpaca().fetchQuotes(['AAPL']);
+    expect(quotes.AAPL).toMatchObject({ code: 'PROVIDER_INVALID_DATA', message: 'No snapshot returned for AAPL' });
+  });
+
+  test('history returns empty arrays when the response has no bars map', async () => {
+    jest.spyOn(axios, 'get').mockResolvedValue({ data: {} });
+    await expect(alpaca().fetchHistories(['AAPL'])).resolves.toEqual({ AAPL: [] });
+  });
+
+  test('prototype-like ticker keys cannot reach Object.prototype', async () => {
+    jest.spyOn(axios, 'get').mockResolvedValue({ data: {
+      constructor: { latestTrade: { p: 1, t: new Date(START).toISOString() } },
+    } });
+    const quotes = await alpaca().fetchQuotes(['toString', 'constructor']);
+    expect(quotes.toString).toBeInstanceOf(MarketProviderError);
+    expect(quotes.constructor).toMatchObject({ price: 1 });
   });
 });

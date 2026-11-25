@@ -9,13 +9,8 @@ export const favoritesRouter = Router();
 favoritesRouter.use(requireAuth);
 
 favoritesRouter.get("/", asyncHandler(async (req, res) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.sendStatus(401);
-        return;
-    }
     const favorites = await db.stockFavorite.findMany({
-        where: { userId },
+        where: { userId: req.userId! },
         select: { ticker: true },
         orderBy: { ticker: "asc" },
     });
@@ -23,27 +18,17 @@ favoritesRouter.get("/", asyncHandler(async (req, res) => {
 }));
 
 favoritesRouter.put("/:ticker", asyncHandler(async (req, res) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.sendStatus(401);
-        return;
-    }
-    const ticker = req.params.ticker?.toString().toUpperCase() ?? "";
+    const ticker = String(req.params.ticker).toUpperCase();
     if (!LIVE_SYMBOLS.includes(ticker)) {
         res.status(404).json({ error: "Unsupported market symbol" });
         return;
     }
-    await db.stockFavorite.createMany({ data: [{ userId, ticker }], skipDuplicates: true });
+    await db.stockFavorite.createMany({ data: [{ userId: req.userId!, ticker }], skipDuplicates: true });
     res.sendStatus(204);
 }));
 
 favoritesRouter.delete("/:ticker", asyncHandler(async (req, res) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.sendStatus(401);
-        return;
-    }
-    const ticker = req.params.ticker?.toString().toUpperCase() ?? "";
-    await db.stockFavorite.deleteMany({ where: { userId, ticker } });
+    const ticker = String(req.params.ticker).toUpperCase();
+    await db.stockFavorite.deleteMany({ where: { userId: req.userId!, ticker } });
     res.sendStatus(204);
 }));

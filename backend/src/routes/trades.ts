@@ -6,6 +6,7 @@ import { LIVE_SYMBOLS } from "../market/catalog";
 import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable, Tx } from "../market/settlement";
 import { STARTING_BALANCE } from "../market/valuation";
 import { asyncHandler } from "../util/asyncHandler";
+import { hasErrorCode } from "../util/dbErrors";
 
 export const tradesRouter = Router();
 tradesRouter.use(requireAuth);
@@ -16,20 +17,9 @@ const MAX_QUANTITY = 1_000_000;
 const MAX_PRICE = 1_000_000;
 
 /** GET /api/trades/position/:ticker: cash balance and position info for a ticker */
-tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const tickerParam = req.params.ticker;
-    if (typeof tickerParam !== "string") {
-        res.status(400).json({ error: "Invalid ticker" });
-        return;
-    }
-
-    const ticker = tickerParam.toUpperCase();
+tradesRouter.get("/position/:ticker", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
+    const ticker = String(req.params.ticker).toUpperCase();
 
     try {
         const [account, position, availableQuantity] = await Promise.all([
@@ -51,15 +41,9 @@ tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Res
 }));
 
 /** GET /api/trades/orders/pending: active pending limit orders for the user */
-tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
+tradesRouter.get("/orders/pending", asyncHandler(async (req, res) => {
     const pendingOrders = await db.order.findMany({
-        where: { userId, status: "PENDING" },
+        where: { userId: req.userId!, status: "PENDING" },
         orderBy: { createdAt: "desc" },
     });
 
@@ -79,15 +63,10 @@ tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Respo
 }));
 
 /** POST /api/trades/orders/:id/cancel: cancels a pending limit order and releases reserved funds/shares */
-tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-
-    const orderId = req.params.id;
-    if (typeof orderId !== "string" || !uuid.test(orderId)) {
+tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
+    const orderId = String(req.params.id);
+    if (!uuid.test(orderId)) {
         res.status(400).json({ error: "Invalid order id" });
         return;
     }
@@ -142,7 +121,7 @@ function validAmount(value: unknown, max: number): value is number {
 }
 
 function parseOrder(body: unknown, type: OrderType): OrderInput {
-    const raw = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+    const raw = (body ?? {}) as Record<string, unknown>;
     const { ticker, quantity, limitPrice } = raw;
     const sideRaw = (raw.side ?? raw.type)?.toString().toUpperCase();
 
@@ -161,19 +140,15 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
         throw new OrderError(400, "Limit price is required for limit orders and must be positive with at most 4 decimal places");
     }
 
-    return {
-        ticker: symbol,
-        side: sideRaw,
-        type,
-        quantity,
-        limitPrice: type === "LIMIT" && typeof limitPrice === "number" ? limitPrice : null,
-    };
+    // Market orders never reach here with a limit price, so this is null for them.
+    return { ticker: symbol, side: sideRaw, type, quantity, limitPrice: typeof limitPrice === "number" ? limitPrice : null };
 }
 
 async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma.Decimal) {
     const qty = new Prisma.Decimal(o.quantity);
     const limit = o.limitPrice != null ? new Prisma.Decimal(o.limitPrice) : null;
-    const fills = o.type === "MARKET" || (limit != null && (o.side === "BUY" ? price.lte(limit) : price.gte(limit)));
+    // A limit order always has a limit price (validated in parseOrder).
+    const fills = o.type === "MARKET" || (o.side === "BUY" ? price.lte(limit!) : price.gte(limit!));
 
     const account = await tx.account.upsert({
         where: { userId },
@@ -185,10 +160,8 @@ async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma
         const hold = qty.mul(limit ?? price);
         if (account.cashBalance.lt(hold)) throw new OrderError(400, "Insufficient cash balance");
         await tx.account.update({ where: { userId }, data: { cashBalance: { decrement: hold } } });
-    } else {
-        if ((await availableShares(tx, userId, o.ticker)).lt(qty)) {
-            throw new OrderError(400, "Insufficient shares owned");
-        }
+    } else if ((await availableShares(tx, userId, o.ticker)).lt(qty)) {
+        throw new OrderError(400, "Insufficient shares owned");
     }
 
     const order = await tx.order.create({
@@ -218,12 +191,8 @@ async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma
     };
 }
 
-async function handlePlaceOrder(type: OrderType, req: Request, res: Response): Promise<void> {
-    const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
+const placeOrder = (type: OrderType) => asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.userId!;
     try {
         const input = parseOrder(req.body, type);
         const price = await getServerPrice(input.ticker);
@@ -234,17 +203,14 @@ async function handlePlaceOrder(type: OrderType, req: Request, res: Response): P
             res.status(error.status).json({ error: error.message });
             return;
         }
-        if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") {
+        if (hasErrorCode(error, "P2034")) {
             res.status(503).json({ error: "The server is busy. Please try again." });
             return;
         }
         console.error(error);
         res.status(500).json({ error: `Failed to execute ${type.toLowerCase()} order` });
     }
-}
-
-const placeOrder = (type: OrderType) =>
-    asyncHandler((req: Request, res: Response) => handlePlaceOrder(type, req, res));
+});
 
 tradesRouter.post("/execute/market", placeOrder("MARKET"));
 tradesRouter.post("/execute/limit", placeOrder("LIMIT"));

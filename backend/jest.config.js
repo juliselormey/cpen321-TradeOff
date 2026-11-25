@@ -12,6 +12,11 @@ module.exports = {
   coveragePathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    '/coverage/'
+    '/coverage/',
+    '/src/generated/',
+    '/src/index.ts',
+    '/src/db.ts',
+    '/src/prisma/db.ts',
+    '/src/market/dev.ts'
   ],
 };

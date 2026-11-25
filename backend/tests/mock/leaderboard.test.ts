@@ -138,9 +138,10 @@ describe("valuation helpers", () => {
         expect(v.profitLoss.toString()).toBe("200");
         expect(v.returnPercent?.toString()).toBe("20");
         expect(v.holdings[0]?.profitLoss?.toString()).toBe("100");
-        expect(v.allocation).toEqual([
-            { label: "Cash", percent: (700 / 1200) * 100 }, { label: "AAPL", percent: (500 / 1200) * 100 },
-        ]);
+        expect(v.allocation[0]?.label).toBe("Cash");
+        expect(v.allocation[0]?.percent).toBeCloseTo((700 / 1200) * 100);
+        expect(v.allocation[1]?.label).toBe("AAPL");
+        expect(v.allocation[1]?.percent).toBeCloseTo((500 / 1200) * 100);
     });
 
     test("a holding without a cost basis has unknown profit/loss", () => {

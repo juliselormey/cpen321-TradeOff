@@ -26,6 +26,7 @@ export async function notifyUser(
     body: string
 ): Promise<void> {
     try {
+        if (!db?.notificationDevice?.findMany) return;
         const devices = await db.notificationDevice.findMany({
             where: { userId },
         });

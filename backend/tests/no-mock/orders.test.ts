@@ -62,6 +62,16 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
     /* 1. Market vs Limit Order Parameter Validation                              */
     /* -------------------------------------------------------------------------- */
     describe("Parameter Validation for Market & Limit Orders", () => {
+        test("POST /api/trades/execute/limit with more than 4 decimal places returns 400 Bad Request", async () => {
+            const res = await request(app)
+                .post("/api/trades/execute/limit")
+                .set("Authorization", `Bearer ${authToken}`)
+                .send({ ticker: "AAPL", side: "BUY", quantity: 1, limitPrice: 100.12345 });
+
+            expect(res.status).toBe(400);
+            expect(await db.order.count({ where: { userId: testUserId } })).toBe(0);
+        });
+
         test("POST /api/trades/execute/market with limitPrice returns 400 Bad Request", async () => {
             const res = await request(app)
                 .post("/api/trades/execute/market")
@@ -91,7 +101,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual({
-                error: "Limit price is required for limit orders and must be positive",
+                error: "Limit price is required for limit orders and must be positive with at most 4 decimal places",
             });
         });
 
@@ -109,7 +119,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual({
-                error: "Limit price is required for limit orders and must be positive",
+                error: "Limit price is required for limit orders and must be positive with at most 4 decimal places",
             });
         });
     });

@@ -343,7 +343,8 @@ describe('Mocked API: trades routes (positions, pending orders, execution paths)
     });
     it.each(['market', 'limit'] as const)('TRD-43 unexpected %s failure → 500 without retrying', async (kind) => {
       mock(db.$transaction).mockRejectedValue(new Error('boom'));
-      const res = await place(kind, { ticker: T, side: 'BUY', quantity: 1, limitPrice: 100 });
+      const body = kind === 'market' ? { ticker: T, side: 'BUY', quantity: 1 } : { ticker: T, side: 'BUY', quantity: 1, limitPrice: 100 };
+      const res = await place(kind, body);
       expect(res.status).toBe(500);
       expect(res.body.error).toBe(`Failed to execute ${kind} order`);
       expect(db.$transaction).toHaveBeenCalledTimes(1);

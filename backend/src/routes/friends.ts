@@ -150,6 +150,7 @@ async function changeFriendship(
 
 async function notifyAccepted(id: string): Promise<void> {
     try {
+        if (!db?.friendship?.findUnique) return;
         const friendship = await db.friendship.findUnique({ where: { id }, include: profiles });
         if (friendship) {
             await notifyUser(

@@ -1,12 +1,10 @@
 import { Router } from "express";
 import { LIVE_SYMBOLS } from "../market/catalog";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../util/asyncHandler";
 
 export const favoritesRouter = Router();
 
-favoritesRouter.use(requireAuth);
 
 favoritesRouter.get("/", asyncHandler(async (req, res) => {
     const favorites = await db.stockFavorite.findMany({

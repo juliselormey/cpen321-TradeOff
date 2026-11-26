@@ -1,6 +1,7 @@
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
 import { db } from "../prisma/db";
+import { STARTING_BALANCE } from "../config/trading";
 import { requireEnv } from "../config/env";
 
 const GOOGLE_CLIENT_ID = requireEnv("GOOGLE_CLIENT_ID");
@@ -39,32 +40,10 @@ export async function findOrCreateUser(google: {
 }
 
 export async function verifyGoogleToken(idToken: string) {
-    if (idToken === "dev-token" || idToken.startsWith("dev_")) {
-        return {
-            googleSub: "local-dev-google-sub-12345",
-            email: "devuser@example.com",
-            name: "Local Dev User",
-        };
-    }
-
-    try {
-        const ticket = await client.verifyIdToken({
-            idToken,
-            audience: GOOGLE_CLIENT_ID,
-        });
-        const payload = ticket.getPayload();
-        if (!payload?.sub || !payload.email) throw new Error("Invalid Google Token");
-        return { googleSub: payload.sub, email: payload.email, name: payload.name };
-    } catch (err) {
-        if (process.env.NODE_ENV === "development") {
-            return {
-                googleSub: "local-dev-google-sub-12345",
-                email: "devuser@example.com",
-                name: "Local Dev User",
-            };
-        }
-        throw err;
-    }
+    const ticket = await client.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    if (!payload?.sub || !payload.email) throw new Error("Invalid Google Token");
+    return { googleSub: payload.sub, email: payload.email, name: payload.name };
 }
 
 export function issueAccessToken(userId: string) {

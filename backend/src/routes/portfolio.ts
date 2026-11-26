@@ -1,11 +1,9 @@
 import { Router } from "express";
 import { db } from "../prisma/db";
-import { requireAuth } from "../middleware/auth";
-import { asyncHandler } from "../util/asyncHandler";
+import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 
 export const portfolioRouter = Router();
-portfolioRouter.use(requireAuth);
 
 /**
  * GET /api/portfolio

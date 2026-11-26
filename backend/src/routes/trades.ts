@@ -1,7 +1,7 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
 import { LIVE_SYMBOLS } from "../market/catalog";
 import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable, Tx } from "../market/settlement";
 import { STARTING_BALANCE } from "../market/valuation";
@@ -9,7 +9,6 @@ import { asyncHandler } from "../util/asyncHandler";
 import { hasErrorCode } from "../util/dbErrors";
 
 export const tradesRouter = Router();
-tradesRouter.use(requireAuth);
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZERO = new Prisma.Decimal(0);

@@ -20,7 +20,7 @@ class TradeStateTest {
         val state = TradeState("AAPL", { false }, null, market, this)
         state.availableCash = 195.0
         state.updateQuantity("1")
-        assertTrue(state.isBuyEnabled)
+        assertFalse(state.isBuyEnabled) // No live quote has loaded yet.
         state.refreshQuote()
         assertFalse(state.isBuyEnabled)
         assertEquals(200.0, state.totalAmount, 0.001)
@@ -36,6 +36,8 @@ class TradeStateTest {
         assertFalse(state.isBuyEnabled)
         assertNotNull(state.inputError)
         state.updateLimitPrice("150")
+        assertFalse(state.isBuyEnabled) // A limit order still needs a live quote.
+        state.refreshQuote()
         assertTrue(state.isBuyEnabled)
         assertNull(state.inputError)
         assertEquals(300.0, state.totalAmount, 0.001)

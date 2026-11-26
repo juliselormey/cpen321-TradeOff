@@ -42,3 +42,16 @@ async function authenticate(req: Request, res: Response, next: NextFunction): Pr
 export const requireAuth: RequestHandler = (req, res, next) => {
     authenticate(req, res, next).catch((error: unknown) => next(error));
 };
+
+export type AuthenticatedRequest = Request & { userId: string };
+
+/** Authenticate once, then give route handlers a required user ID. */
+export const authenticatedHandler = (
+    handler: (req: AuthenticatedRequest, res: Response) => Promise<void>,
+): RequestHandler => (req, res, next) => {
+    authenticate(req, res, () => {
+        const userId = req.userId;
+        if (!userId) { next(new Error("Authenticated request has no user ID")); return; }
+        handler(Object.assign(req, { userId }), res).catch((error: unknown) => next(error));
+    }).catch((error: unknown) => next(error));
+};

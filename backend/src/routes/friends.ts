@@ -10,7 +10,6 @@ import { publishFriendsChanged } from "../realtime/friendEvents";
 export const friendsRouter = Router();
 const publicProfile = { id: true, username: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
-friendsRouter.use(requireAuth);
 
 const orderedByNewest = [{ createdAt: "desc" as const }, { id: "asc" as const }];
 const involving = (userId: string) => ({ OR: [{ senderId: userId }, { recipientId: userId }] });

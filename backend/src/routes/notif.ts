@@ -1,11 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../util/asyncHandler";
 
 export const notifRouter = Router();
 
-notifRouter.use(requireAuth);
 
 function isValidInstallationId(value: unknown): value is string {
     return typeof value === "string" && /^[cdef][A-Za-z0-9_-]{21}$/.test(value);

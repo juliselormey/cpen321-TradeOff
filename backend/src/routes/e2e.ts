@@ -1,3 +1,4 @@
+import { STARTING_BALANCE } from "../config/trading";
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { db } from '../prisma/db';

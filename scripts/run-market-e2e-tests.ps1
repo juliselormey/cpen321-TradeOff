@@ -1,5 +1,3 @@
 #!/usr/bin/env pwsh
-# Compatibility alias: uses the normal backend; never switches URLs to a fixture.
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-& (Join-Path $PSScriptRoot 'run-browse-stocks-e2e-tests.ps1')
+& (Join-Path $PSScriptRoot 'lib/run-e2e-classes.ps1') -ReportPrefix 'market' -Suites @('SearchStocksE2ETest', 'ViewStockDetailsE2ETest', 'ManageFavoritesE2ETest', 'BrowseStocksE2ETest')

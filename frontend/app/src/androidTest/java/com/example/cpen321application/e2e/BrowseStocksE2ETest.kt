@@ -8,13 +8,11 @@ import com.example.cpen321application.BuildConfig
 import com.example.cpen321application.MainActivity
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import java.util.concurrent.TimeUnit
 
 /** Browse Stocks, formal specification 3.5.1. Normal backend and real Alpaca. */
 class BrowseStocksE2ETest {
@@ -31,7 +29,7 @@ class BrowseStocksE2ETest {
     private fun accountSnapshot(): String {
         val request = Request.Builder().url(BuildConfig.API_BASE_URL.trimEnd('/') + "/__e2e/account/snapshot")
             .header("Authorization", "Bearer " + requireNotNull(SessionManager.getToken(compose.activity))).build()
-        return OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build().newCall(request).execute().use {
+        return ApiClient.createBackendHttpClient(compose.activity).newCall(request).execute().use {
             check(it.isSuccessful) { "Account evidence HTTP ${it.code}; enable E2E setup and check login." }
             requireNotNull(it.body).string()
         }

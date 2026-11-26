@@ -9,7 +9,6 @@ import com.example.cpen321application.BuildConfig
 import com.example.cpen321application.MainActivity
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -20,14 +19,13 @@ import org.junit.Rule
 import org.junit.Test
 import java.text.NumberFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /** View Portfolio, formal specification 3.5.3. Real UI, backend, SQL and Alpaca. */
 class PortfolioE2ETest {
     @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
     private val api get() = ApiClient.create(compose.activity)
-    private val client = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).build()
+    private val client get() = ApiClient.createBackendHttpClient(compose.activity)
     private var prepared = false
     private val displayFailures = mutableListOf<String>()
 

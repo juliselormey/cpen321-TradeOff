@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -187,7 +188,9 @@ private fun MarketContent(state: MarketUiState, favorites: FavoritesUi, actions:
     MaterialTheme {
         LazyColumn(
             state = if (showFavorites) favoritesListState else stocksListState,
-            modifier = Modifier.fillMaxSize().testTag("market-list").background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxSize().testTag("market-list")
+                .semantics { stateDescription = "${stocks.size} matching stocks" }
+                .background(MaterialTheme.colorScheme.background),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -295,7 +298,7 @@ private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
             }
             Text("$available/${state.stocks.size} quotes available · shared backend cache", color = Muted, fontSize = 12.sp)
             if (state.checkedAt != null) {
-                Text("Backend checked ${time(state.checkedAt)} · live updates", color = Muted, fontSize = 11.sp)
+                Text("Backend checked ${time(state.checkedAt)} · live updates", modifier = Modifier.testTag("market-checked-at"), color = Muted, fontSize = 11.sp)
             }
             if (issue != null) {
                 Text(issue, color = Red, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))

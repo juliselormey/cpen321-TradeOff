@@ -1,6 +1,6 @@
 # README: TradeOff installation guide
 
-For automated Browse Stocks, Place Market Buy, View Portfolio, View Leaderboard and Send Friend Request acceptance tests, follow
+For automated Market, Trading, Portfolio and existing Social acceptance tests, follow
 [Local E2E Setup](documentation/Local_E2E_Setup.md). It documents the one-time
 MySQL/MariaDB, Google and Alpaca setup, then ordinary `npm run dev` plus a test
 runner. No Docker or special E2E server is required. The general application
@@ -9,9 +9,12 @@ the isolated local test configuration.
 
 After that setup, keep `npm run dev` running from `backend`, sign in on the Pixel 9
 app and return to Market. From the repository root run
-`.\scripts\run-frontend-e2e-tests.ps1` to execute all five use-case tests one by one.
+`.\scripts\run-market-e2e-tests.ps1` for all four Market use cases (Browse Stocks last),
+`.\scripts\run-trading-e2e-tests.ps1` for the four Trading use cases,
+`.\scripts\run-portfolio-e2e-tests.ps1` for the two Portfolio use cases,
+or `.\scripts\run-frontend-e2e-tests.ps1` for all twelve implemented use-case tests one by one.
 Individual commands and saved report locations are listed in
-[Testing](documentation/Testing.md#commands-for-the-five-formal-use-cases).
+[Testing](documentation/Testing.md#commands-for-e2e-suites).
 
 ## Introduction
 

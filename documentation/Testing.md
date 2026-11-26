@@ -4,6 +4,93 @@ For complete one-time database, Google, Alpaca and Android setup, follow
 [Local E2E Setup](Local_E2E_Setup.md). No Docker or special server is required.
 The normal backend runs with `npm run dev`; then use one of the documented test runners.
 
+## Commands for E2E suites
+
+The **three selected main features** are Market, Trading and Portfolio: **10
+use-case tests** in total. Three of them also cover formal cases from section
+3.5: Browse Stocks, Place Market Buy and View Portfolio. Two further formal
+Social cases are retained below as **extra tests**, making **12 tests overall**.
+
+After the one-time setup, keep MySQL/MariaDB and the normal backend running,
+use Pixel 9 API 36, sign in through Google and return to Market. Run all commands
+below from the **repository root**. On macOS/Linux, use the matching `.sh` file
+with `bash`.
+
+**Run everything, including the extra formal tests:**
+
+```powershell
+.\scripts\run-frontend-e2e-tests.ps1
+```
+
+### Market — four use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Market feature** | Runs Search → Details → Favorites → **Browse last**. No Trading, Portfolio or Social test class is selected. | `.\scripts\run-market-e2e-tests.ps1` |
+| Search Stocks | Full/partial ticker and company searches, case-insensitivity, no-match message, correction and clearing the search. | `.\scripts\run-search-stocks-e2e-tests.ps1` |
+| View Stock Details | Identity/logo/quote, chart periods, point inspection, live snapshot receipt and switching to another stock without trading. | `.\scripts\run-view-stock-details-e2e-tests.ps1` |
+| Manage Favorite Stocks | Add/remove through stars, view Favorites, persistence and empty state; preserve selections during live updates and restore the original saved set. | `.\scripts\run-manage-favorites-e2e-tests.ps1` |
+| Browse Stocks — **formal 3.5.1** | Scroll all 100 cards; check names, tickers, logo elements, displayed price/change and unchanged account data. This is the slowest Market case. | `.\scripts\run-browse-stocks-e2e-tests.ps1` |
+
+### Trading — four use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Trading feature** | Runs Market Buy → Limit Order → Cancel Pending Order → Sell Shares. | `.\scripts\run-trading-e2e-tests.ps1` |
+| Place Market Buy — **formal 3.5.2** | Invalid quantity/insufficient funds, actual purchase, exact cash/share changes, recorded BUY and persistence. | `.\scripts\run-market-buy-e2e-tests.ps1` |
+| Place Limit Order | Invalid inputs/funds, pending BUY with cash reserve, persistence and immediately executable limit BUY using a real quote. | `.\scripts\run-limit-order-e2e-tests.ps1` |
+| Cancel Pending Order | Cancel BUY from Trade and SELL from Portfolio; release the exact cash/share reserve, verify CANCELLED and persistence without duplicate refunds. Persisted-state checks do not need price valuation. | `.\scripts\run-cancel-pending-order-e2e-tests.ps1` |
+| Sell Shares | Invalid/excess/reserved quantities, partial/full market sales, pending/immediate limit sales, real proceeds and SELL history. | `.\scripts\run-sell-shares-e2e-tests.ps1` |
+
+### Portfolio — two use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Portfolio feature** | Runs View Portfolio → View Transaction History. | `.\scripts\run-portfolio-e2e-tests.ps1` |
+| View Portfolio — **formal 3.5.3** | Empty/funded portfolios, holdings, cash including reserves, total value, allocation, profit/loss, pending orders and read-only viewing. | `.\scripts\run-view-portfolio-e2e-tests.ps1` |
+| View Transaction History | Empty history, actual BUY/SELL fields and newest-first order, no duplicate/pending/cancelled history entries, persistence and unchanged data during viewing. It prepares its own real trades. | `.\scripts\run-view-transaction-history-e2e-tests.ps1` |
+
+### Extra formal tests — Social
+
+These remain implemented, independently runnable, and included in the all-tests
+command. They are **additional formal-case coverage**, not a fourth selected
+main feature and not part of any Market/Trading/Portfolio-only runner.
+
+| Extra formal use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| Send Friend Request — **formal 3.5.4** | Username-based pending request, outgoing-list persistence, and unknown/self/existing-relationship validation. | `.\scripts\run-send-friend-request-e2e-tests.ps1` |
+| View Leaderboard — **formal 3.5.5** | Self-only and accepted-friend rankings, value/return sorting and unchanged account data. | `.\scripts\run-view-leaderboard-e2e-tests.ps1` |
+
+**Execution and reports:** an individual command selects one test class. That
+class can have preparation, several UI stages and cleanup; these are not extra
+test classes. Feature/all runners explicitly execute their listed classes one
+at a time, continue after a failed class, and return failure if any class failed.
+No runner starts the backend/database or performs Google sign-in.
+
+The all-tests order is Search → Details → Favorites → Market Buy → Limit Order →
+Cancel Pending → Sell Shares → View Portfolio → Transaction History → Leaderboard →
+Send Friend Request → **Browse Stocks last**. Ordering does not supply data to
+later tests; each test prepares its own required state.
+
+Individual Gradle reports are overwritten by the next invocation:
+`frontend/app/build/reports/androidTests/connected/debug/index.html`.
+Aggregate runners preserve fresh per-class reports under:
+
+| Runner | Saved reports |
+| --- | --- |
+| Market | `frontend/app/build/reports/e2e-market/<run-id>/<class>/index.html` |
+| Trading | `frontend/app/build/reports/e2e-trading/<run-id>/<class>/index.html` |
+| Portfolio | `frontend/app/build/reports/e2e-portfolio/<run-id>/<class>/index.html` |
+| Everything, including extra formal cases | `frontend/app/build/reports/e2e-all/<run-id>/<class>/index.html` |
+
+Use the disposable test database/account described in the setup. Trading,
+Portfolio and extra Social tests reset the caller's trading data; Favorites
+preparation temporarily changes and then restores its saved set. See the cleanup
+and coverage limitations below. Renew Google login before a long run: the backend
+JWT lasts 15 minutes. HTTP 401 requires a fresh login, not a database restart.
+A persistent real provider failure is not hidden; unsupported forced-failure
+branches remain documented rather than being reported as covered.
+
 ## Market live updates — 2026-11-25
 
 The normal backend now refreshes shared quotes on a 4-second loop and daily
@@ -31,10 +118,286 @@ account data are unchanged. Provider retry/cooldown takes precedence over timers
 
 From `backend/`: `npx.cmd jest tests/mock --runInBand --coverage=false`.
 From `frontend/`: `./gradlew.bat :app:testDebugUnitTest --tests '*Market*Test' :app:assembleDebug`.
-The existing five-use-case runner below remains the full E2E check; run it with
+The current all-tests runner includes the ten selected-feature cases and two extra
+formal cases; run it with
 the normal backend, disposable test database, emulator and real Google login.
 
-## Commands for the five formal use cases
+## Market feature E2E specifications
+
+Market is tested as four independently runnable use cases. The three new cases
+below are test specifications, not additions to Requirements and Design section
+3.5. The existing formal Browse Stocks specification remains unchanged.
+
+Feature and individual commands are listed in [Commands for E2E suites](#commands-for-e2e-suites).
+Source classes are in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/`.
+
+Browse Stocks runs last because it scrolls all 100 cards. Matching `.sh` runners
+are available via `bash`. Individual reports use Gradle's default connected-test
+report; the Market runner preserves each fresh report under
+`frontend/app/build/reports/e2e-market/<run-id>/<class>/index.html`.
+The all-tests runner now includes all twelve implemented use cases, with Browse
+last overall. The Trading cases are described below; Both Portfolio use cases are described below.
+All aggregate runners share `scripts/lib/run-e2e-classes.ps1` / `.sh`, continue
+after a failed suite, and return failure if any suite fails. Normal Gradle output
+is retained. No runner starts a server, installs a database or signs in.
+
+Prerequisites: normal full backend started with `npm run dev`, real Alpaca keys,
+MySQL/MariaDB with the disposable E2E schema and `E2E_ENABLED=true`, Pixel 9,
+both Android URLs pointing to that backend, and an existing real Google login.
+See [Local E2E Setup](Local_E2E_Setup.md). Run suites serially, without concurrent
+account activity. Account evidence requests share the app's TLS trust/session
+configuration, including the Browse test.
+
+### Search Stocks
+
+Actor: authenticated Trader, starting on Market. Precondition: real catalog
+loaded. Postcondition: no account or favorites changes.
+
+| Scenario | Automated checks |
+| --- | --- |
+| Success 1–3 | Open Market / Stocks; require the 100-stock catalog. |
+| Success 4–11 | Search full ticker `AAPL`, company `Microsoft`, partial ticker `MSF`, partial name `Micro`, and lower/upper case. Compare result count with actual catalog matching; scroll to every expected result and assert name/ticker, reject visible nonmatches. |
+| Failure 4a–4a2 | Enter a string absent from the catalog; assert zero result cards and `No stocks match your search.` |
+| Failure recovery | Replace the unknown string with `MSFT`; correct results return. |
+| Success 12–13 | Clear the query; the full 100-stock list returns. |
+| Postcondition | Compare real account snapshot and favorites before/after; do not click Favorites or any star. |
+
+### View Stock Details
+
+Actor: authenticated Trader. The test selects two actually available stocks with
+real history; it does not inject a fixed price or assume one price across calls.
+Postcondition: no account or favorites changes.
+
+| Scenario | Automated checks |
+| --- | --- |
+| Success 1–6 | Select a stock from Stocks; verify trade screen title, company, bundled logo, positive USD price, previous-close change label, and default 1M chart. |
+| Success 7–11 | Select 1W, 1D, then 1M. Require selected controls and a chart or the legitimate insufficient-data message for sparse 1D history. |
+| Success 12–14 | Tap an older chart point and drag to a later point; inspect displayed price and different real timestamps. |
+| Success 15 | Wait for a different server quote retrieval timestamp delivered to the detail card; assert the period and inspected point remain selected. A market-price change is not required during closed hours. |
+| Success 16–17 | Return to Market, select a different stock, verify its title/company/logo rather than the previous stock. |
+| Postcondition | No BUY/SELL actions; compare account and favorites evidence before/after. |
+
+The retrieval timestamp is exposed through a custom test semantics property,
+not a test-only replacement price or visible implementation detail. A successful
+snapshot receipt is checked; this does not assert that every possible external
+market event or every rendered chart pixel is correct.
+
+### Manage Favorite Stocks
+
+Actor: authenticated Trader. Preparation reads the caller's original favorites,
+clears that caller's set through ordinary APIs, then reloads the real UI. Cleanup
+restores the original set and verifies it. Trading data is not reset or modified.
+
+| Scenario | Automated checks |
+| --- | --- |
+| Success 1–8 | Add AAPL through its star in Stocks; star changes, card remains in Stocks, and AAPL appears in Favorites. Verify saved API data. |
+| Success 9–11 | Add MSFT, show both favorites, wait for a new live Market snapshot, and assert the tab/list and saved set remain intact. |
+| Success 12–13 | Remove AAPL from Stocks; Favorites contains only MSFT. |
+| Success 14–15 | Recreate the activity and reopen Favorites; MSFT remains saved. |
+| Success 16–18 | Remove MSFT; assert the empty-favorites message. Return to Stocks and verify both unselected stars remain available. |
+| Postcondition | Restore original favorites, compare account evidence and saved original set. |
+
+Empty favorites is a normal outcome, not a failure scenario. Search within
+Favorites is not part of these tests. No multi-account isolation claim is made.
+
+### Failure coverage boundaries
+
+Only Search has a deliberately reproducible failure in these new specifications:
+a user query with no matches. Details and Favorites do not accept an arbitrary
+invalid stock through their current UI. Provider/DB errors, WebSocket interruption,
+missing history and failed favorite writes are not manufactured by frontend mocks.
+Guest authorization flows are not included in this logged-in suite. A naturally
+sparse 1D chart is handled, but guaranteed sparse-history coverage is not claimed.
+The formal Browse failure scenarios retain their existing documented exclusions;
+these new specifications do not waive the PDF's formal-scenario requirement.
+
+### Market suite verification
+
+Verified on Pixel 9 API 36 with the existing normal local backend and renewed
+real Google login: Search Stocks passed, View Stock Details passed, and Browse
+Stocks passed in the four-case Market runner. Favorites initially failed because
+the test tried to scroll directly to a header already outside the LazyColumn's
+composed area. It now scrolls through the list's `performScrollToNode` action;
+the individual Manage Favorites rerun passed, including original-set restoration
+and unchanged account evidence. All four current tests have passing runs; a new
+single aggregate run after that test-only correction was not repeated.
+
+The initial aggregate folder retains the failed Favorites attempt alongside the
+three passing cases. The passing retry report is preserved in a separate
+`e2e-market/<run-id>-favorites-retry/ManageFavoritesE2ETest/` folder. A previous
+preparation attempt returned HTTP 401 before renewed login; it is not counted as
+a functional pass. The other four legacy Trading/Portfolio/Social suites were not
+rerun for this Market-only change. PowerShell parsing, Bash syntax checks and
+Android instrumentation compilation passed.
+
+
+## Trading feature E2E specifications
+
+Four independent cases use the normal full backend, real Alpaca quotes and real
+SQL state. Start signed in on Market. Run only on the disposable E2E database:
+each suite resets the caller's orders, trades, holdings and cash before/after;
+previous trading data is not restored. Favorites are preserved. No other user is
+reset. Setup buys and pending orders use the actual trading UI, not fixed API
+responses. Shared preparation is in `TradingE2ESupport.kt`; the existing Market
+Buy class retains its own setup and now shares the app's TLS-aware evidence client.
+
+Feature and individual commands are listed in [Commands for E2E suites](#commands-for-e2e-suites).
+Source classes are in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/`.
+
+Matching `.sh` scripts run through `bash`. The Trading runner contains only these
+four classes and preserves reports under
+`frontend/app/build/reports/e2e-trading/<run-id>/<class>/index.html`. It continues
+after a failed case and fails overall if any case fails. The Market runner remains
+limited to Search, Details, Favorites, Browse; the complete runner now has twelve
+implemented cases, with Browse last. No runner starts another backend or signs in.
+
+### Place Market Buy
+
+The existing formal 3.5.2 case is preserved and extended: blank/zero quantity,
+insufficient cash, correction/cancellation, one actual purchase, exact cash/share
+accounting using the recorded execution price, no pending order, Portfolio's
+Bought record, and reopening Trade with persisted state. No provider outage is
+manufactured. The formal unavailable-price branch remains an explicit coverage
+limitation, not a blanket course-approved exception.
+
+### Place Limit Order
+
+| Scenario | Checks |
+| --- | --- |
+| Invalid quantity / price | Blank and zero quantity or limit disable BUY; zero values show validation. No account mutation. |
+| Insufficient cash | A valid but unaffordable reserve shows the balance blocker and disables BUY. |
+| Pending BUY | Two MSFT shares at $1 create one LIMIT BUY/PENDING. Cash falls by $2, reserved cash is $2, holdings/history stay empty. Verify order fields and persisted PENDING status. |
+| Portfolio and reopening | Pending card exists on Trade and Portfolio; cash plus reserve remains $10,000. Recreate Activity and verify the same pending state. |
+| Immediate fill | Cancel the preparation reserve via UI, choose a buy limit twice the actual observed quote, submit one share. Require FILLED, price at/below limit, exactly one BUY, correct balance/quantity, no pending order or leftover reserve, and persisted data. |
+
+### Cancel Pending Order
+
+| Scenario | Checks |
+| --- | --- |
+| BUY from Trade | Create an actual pending BUY through UI, cancel it, require CANCELLED in DB evidence, exact reserve return, no pending order, no holding or completed trade created. |
+| Portfolio confirmation | The restored balance is shown and the cancelled BUY is absent. |
+| SELL preparation | Buy two shares through UI and reserve one with a distant limit SELL. No sale proceeds/history change before execution. |
+| SELL from Portfolio | Cancel its card there. Require CANCELLED, unchanged cash/owned shares/completed trades, and available quantity restored from one to two. |
+| Reopening | Reopen Trade and Portfolio; no returning order or repeated refund. |
+
+Cancellation evidence is read from the real `/__e2e/account/snapshot`, scoped
+to the authenticated profile ID. It compares stored cash, positive positions,
+completed trades, pending orders and reserved BUY cash without valuing holdings.
+The existing DTO is reused only for test comparisons; no application API response
+or quote is replaced. This avoids unrelated Portfolio HTTP 503 during state
+checks after a successful cancellation. The UI still loads ordinary Portfolio
+APIs and the test still clicks Cancel there; trading setup still requires real
+quotes. Authentication failures and incorrect state are not ignored or retried
+as successful results. Other Trading cases retain their existing snapshot logic.
+The revised Cancel Pending Order case was rerun individually on Pixel 9 against
+the real local backend: passed (BUILD SUCCESSFUL, approximately one minute).
+No Alpaca outage or replacement response was injected for this verification.
+
+### Sell Shares
+
+| Scenario | Checks |
+| --- | --- |
+| Independent preparation | Buy four actual MSFT shares through UI. |
+| Invalid / excess quantity | Blank/zero or five shares cannot be sold; errors/blockers are visible; account unchanged. |
+| Partial market sale | Sell one; require exactly one SELL, actual positive execution price, correct proceeds and quantity falling to three, no pending order. |
+| Invalid limit price | Blank/zero limit blocks SELL without mutation. |
+| Pending limit sale | Reserve two shares at $1,000,000; owned quantity stays three, available becomes one, cash and completed trades unchanged; order is PENDING. |
+| Already reserved shares | Attempt to market-sell two while only one is available; disabled SELL and unchanged state. |
+| Immediate limit sale | Cancel the preparation reserve through UI; sell one with a $0.01 floor. Require actual execution at/above the floor and correct proceeds/quantity/history. |
+| Sell remainder | Market-sell the final two; no positive holding or pending order, owned/available zero, exactly three completed SELL records overall. |
+| Persistence | Portfolio shows Sold activity, no positive MSFT holding, and reopened Trade retains the final balance. |
+
+These prices are legitimate submitted limit orders relative to the observed real
+MSFT quote, not injected market values. Tests validate MSFT's quote fits the
+$10,000 budget and pending limits before proceeding. External prices can still
+change: unexpected actual execution is a real failure, not a mocked success.
+Comparison tolerances account for decimal rounding; no fixed execution price is
+assumed. No test forces Alpaca errors, a future market crossing, database failures,
+network interruption, duplicate cancellation or concurrent fill/cancel races.
+Those unsupported E2E branches remain explicitly outside coverage. UI-disabled
+invalid inputs are verified as prevented submissions; they do not prove the
+backend rejects manually forged requests (backend API tests cover that).
+
+### Trading suite verification
+
+Verified on Pixel 9 API 36 against the existing normal local backend, real
+Google session, real SQL database and actual Alpaca prices. All four current
+Trading cases have passing runs, including setup/cleanup:
+
+- The first Market Buy attempt exposed a test timing issue: Portfolio's list
+  exists before its asynchronous response. The test now waits for the actual
+  Bought record rather than assuming list creation means loaded data.
+- In the four-case aggregate run, Market Buy and Sell Shares passed. Limit Order
+  and Cancel initially failed because Activity recreation restores the previous
+  navigation route, not necessarily Market. Shared test navigation now explicitly
+  returns through the real UI to Market before selecting a stock.
+- Limit Order and Cancel then passed in a two-case retry. A fresh four-case run
+  after that test-only navigation correction was not repeated. Original reports
+  retain the initial failures; retry reports are separate under `e2e-trading/`.
+- PowerShell syntax, Bash syntax and Android instrumentation compilation passed.
+  The Market-only and complete twelve-case runners were not rerun for this
+  Trading-only change. No production business logic or database schema changed.
+
+Aggregate/retry reports: `frontend/app/build/reports/e2e-trading/<run-id>/<class>/index.html`.
+Individual invocations use Gradle's default connected-test report, overwritten
+by the next invocation. Both aggregate runs preserved their per-case HTML reports.
+
+
+## Portfolio feature E2E specifications
+
+Portfolio has two independent use cases. Both require the normal full backend,
+real Google login, Alpaca and the disposable SQL test database. Each prepares and
+cleans the current test account automatically; previous trades/positions are not
+restored. No additional server, fake price or pre-populated tester account is used.
+
+Feature and individual commands are listed in [Commands for E2E suites](#commands-for-e2e-suites).
+Source classes are in `frontend/app/src/androidTest/java/com/example/cpen321application/e2e/`.
+
+Matching `.sh` commands run via `bash`. Portfolio-only reports are saved under
+`frontend/app/build/reports/e2e-portfolio/<run-id>/<class>/index.html`.
+The Market/Trading runners do not add Portfolio test classes; they may navigate
+to Portfolio as a postcondition of their own use cases. The complete runner now
+contains twelve cases: ten across the three selected main features plus the two
+existing Social cases. Browse Stocks remains last overall.
+
+### View Transaction History
+
+The new class reuses normal trading setup/UI helpers, not another feature's test
+result. Evidence comparisons use real DB snapshots rather than recalculating
+market value. Its viewing phase starts only after preparation has finished.
+
+| Scenario | Automated checks |
+| --- | --- |
+| Empty-history alternative | Reset the account, open Portfolio, verify the empty holdings area and absence of Recent Activity/history records. Viewing must not change persisted state. |
+| Automated independent preparation | Through the real Trade UI buy three MSFT shares, sell one, create/cancel a $1 limit BUY, and leave another $1 limit BUY pending. No synthetic trade records or Alpaca responses are inserted. |
+| Success: retrieve and inspect history | Open Portfolio and scroll to Recent Activity. Require exactly the two actual completed trades, SELL then BUY, with no duplicate IDs. Pending/cancelled orders must not become completed history entries. |
+| Record fields | For each transaction verify ticker/direction, executed quantity, actual price, signed formatted total and displayed date against real stored evidence. Verify the two visible cards are ordered newest first. |
+| Persistence | Recreate/reopen the application pages, require the same records/details without duplicates. |
+| Read-only postconditions | Compare accounts, positions, trades, orders and friendships before/after empty viewing and before/after populated viewing/reopening. Favorites remain unchanged through shared teardown. |
+| Cleanup | Reset the caller's disposable trading state even after assertion failure, subject to backend availability and valid login. |
+
+The UI's existing Recent Activity list is used; no new history page is invented.
+Transaction tags and header-order semantics expose the actual displayed records
+without replacing any response. Backend history currently includes up to 100
+completed trades; the UI displays dates, not exact times. Forced retrieval/network
+failures, second-account isolation, pagination and history beyond 100 records are
+not claimed. Empty history is a normal alternative, not an artificial failure.
+The existing formal View Portfolio failure exclusions remain documented below.
+
+### Portfolio verification
+
+Verified on Pixel 9 API 36 against the existing normal local backend, real
+Google session, SQL data and Alpaca: the new History case passed individually,
+then the Portfolio-only runner completed **2/2 successfully**, View Portfolio
+followed by View Transaction History. The successful aggregate reports are under
+`frontend/app/build/reports/e2e-portfolio/20261125-230413-227/`. Setup and cleanup
+completed in both cases. Existing Portfolio evidence requests now use the same
+TLS-aware client as the app. PowerShell/Bash runner syntax and instrumentation
+compilation passed. No provider/network failure was injected. Other feature
+suites and the complete twelve-case runner were not rerun for this change.
+
+
+## Historical integration and backend verification
 
 After integrating `fb-nfr-thing`, Send Friend Request uses **usernames**, not UUID
 friend IDs. The formal use case, test input and generated participant usernames
@@ -88,34 +451,7 @@ The no-mock backend suite was not rerun as part of this fix.
 Command (from `backend`):
 `npm.cmd run test:api:mock -- --runInBand`; NFR: `npm.cmd run test:nfr`.
 
-Complete [Local E2E Setup](Local_E2E_Setup.md) once: running MySQL/MariaDB,
-isolated test database with migrations, real Google/Alpaca credentials in
-`backend/.env`, `E2E_ENABLED=true`, and matching Android/backend URLs.
-Each session: keep `npm run dev` running from `backend`, open Pixel 9 API 36,
-sign in through Google and return to Market. Run commands below from the repository root.
-
-| Formal case | Test class | PowerShell command |
-| --- | --- | --- |
-| 3.5.1 Browse Stocks | `BrowseStocksE2ETest` | `.\scripts\run-browse-stocks-e2e-tests.ps1` |
-| 3.5.2 Place Market Buy | `TradingE2ETest` | `.\scripts\run-market-buy-e2e-tests.ps1` |
-| 3.5.3 View Portfolio | `PortfolioE2ETest` | `.\scripts\run-view-portfolio-e2e-tests.ps1` |
-| 3.5.4 Send Friend Request | `SendFriendRequestE2ETest` | `.\scripts\run-send-friend-request-e2e-tests.ps1` |
-| 3.5.5 View Leaderboard | `LeaderboardE2ETest` | `.\scripts\run-view-leaderboard-e2e-tests.ps1` |
-| All five, sequentially | All above | `.\scripts\run-frontend-e2e-tests.ps1` |
-
-The all-tests runner explicitly starts and waits for Browse → Buy → Portfolio →
-Leaderboard → Send Friend Request. Each suite is independent; the ordering does
-not supply data to later tests. It attempts every suite even after a test failure
-and exits unsuccessfully if any suite fails. It uses the existing server and login.
-On macOS/Linux, run `bash scripts/run-frontend-e2e-tests.sh`; individual scripts
-also have `.sh` equivalents. Old special-server suites are excluded.
-
-Normal Gradle output remains unchanged. The combined runner preserves each fresh
-HTML report at `frontend/app/build/reports/e2e-all/<run-id>/<test-class>/index.html`.
-The default `reports/androidTests/connected/debug/index.html` is overwritten per
-suite and represents only the last invocation. A failure before reporting appears
-in terminal output, not as a copied stale report. Google sessions can expire;
-HTTP 401 requires signing in again before rerunning the failed suite.
+Current run commands are in [Commands for E2E suites](#commands-for-e2e-suites).
 
 ## View Portfolio E2E — formal specification 3.5.3
 
@@ -263,7 +599,7 @@ Test: `viewLeaderboardRanksAcceptedFriendsByValueAndReturnWithoutMutatingAccount
 Follow [Local E2E Setup](Local_E2E_Setup.md), start the normal backend with
 `npm run dev`, sign in through Google and return to Market. From the root run
 `./scripts/run-view-leaderboard-e2e-tests.ps1` (or its `.sh` counterpart).
-The combined `run-frontend-e2e-tests` runner selects all five formal-use-case suites.
+The combined `run-frontend-e2e-tests` runner includes this suite alongside the four Market cases and the other implemented use cases (twelve total).
 
 Preparation is independent: reset this account's trading state, remove its existing
 friendships, first verify self-only state, then create eight real database users.
@@ -304,7 +640,7 @@ The empty `SocialE2ETest.kt` placeholder was replaced. Follow
 [Local E2E Setup](Local_E2E_Setup.md), start the ordinary `npm run dev` backend,
 sign in through Google and return to Market. Run
 `./scripts/run-send-friend-request-e2e-tests.ps1` or its `.sh` counterpart.
-The combined runner now selects all five formal-use-case suites.
+The combined runner selects twelve implemented use cases, including the ten selected-feature use cases and the two extra Social formal cases.
 
 Preparation resets only the signed-in test account's trading state, replaces its
 friendships, and reuses the guarded real database participant setup described for
@@ -345,6 +681,7 @@ No cloud or physical-device execution is claimed.
 | 2026-11-03 | Section 2.1: Market API tests | Specify mocked and live integration tests for every Market HTTP interface. |
 | 2026-11-03 | Section 4: Market E2E tests | Use deterministic market fixtures so the app-to-API flows run without MySQL or Alpaca credentials. |
 | 2026-11-04 | Section 2.1: Renumbered Use Cases | Renumber use cases following the removal of delete account (UC-05 to UC-19). |
+| 2026-11-25 | E2E command guide, feature grouping and test specifications | Group ten cases under Market/Trading/Portfolio, retain two extra formal Social cases, document per-case/feature/all commands, cleanup and verified coverage limits. |
 | 2026-11-18 | Section 3: Non-functional testing | Replace template placeholders with NFR-1/2/3 tests, run instructions, measured results, evidence locations, and the stale-price production fix. |
 
 ---
@@ -560,7 +897,7 @@ Start signed in on Market as required by the course's feature-test convention.
 The product supports signed-out browsing too; guest behavior is not covered here.
 
 Run `./scripts/run-browse-stocks-e2e-tests.ps1` or its `.sh` counterpart.
-The existing `run-market-e2e-tests.ps1` is now an alias to this real-backend test;
+The existing `run-market-e2e-tests.ps1` now runs all four real-backend Market cases with Browse last;
 it no longer rewrites URLs or requires port 3003. The common E2E runner includes
 Browse Stocks, Buy, Portfolio and Leaderboard.
 

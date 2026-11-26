@@ -7,6 +7,7 @@
 | 2026-10-19      | Project description, documented features, actors, use cases, and high-level design | Filling out the sections for submission to CP1 |
 | 2026-11-01      | Everything concerning requirements, features, use cases, components, interfaces and the like (2.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7) | Filling out the sections for submission to CP2 |
 | 2026-11-03      | Continuation of changes on 2026-11-01 (3.2, 3.4, 3.5, 4.1, 4.3, 4.4, 4.5, 4.6, 4.7) | In response to CP2 submission, backend changes, and TA feedback |
+| 2026-11-25 | Sections 3.1, 3.2, 3.4 and 4: Market Favorites | Document the implemented per-user Favorites use case, current Market detail diagram and authenticated persistence interfaces; retain the five formal specifications. |
 | 2026-11-18 | Section 4.7: NFR design | Align the implemented concurrent workload, freshness enforcement, and testing-document reference. |
 
 ---
@@ -24,7 +25,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 ### **3.1. List of Features**
 
 1. **Authentication** - Registration and signins happen through the Google authentication service, which then links to a personal virtual trading account and profile-specific settings (such as managing account info, app preferences, signing out).
-2. **Market** - Live market information retrieved from the Alpaca Market Data API, including browsing and searching current stock prices and changes. The backend refreshes all 100 stocks in shared batches: quotes on a 4-second loop and daily history on a 60-second loop. Each loop waits after completion to prevent overlap and respects provider cooldown. Cache updates reach the visible Android Market screen through WebSocket snapshots, with reconnect and initial cache synchronization.
+2. **Market** - Live market information retrieved from the Alpaca Market Data API, including browsing and searching current stock prices and changes. The backend refreshes all 100 stocks in shared batches: quotes on a 4-second loop and daily history on a 60-second loop. Each loop waits after completion to prevent overlap and respects provider cooldown. Cache updates reach the visible Android Market screen through WebSocket snapshots, with reconnect and initial cache synchronization. Authenticated Traders can add/remove stocks with stars and view their own persisted Favorites; saving a favorite does not reorder the Stocks tab.
 3. **Trading** - People can buy or sell shares using virtual money through a trading system, which governs validating funds and shares, updating account balances and stock positions, and recording transactions completed.
 4. **Portfolio** - View your personal virtual investment portfolio through its respective screen, including available cash, held stocks, total portfolio value, allocation of assets, profits and losses, and transaction history.
 5. **Social** - People can send, cancel, accept and decline friend requests between other users, and compare statistics with accepted friends, displaying rankings that can be sorted in a leaderboard.
@@ -33,9 +34,36 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 
 ![3.2-use-case-diagram](images/3.2-updated-use-case-diagram.png)
 
+The overall image above is retained from the previous design. The current Market
+use-case detail below adds **Manage Favorite Stocks**; only Trader is authorized
+for stock details/trading and saved Favorites. Guests can browse/search and are
+prompted to sign in when selecting a protected action.
+
+```mermaid
+flowchart LR
+    Guest["Guest"]
+    Trader["Trader"]
+    subgraph Market["Market"]
+        Browse(["Browse Stocks"])
+        Search(["Search Stocks"])
+        Details(["View Stock Details"])
+        Favorites(["Manage Favorite Stocks"])
+    end
+    Guest --- Browse
+    Guest --- Search
+    Trader --- Browse
+    Trader --- Search
+    Trader --- Details
+    Trader --- Favorites
+```
+
+Editable diagram source: [Market use cases](res/market-use-cases.mmd). The list's
+new Favorites entry is appended as item 20 so existing entries are not renumbered.
+
+
 ### **3.3. Actors Description**
 
-1. **[primary] Guest (unauthenticated user)** - One who has no TradeOff account. All of the user interface is barred for this user except for market data (which they cannot act on...).
+1. **[primary] Guest (unauthenticated user)** - Can browse and search Market data without a session. Opening protected stock details/trading, using a favorite star or opening Favorites prompts sign-in.
 2.  **[primary] Trader (authenticated user)** - One who has a TradeOff account. They can thus act on market data, execute trading, use social features, have a logged history viewable by portfolio, among other app capabilities.
 3. **[secondary] Google Authentication Service - Secondary**: Provides account authentication, specifically the verification of TradeOff accounts by linking them to certain Google accounts.
 4. **[secondary] Alpaca Market Data API - Secondary**: Bridges TradeOff with necessary stock market data to emulate an investment platform (maybe be more specific?)
@@ -61,6 +89,8 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 17. **[social] Cancel Friend Request** - Cancel a request the user sent that is still pending. TradeOff removes the request.
 18. **[social] Remove Friend** - Remove an existing friend from the friend list. TradeOff removes the friendship for both users.
 19. **[social] View Leaderboard** - View a ranking of the user and their accepted friends by total portfolio value or percentage return, and reorder it by either criterion.
+20. **[market] Manage Favorite Stocks** - An authenticated Trader adds or removes stocks using the star on a Market card and views saved stocks in the Favorites tab. TradeOff persists a unique user/ticker selection in MySQL, restores it on later visits, and keeps each user's selections separate. Stocks remain in the Stocks tab; public quote updates do not overwrite favorites. Guests who select a star or the Favorites tab are prompted to sign in. An empty Favorites tab displays an empty-state message.
+
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
 <a name="fucs1"></a>
@@ -235,7 +265,7 @@ All error responses are JSON of the form { "error": string }. Market data respon
 
 Individual stock-detail requests return the stock's available data and status when a current or stale quote exists. They return HTTP 503 when no quote is available. Operations that require a fresh quote, including trade execution and portfolio valuation, return HTTP 503 when a fresh quote cannot be retrieved. Stale quotes must never be treated as current prices for these operations.
 1. **User Service**
-   - **Purpose**: Verifies Google identities, creates and finds accounts, and manages profile data and account deletion.
+   - **Purpose**: Verifies Google identities, creates and finds accounts, and manages profile data, account deletion and user-owned stock favorites.
    - **Rationale**: Centralizing identity gives every other component one consistent authenticated user id, and keeps Google-specific code in one place.
    - **Interfaces**:
       1. `POST /api/auth/google (idToken) → AuthResponse`
@@ -249,12 +279,19 @@ Individual stock-detail requests return the stock's available data and status wh
          - **Purpose**: Deletes the account and all of its data (UC-05). Sign-out (UC-03) has no endpoint: the app discards its token.
       5. `verifyIdToken(idToken) → GoogleIdentity` (User Service → Google Authentication Service)
          - **Purpose**: Validates a Google ID token and returns the verified identity.
+      6. `GET /api/auth/me/favorites (JWT) → { tickers: string[] }`
+         - **Purpose**: Returns only the authenticated user's saved tickers, alphabetically sorted. The response is not shared through the public market cache. Errors: 401 missing/invalid/expired session, 403 banned account.
+      7. `PUT /api/auth/me/favorites/:ticker (JWT) → 204`
+         - **Purpose**: Saves a supported ticker for the authenticated user without creating duplicates. Errors: 401/403 authorization, 404 unsupported symbol.
+      8. `DELETE /api/auth/me/favorites/:ticker (JWT) → 204`
+         - **Purpose**: Removes the authenticated user's saved ticker; removing an absent selection is harmless. Errors: 401/403 authorization.
+
 2. **Market Service**
     - **Purpose**: Retrieves quotes and price history from Alpaca, keeps shared quotes (4-second lifetime) and daily history (60-second lifetime), serves the market endpoints, and provides a price lookup to other components. The normal server independently refreshes these caches and publishes full `market.snapshot` messages at `/api/market/events` (WS locally, WSS with HTTPS). The public stream contains market data only; user favorites and account data remain in authenticated APIs and MySQL. Connections receive an immediate snapshot; reconnects resynchronize missed state.
     - **Rationale**: One component talks to Alpaca, which limits external calls and keeps NFR-1 to NFR-3 testable in one place. The cache is a layer inside this component, not a component of its own.
     - **Interfaces**:
         1. `GET /api/market/stocks → StockList`
-            - **Purpose**: Lists the six supported stocks (UC-06, UC-07). Returns the list even when individual stock data is stale or unavailable; each stock reports its own `status`. This endpoint does not return 503 solely because one or more quotes are unavailable.
+            - **Purpose**: Lists the 100 supported stocks (UC-06, UC-07). Returns the list even when individual stock data is stale or unavailable; each stock reports its own `status`. This endpoint does not return 503 solely because one or more quotes are unavailable.
             - `StockList { stocks: [{ ticker: string, companyName: string, currentPrice: number | null, change: number | null, percentageChange: number | null, quoteAsOf: string | null, source: string | null, feed: string | null, status: 'ok' | 'stale' | 'unavailable', quoteAgeSeconds: number | null, historySource: string | null, history: { symbol: string, status: 'ok' | 'stale' | 'unavailable', points: [{ timestamp: string, price: number }] } }] }`
         2. `GET /api/market/stocks/:ticker → StockDetails`
             - **Purpose**: Returns one stock's latest quote and its data status (UC-08). Errors: 404 unsupported ticker. A stale quote is returned with `status: 'stale'`; if no quote is available, the stock is returned with `status: 'unavailable'`. This endpoint does not return 503 solely because its quote is stale or unavailable.

@@ -12,9 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.PortfolioSummaryResponse
 import com.example.cpen321application.TradeHistoryItemResponse
+
+internal val TransactionHistoryIds = SemanticsPropertyKey<List<String>>("TransactionHistoryIds")
 
 internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioActivity(
     summary: PortfolioSummaryResponse?, onCancel: (String) -> Unit,
@@ -26,7 +32,12 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioActivity(
     }
     val recentTrades = summary?.recentTrades.orEmpty()
     if (recentTrades.isNotEmpty()) {
-        item { SectionTitle("Recent Activity", "Executed transactions") }
+        item {
+            Column(Modifier.testTag("transaction-history").semantics {
+                stateDescription = "${recentTrades.size} completed transactions"
+                this[TransactionHistoryIds] = recentTrades.map { it.id }
+            }) { SectionTitle("Recent Activity", "Executed transactions") }
+        }
         items(recentTrades, key = { it.id }) { trade -> TransactionCard(trade) }
     }
 }
@@ -60,7 +71,7 @@ private fun PendingOrderCard(
 @Composable
 private fun TransactionCard(trade: TradeHistoryItemResponse) {
     val isBuy = trade.type == "BUY"
-    PortfolioPanel {
+    PortfolioPanel(modifier = Modifier.testTag("transaction-${trade.id}").semantics(mergeDescendants = true) {}) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 modifier = Modifier.size(36.dp).background(

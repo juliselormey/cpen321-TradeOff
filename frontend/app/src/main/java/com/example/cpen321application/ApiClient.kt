@@ -15,6 +15,10 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 object ApiClient {
+    /** Raw test evidence requests use the same TLS trust and session rules as Retrofit. */
+    fun createBackendHttpClient(context: Context): OkHttpClient = getOkHttpClient(
+        context, BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }, 30,
+    )
     private fun createdTrustClient(context: Context): OkHttpClient {
         val ctf = CertificateFactory.getInstance("X.509")
         val inputStream = context.resources.openRawResource(R.raw.cert)

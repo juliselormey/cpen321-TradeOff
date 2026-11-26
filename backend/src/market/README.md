@@ -172,7 +172,9 @@ that navigating away closes the Market socket. Stop
 and restart the server to check retained values and automatic recovery.
 # Local acceptance testing
 
-For Browse Stocks, Place Market Buy, View Portfolio, View Leaderboard and Send Friend Request, use the full ordinary backend via
+For all four Market use cases, run `scripts/run-market-e2e-tests.ps1` from the
+repository root (Search, Details, Favorites, then Browse). For the complete twelve-case
+set use `scripts/run-frontend-e2e-tests.ps1`. Both use the full ordinary backend via
 `npm run dev` and follow [Local E2E Setup](../../../documentation/Local_E2E_Setup.md).
 Market-only servers and deterministic fixtures below are separate development
 tools; they do not replace the authenticated backend for these acceptance tests.

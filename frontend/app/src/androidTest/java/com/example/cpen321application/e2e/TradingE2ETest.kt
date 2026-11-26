@@ -9,7 +9,6 @@ import com.example.cpen321application.MainActivity
 import com.example.cpen321application.PortfolioSummaryResponse
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.After
@@ -18,7 +17,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /** Place Market Buy, formal specification 3.5.2. Uses real HTTP, SQL and Alpaca. */
 class TradingE2ETest {
@@ -61,7 +59,7 @@ class TradingE2ETest {
             .header("Authorization", "Bearer $token")
             .post("".toRequestBody())
             .build()
-        OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).build()
+        ApiClient.createBackendHttpClient(compose.activity)
             .newCall(request).execute().use {
                 check(it.isSuccessful) { "Account setup failed (HTTP ${it.code}); check server and sign-in." }
             }
@@ -114,6 +112,10 @@ class TradingE2ETest {
             }
         }
         openMicrosoft()
+        // Failure 8a: an empty quantity also prevents submission.
+        quantity("")
+        compose.onNodeWithText("BUY").performScrollTo().assertIsNotEnabled()
+        assertEquals(before, snapshot())
         // Success 3 and 5: enter one share and wait for a live price to enable BUY.
         // Initial price display is covered indirectly by button readiness.
         quantity("1")
@@ -150,8 +152,8 @@ class TradingE2ETest {
 
         // Success 7–8: the real backend obtains a price and validates funds/quantity.
         // These internal steps are checked through their persisted result below.
-        // Failure 7a–7a2 is excluded: controlling an Alpaca outage would require mocking.
-        // The course permits this omission; see the traceability table in Testing.md.
+        // Failure 7a–7a2 is not forced here: no Alpaca outage or response is injected.
+        // See the explicit coverage limitation in Testing.md; no blanket course exemption is claimed.
         // Success 10, UI result: show the market-order fill confirmation.
         val after = run {
             waitFor("MARKET BUY filled", substring = true)
@@ -180,6 +182,18 @@ class TradingE2ETest {
 
         // Use-case postconditions: reopen Trading and verify persisted cash/holdings/history.
         compose.onNodeWithContentDescription("Back to Market").performScrollTo().performClick()
+        // View the executed purchase through Portfolio as well as the persistence API.
+        compose.onNode(hasText("Portfolio") and hasClickAction()).performClick()
+        compose.waitUntil(30_000) { compose.onAllNodesWithTag("portfolio-list").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30_000) {
+            runCatching {
+                compose.onNodeWithTag("portfolio-list").performScrollToNode(hasText("Bought MSFT"))
+                true
+            }.getOrDefault(false)
+        }
+        compose.onNodeWithText("Bought MSFT").assertIsDisplayed()
+        compose.onNodeWithTag("portfolio-list").performScrollToNode(hasText("‹ Back to Market"))
+        compose.onNodeWithText("‹ Back to Market").performClick()
         openMicrosoft()
         compose.waitUntil(30_000) {
             compose.onAllNodesWithText(cashText).fetchSemanticsNodes().isNotEmpty()

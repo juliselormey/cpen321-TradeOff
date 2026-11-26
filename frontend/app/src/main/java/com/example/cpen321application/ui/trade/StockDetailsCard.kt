@@ -12,12 +12,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.ui.market.data.MarketStock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+internal val StockSnapshotTime = SemanticsPropertyKey<String>("StockSnapshotTime")
 
 @Composable
 internal fun StockDetailsCard(ticker: String, stock: MarketStock?, connectionError: String?) {
@@ -26,13 +31,14 @@ internal fun StockDetailsCard(ticker: String, stock: MarketStock?, connectionErr
     val trend = if ((stock?.percentageChange ?: 0.0) < 0) colors.error else colors.primary
     val price = stock?.currentPrice?.toDoubleOrNull()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("stock-details")
+            .semantics { this[StockSnapshotTime] = stock?.fetchedAt.orEmpty() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surface),
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StockLogo(ticker, Modifier.size(56.dp))
+                StockLogo(ticker, Modifier.size(56.dp), stock?.companyName)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(ticker, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Text(stock?.companyName ?: "Stock details", color = colors.onSurfaceVariant, fontSize = 13.sp)
@@ -50,7 +56,7 @@ internal fun StockDetailsCard(ticker: String, stock: MarketStock?, connectionErr
             }
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(price?.usd() ?: "—", fontSize = 38.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp)
+                    Text(price?.usd() ?: "—", modifier = Modifier.testTag("stock-detail-price"), fontSize = 38.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp)
                     Text("USD", color = colors.onSurfaceVariant, fontSize = 12.sp, modifier = Modifier.padding(bottom = 7.dp))
                 }
                 val change = stock?.change?.toDoubleOrNull()

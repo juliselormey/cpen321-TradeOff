@@ -81,8 +81,8 @@ internal fun StockHistoryChart(ticker: String, points: List<MarketPricePoint>, c
             val duration = (last.time - first.time).toDouble()
             val labelFormat = remember { DateTimeFormatter.ofPattern("MMM d, HH:mm 'UTC'", Locale.US).withZone(ZoneOffset.UTC) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(selected.price.usd(), fontWeight = FontWeight.SemiBold, color = color, fontSize = 15.sp)
-                Text(labelFormat.format(Instant.ofEpochMilli(selected.time)), color = colors.onSurfaceVariant, fontSize = 10.sp)
+                Text(selected.price.usd(), modifier = Modifier.testTag("stock-chart-selected-price"), fontWeight = FontWeight.SemiBold, color = color, fontSize = 15.sp)
+                Text(labelFormat.format(Instant.ofEpochMilli(selected.time)), modifier = Modifier.testTag("stock-chart-selected-time"), color = colors.onSurfaceVariant, fontSize = 10.sp)
             }
             val gridColor = colors.outlineVariant.copy(alpha = 0.5f)
             Row(Modifier.fillMaxWidth().height(218.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

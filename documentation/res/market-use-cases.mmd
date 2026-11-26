@@ -1,0 +1,15 @@
+flowchart LR
+    Guest["Guest"]
+    Trader["Trader"]
+    subgraph Market["Market"]
+        Browse(["Browse Stocks"])
+        Search(["Search Stocks"])
+        Details(["View Stock Details"])
+        Favorites(["Manage Favorite Stocks"])
+    end
+    Guest --- Browse
+    Guest --- Search
+    Trader --- Browse
+    Trader --- Search
+    Trader --- Details
+    Trader --- Favorites

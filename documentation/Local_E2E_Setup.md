@@ -1,12 +1,14 @@
 # Local test setup (no Docker)
 
-This is the setup for the five real-backend acceptance tests: Browse Stocks
-(`BrowseStocksE2ETest`), Place Market Buy
-(`TradingE2ETest`), View Portfolio (`PortfolioE2ETest`), View Leaderboard
-(`LeaderboardE2ETest`) and Send Friend Request (`SendFriendRequestE2ETest`). They use the normal
-`npm run dev` backend, real Google login, real MySQL/MariaDB and real Alpaca data.
-After one-time setup, each session requires starting the database, `npm run dev`,
-and a test runner. Nothing here requires the old special E2E servers.
+This guide prepares the **three selected main features** for automated E2E:
+**Market (4 use cases), Trading (4), Portfolio (2)**. The two existing Social formal
+cases remain as **extra tests**. The all-tests command runs all **12**; each
+feature also has its own runner. Tables in [section 6](#6-every-test-session-normal-server-then-a-test-script)
+explain every test and its individual/feature command.
+
+Tests use the normal `npm run dev` backend, real Google login, real MySQL/MariaDB
+and real Alpaca data. After one-time setup, each session requires the database,
+backend and a test runner. No Docker or special E2E server is required.
 
 ## 1. Install prerequisites once
 
@@ -165,42 +167,94 @@ proxy setups must forward WebSocket upgrades for this path as well as the existi
 `/api/friends/events`. Local HTTP uses `ws://`; HTTPS uses `wss://` through the
 same base URL and certificate configuration. No additional server is required.
 
-Terminal 2, from the repository root, choose one command:
+The **three selected main features** are Market, Trading and Portfolio: **10
+use-case tests** in total. Three of them also cover formal cases from section
+3.5: Browse Stocks, Place Market Buy and View Portfolio. Two further formal
+Social cases are retained below as **extra tests**, making **12 tests overall**.
 
-| Tests | Command |
-| --- | --- |
-| All five real-backend feature tests | `.\scripts\run-frontend-e2e-tests.ps1` |
-| Browse Stocks only | `.\scripts\run-browse-stocks-e2e-tests.ps1` |
-| Place Market Buy only | `.\scripts\run-market-buy-e2e-tests.ps1` |
-| View Portfolio only | `.\scripts\run-view-portfolio-e2e-tests.ps1` |
-| View Leaderboard only | `.\scripts\run-view-leaderboard-e2e-tests.ps1` |
-| Send Friend Request only | `.\scripts\run-send-friend-request-e2e-tests.ps1` |
+After the one-time setup, keep MySQL/MariaDB and the normal backend running,
+use Pixel 9 API 36, sign in through Google and return to Market. Run all commands
+below from the **repository root**. On macOS/Linux, use the matching `.sh` file
+with `bash`.
 
-These use normal Gradle output. Results are in
+**Run everything, including the extra formal tests:**
+
+```powershell
+.\scripts\run-frontend-e2e-tests.ps1
+```
+
+### Market — four use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Market feature** | Runs Search → Details → Favorites → **Browse last**. No Trading, Portfolio or Social test class is selected. | `.\scripts\run-market-e2e-tests.ps1` |
+| Search Stocks | Full/partial ticker and company searches, case-insensitivity, no-match message, correction and clearing the search. | `.\scripts\run-search-stocks-e2e-tests.ps1` |
+| View Stock Details | Identity/logo/quote, chart periods, point inspection, live snapshot receipt and switching to another stock without trading. | `.\scripts\run-view-stock-details-e2e-tests.ps1` |
+| Manage Favorite Stocks | Add/remove through stars, view Favorites, persistence and empty state; preserve selections during live updates and restore the original saved set. | `.\scripts\run-manage-favorites-e2e-tests.ps1` |
+| Browse Stocks — **formal 3.5.1** | Scroll all 100 cards; check names, tickers, logo elements, displayed price/change and unchanged account data. This is the slowest Market case. | `.\scripts\run-browse-stocks-e2e-tests.ps1` |
+
+### Trading — four use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Trading feature** | Runs Market Buy → Limit Order → Cancel Pending Order → Sell Shares. | `.\scripts\run-trading-e2e-tests.ps1` |
+| Place Market Buy — **formal 3.5.2** | Invalid quantity/insufficient funds, actual purchase, exact cash/share changes, recorded BUY and persistence. | `.\scripts\run-market-buy-e2e-tests.ps1` |
+| Place Limit Order | Invalid inputs/funds, pending BUY with cash reserve, persistence and immediately executable limit BUY using a real quote. | `.\scripts\run-limit-order-e2e-tests.ps1` |
+| Cancel Pending Order | Cancel BUY from Trade and SELL from Portfolio; release the exact cash/share reserve, verify CANCELLED and persistence without duplicate refunds. Persisted-state checks do not need price valuation. | `.\scripts\run-cancel-pending-order-e2e-tests.ps1` |
+| Sell Shares | Invalid/excess/reserved quantities, partial/full market sales, pending/immediate limit sales, real proceeds and SELL history. | `.\scripts\run-sell-shares-e2e-tests.ps1` |
+
+### Portfolio — two use cases
+
+| Run / use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| **Entire Portfolio feature** | Runs View Portfolio → View Transaction History. | `.\scripts\run-portfolio-e2e-tests.ps1` |
+| View Portfolio — **formal 3.5.3** | Empty/funded portfolios, holdings, cash including reserves, total value, allocation, profit/loss, pending orders and read-only viewing. | `.\scripts\run-view-portfolio-e2e-tests.ps1` |
+| View Transaction History | Empty history, actual BUY/SELL fields and newest-first order, no duplicate/pending/cancelled history entries, persistence and unchanged data during viewing. It prepares its own real trades. | `.\scripts\run-view-transaction-history-e2e-tests.ps1` |
+
+### Extra formal tests — Social
+
+These remain implemented, independently runnable, and included in the all-tests
+command. They are **additional formal-case coverage**, not a fourth selected
+main feature and not part of any Market/Trading/Portfolio-only runner.
+
+| Extra formal use case | What it checks | PowerShell command |
+| --- | --- | --- |
+| Send Friend Request — **formal 3.5.4** | Username-based pending request, outgoing-list persistence, and unknown/self/existing-relationship validation. | `.\scripts\run-send-friend-request-e2e-tests.ps1` |
+| View Leaderboard — **formal 3.5.5** | Self-only and accepted-friend rankings, value/return sorting and unchanged account data. | `.\scripts\run-view-leaderboard-e2e-tests.ps1` |
+
+**Execution and reports:** an individual command selects one test class. That
+class can have preparation, several UI stages and cleanup; these are not extra
+test classes. Feature/all runners explicitly execute their listed classes one
+at a time, continue after a failed class, and return failure if any class failed.
+No runner starts the backend/database or performs Google sign-in.
+
+The all-tests order is Search → Details → Favorites → Market Buy → Limit Order →
+Cancel Pending → Sell Shares → View Portfolio → Transaction History → Leaderboard →
+Send Friend Request → **Browse Stocks last**. Ordering does not supply data to
+later tests; each test prepares its own required state.
+
+Individual Gradle reports are overwritten by the next invocation:
 `frontend/app/build/reports/androidTests/connected/debug/index.html`.
-The combined runner explicitly runs one class per Gradle invocation, in this order:
-Browse Stocks, Place Market Buy, View Portfolio, View Leaderboard, Send Friend Request.
-It waits for each to finish before starting the next and continues after a test
-failure so every suite is attempted. Any failed suite makes the overall command fail.
-It does not start the backend, install MySQL or sign in for you.
+Aggregate runners preserve fresh per-class reports under:
 
-Because each invocation replaces Gradle's default report, the combined runner
-copies each fresh HTML report to
-`frontend/app/build/reports/e2e-all/<run-id>/<test-class>/index.html`.
-The default report path contains only the most recent invocation. Preserve the
-run-specific folder when sharing results. If setup/build failed before generating
-a new report, inspect the terminal output; an old report is not copied as a new result.
+| Runner | Saved reports |
+| --- | --- |
+| Market | `frontend/app/build/reports/e2e-market/<run-id>/<class>/index.html` |
+| Trading | `frontend/app/build/reports/e2e-trading/<run-id>/<class>/index.html` |
+| Portfolio | `frontend/app/build/reports/e2e-portfolio/<run-id>/<class>/index.html` |
+| Everything, including extra formal cases | `frontend/app/build/reports/e2e-all/<run-id>/<class>/index.html` |
 
-Before a combined run, sign in again if necessary so the session remains valid
-through the full run (Browse Stocks alone takes about two minutes). If a suite
-fails with HTTP 401, sign in again and rerun that suite or the combined command.
-On macOS/Linux use the corresponding `.sh` runner with `bash`, and `npm`/`npx`.
-Use one emulator/device and do not run tests against the same account concurrently.
-Stop the backend with Ctrl+C. Restart the database after reboot if it is not a service.
+Use the disposable test database/account described in the setup. Trading,
+Portfolio and extra Social tests reset the caller's trading data; Favorites
+preparation temporarily changes and then restores its saved set. See the cleanup
+and coverage limitations below. Renew Google login before a long run: the backend
+JWT lasts 15 minutes. HTTP 401 requires a fresh login, not a database restart.
+A persistent real provider failure is not hidden; unsupported forced-failure
+branches remain documented rather than being reported as covered.
 
 ## What the tests erase
 
-Before and after each mutating/prepared feature test (Buy, Portfolio, Leaderboard
+Before and after each mutating/prepared feature test (all four Trading cases, both Portfolio cases, Leaderboard
 and Send Friend Request), Android calls `POST /__e2e/account/reset` using the
 current Google session's backend JWT. The normal backend removes **that user's**
 orders, trades and positions, and sets cash/starting balance to $10,000 in one
@@ -220,6 +274,16 @@ afterward. Original friendships are not restored. Profiles/login/Favorites of th
 current user remain intact. No second Google login is needed.
 Browse Stocks performs no reset or cleanup: it only reads data and checks that
 the account and Favorites have not changed.
+Search Stocks and View Stock Details likewise perform no trading reset and compare
+account/Favorites evidence before and after. Manage Favorites temporarily clears
+only the signed-in user's favorites using real authenticated API calls, exercises
+add/remove through the UI, and restores the original set in teardown, including
+after assertion failures. A killed process or unavailable backend can prevent
+restoration; use a disposable test account. No other user is modified.
+All Market suites start on Market with an existing real Google login. They do
+not mock the backend, inject provider failures, or require a second Google account.
+The common setup/evidence helper is `MarketE2ESupport.kt`; it does not use the
+legacy `RealBackendTest` isolated/fault server. Browse retains its own read-only setup.
 
 ## Firebase/NFR integration
 
@@ -257,12 +321,16 @@ These use controlled providers and no real database, as documented in
 
 ## Other tests and old fixtures
 
-The common E2E runner selects `BrowseStocksE2ETest`, `TradingE2ETest`, `PortfolioE2ETest`, `LeaderboardE2ETest` and `SendFriendRequestE2ETest`.
+The common E2E runner selects `SearchStocksE2ETest`, `ViewStockDetailsE2ETest`,
+`ManageFavoritesE2ETest`, `TradingE2ETest`, `PlaceLimitOrderE2ETest`,
+`CancelPendingOrderE2ETest`, `SellSharesE2ETest`, `PortfolioE2ETest`,
+`ViewTransactionHistoryE2ETest`, `LeaderboardE2ETest`,
+`SendFriendRequestE2ETest`, and finally `BrowseStocksE2ETest`.
 It does not run every class in `androidTest/e2e`. The old `MarketFlowTest` was
-removed; `run-market-e2e-tests.ps1` now runs Browse Stocks against the normal
-backend. The remaining old `PortfolioFlowTest` depends on a special fixture
+removed; `run-market-e2e-tests.ps1` runs Search, Details, Favorites and Browse
+against the normal backend. The remaining old `PortfolioFlowTest` depends on a special fixture
 host and is not part of this no-mock acceptance workflow. Do not use
-`backend/scripts/e2e-server.ts` or `market-e2e-server.ts` for the five feature tests.
+`backend/scripts/e2e-server.ts` or `market-e2e-server.ts` for these acceptance tests.
 
 Backend API/Jest tests are separate: see `Testing.md` for mock and no-mock suites;
 their database/service requirements differ. Do not assume this runner covers them.

@@ -12,6 +12,7 @@ import com.example.cpen321application.ExecuteLimitOrderRequest
 import com.example.cpen321application.ExecuteMarketOrderRequest
 import com.example.cpen321application.PendingOrderItem
 import com.example.cpen321application.ui.market.data.MarketApiService
+import com.example.cpen321application.ui.market.data.MarketStock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -38,7 +39,8 @@ internal class TradeState(
     var marketChange by mutableStateOf<Double?>(null)
     var quoteFailed by mutableStateOf(false)
 
-    var availableCash by mutableDoubleStateOf(TradingDefaults.STARTING_BALANCE)
+    var accountLoaded by mutableStateOf(apiService == null)
+    var availableCash by mutableDoubleStateOf(if (apiService == null) TradingDefaults.STARTING_BALANCE else 0.0)
     var ownedShares by mutableDoubleStateOf(0.0)
     private var liveAvailableShares by mutableStateOf<Double?>(null)
     val availableShares get() = if (isLive) liveAvailableShares ?: 0.0 else ownedShares
@@ -56,7 +58,7 @@ internal class TradeState(
 
     val quantity get() = quantityText.toDoubleOrNull() ?: 0.0
     val limitPrice get() = limitPriceText.toDoubleOrNull()
-    val hasPrice get() = currentMarketPrice != null
+    val hasPrice get() = currentMarketPrice != null && !quoteFailed
     val effectivePrice: Double?
         get() = if (selectedOrderType == "LIMIT") limitPrice ?: currentMarketPrice else currentMarketPrice
     val totalAmount get() = quantity * (effectivePrice ?: 0.0)
@@ -66,8 +68,8 @@ internal class TradeState(
     val isLimitPriceValid get() = selectedOrderType != "LIMIT" || ((limitPrice ?: 0.0) > 0)
     val hasEnoughCash get() = availableCash >= totalAmount
     val hasEnoughShares get() = availableShares >= quantity
-    val isBuyEnabled get() = hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughCash
-    val isSellEnabled get() = hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughShares
+    val isBuyEnabled get() = accountLoaded && hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughCash
+    val isSellEnabled get() = accountLoaded && hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughShares
 
     val inputError: String?
         get() = when {
@@ -78,18 +80,25 @@ internal class TradeState(
         }
 
     val buyBlocker: String?
-        get() = if (isQuantityValid && !hasEnoughCash) {
+        get() = if (accountLoaded && isQuantityValid && !hasEnoughCash) {
             "Cannot Buy: Insufficient cash balance (${availableCash.usd()} available)."
         } else null
 
     val sellBlocker: String?
         get() = when {
-            !isQuantityValid || hasEnoughShares -> null
+            !accountLoaded || !isQuantityValid || hasEnoughShares -> null
             ownedShares == 0.0 -> "Cannot Sell: You do not own any shares of $ticker."
             else -> "Cannot Sell: Insufficient available shares (${availableShares.fmt()} available; pending sells reserve shares)."
         }
 
     // Refresh
+
+    fun applyMarketStock(stock: MarketStock?, disconnected: Boolean = false) {
+        val price = stock?.currentPrice?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
+        if (price != null) currentMarketPrice = price
+        marketChange = stock?.percentageChange
+        quoteFailed = disconnected || stock?.status != "ok" || price == null
+    }
 
     suspend fun refreshQuote() {
         runOrReportNetworkFailure({
@@ -97,14 +106,7 @@ internal class TradeState(
             quoteFailed = true
         }) {
             val matched = marketApi.getStocks().stocks.find { it.ticker.equals(ticker, ignoreCase = true) }
-            val live = matched?.currentPrice?.toDoubleOrNull()
-            if (live != null) {
-                currentMarketPrice = live
-                matched.percentageChange?.let { marketChange = it }
-                quoteFailed = false
-            } else {
-                quoteFailed = true
-            }
+            applyMarketStock(matched)
         }
     }
 
@@ -117,6 +119,7 @@ internal class TradeState(
                     availableCash = it.cashBalance
                     ownedShares = it.ownedQuantity
                     liveAvailableShares = it.availableQuantity
+                    accountLoaded = true
                 }
                 api.getPendingOrders().bodyOrNull()?.let { res ->
                     pendingOrders = res.orders.filter { it.ticker.equals(ticker, ignoreCase = true) }
@@ -185,6 +188,7 @@ internal class TradeState(
                     availableCash = body.cashBalance
                     ownedShares = body.ownedQuantity
                     liveAvailableShares = body.availableQuantity
+                    accountLoaded = true
                 }
                 resetForm()
                 successMessage = body.message

@@ -21,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,53 +33,87 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.ApiService
 import com.example.cpen321application.util.SessionManager
-import kotlinx.coroutines.coroutineScope
+import com.example.cpen321application.ui.market.MarketViewModel
+import com.example.cpen321application.ui.market.MarketUiState
+import com.example.cpen321application.ui.market.data.MarketRepository
+import com.example.cpen321application.ui.market.data.MarketStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val POLL_INTERVAL_MS = 8_000L
 
+// Retrofit proxy equals() is not reflexive; Compose keys must compare these by identity.
+internal class TradeServiceKey(private val service: Any?) {
+    override fun equals(other: Any?) = other is TradeServiceKey && service === other.service
+    override fun hashCode() = System.identityHashCode(service)
+}
+
+@Composable
+internal fun rememberTradeState(
+    ticker: String,
+    api: ApiService?,
+    market: com.example.cpen321application.ui.market.data.MarketApiService,
+    scope: kotlinx.coroutines.CoroutineScope,
+    isLoggedIn: () -> Boolean,
+): TradeState = remember(ticker, TradeServiceKey(api), TradeServiceKey(market), scope) {
+    TradeState(ticker, isLoggedIn, api, market, scope)
+}
+
 @Composable
 fun TradeScreen(ticker: String, apiService: ApiService? = null, onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val marketApi = remember(context) { ApiClient.createMarket(context) }
-    val state = remember(ticker, context, apiService, marketApi, scope) {
-        TradeState(ticker, { SessionManager.isLoggedIn(context) }, apiService, marketApi, scope)
+    val state = rememberTradeState(ticker, apiService, marketApi, scope) { SessionManager.isLoggedIn(context) }
+    val factory = remember(TradeServiceKey(marketApi)) { MarketViewModel.Factory(MarketRepository(marketApi)) }
+    val market: MarketViewModel = viewModel(key = "trade-market-$ticker", factory = factory)
+    val marketState by market.state.collectAsState()
+    val stock = marketState.stocks.find { it.ticker.equals(ticker, ignoreCase = true) }
+    val stream = remember(context) {
+        MarketStream(ApiClient.createMarketEventsClient(context), ApiClient.marketEventsUrl())
     }
-    TradePolling(state)
-    TradeContent(state, onBack)
+    LaunchedEffect(state, stock, marketState.error) {
+        state.applyMarketStock(stock, marketState.error != null)
+    }
+    TradeUpdates(state, market, stream)
+    TradeContent(state, marketState, onBack)
 }
 
 @Composable
-private fun TradePolling(state: TradeState) {
+private fun TradeUpdates(state: TradeState, market: MarketViewModel, stream: MarketStream) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(state, lifecycle) {
+    LaunchedEffect(state, lifecycle, market, stream) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                coroutineScope {
-                    launch { state.refreshQuote() }
-                    launch { state.refreshAccount() }
+            launch { market.observeMarket(stream) }
+            launch {
+                // Private account/order data has its own REST refresh; prices and charts use WS.
+                while (isActive) {
+                    state.refreshAccount()
+                    delay(POLL_INTERVAL_MS)
                 }
-                delay(POLL_INTERVAL_MS)
             }
         }
     }
 }
 
 @Composable
-private fun TradeContent(state: TradeState, onBack: () -> Unit) {
+private fun TradeContent(state: TradeState, market: MarketUiState, onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         TradeTopBar(state.ticker, onBack)
-        StockHeaderCard(state.ticker, state.currentMarketPrice, state.marketChange, state.quoteFailed)
-        AccountPositionCard(state.availableCash, state.ownedShares)
+        StockDetailsCard(
+            ticker = state.ticker,
+            stock = market.stocks.find { it.ticker.equals(state.ticker, ignoreCase = true) },
+            connectionError = market.error,
+        )
+        AccountPositionCard(state.availableCash, state.ownedShares, state.accountLoaded)
         OrderEntryCard(state)
         if (state.pendingOrders.isNotEmpty()) {
             PendingOrdersCard(state.pendingOrders, state::cancelOrder)

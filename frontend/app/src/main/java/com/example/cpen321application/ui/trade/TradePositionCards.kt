@@ -69,7 +69,7 @@ internal fun StockHeaderCard(ticker: String, price: Double?, change: Double?, qu
 }
 
 @Composable
-internal fun AccountPositionCard(availableCash: Double, ownedShares: Double) {
+internal fun AccountPositionCard(availableCash: Double, ownedShares: Double, loaded: Boolean = true) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -80,11 +80,11 @@ internal fun AccountPositionCard(availableCash: Double, ownedShares: Double) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text("Available Cash", fontSize = 13.sp, color = Color.Gray)
-                    Text(availableCash.usd(), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (loaded) availableCash.usd() else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Owned Shares", fontSize = 13.sp, color = Color.Gray)
-                    Text(ownedShares.fmt(), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(if (loaded) ownedShares.fmt() else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

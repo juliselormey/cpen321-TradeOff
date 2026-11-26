@@ -59,6 +59,30 @@ class TradeStateTest {
     }
 
     @Test
+    fun liveSnapshotsRepriceOrderWithoutResettingInputsAndStaleDataBlocksTrading() = runBlocking {
+        val state = TradeState("AAPL", { false }, null, market, this)
+        state.availableCash = 250.0
+        state.ownedShares = 2.0
+        state.updateQuantity("1")
+        val stock = market.getStocks().stocks.single()
+        state.applyMarketStock(stock)
+        assertTrue(state.isBuyEnabled)
+        assertTrue(state.isSellEnabled)
+        state.applyMarketStock(stock.copy(currentPrice = "300.0", percentageChange = 3.0))
+        assertEquals(300.0, state.totalAmount, 0.001)
+        assertFalse(state.isBuyEnabled)
+        assertEquals("1", state.quantityText)
+        assertEquals(250.0, state.availableCash, 0.001)
+        state.applyMarketStock(stock.copy(status = "stale"))
+        assertEquals(200.0, state.currentMarketPrice!!, 0.001)
+        assertFalse(state.isSellEnabled)
+        state.applyMarketStock(stock, disconnected = true)
+        assertFalse(state.isBuyEnabled)
+        state.applyMarketStock(stock)
+        assertTrue(state.isBuyEnabled)
+    }
+
+    @Test
     fun cancelledQuoteRefreshPropagatesCancellation() = runBlocking {
         val cancelledMarket = object : MarketApiService {
             override suspend fun getStocks(): MarketResponse = throw CancellationException("stopped")

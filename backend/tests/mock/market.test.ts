@@ -37,7 +37,7 @@ describe('Mocked: market endpoints and caches', () => {
   test('list supplies provider quotes and history for all 100 unique catalog stocks', async () => {
     const { app, fetchQuote, fetchHistory } = fixture();
     const response = await request(app).get('/api/market/stocks').expect(200);
-    expect(response.body.refreshIntervalMs).toBe(8_000);
+    expect(response.body.refreshIntervalMs).toBe(4_000);
     expect(response.body.stocks).toHaveLength(100);
     expect(response.body.stocks[0]).toMatchObject({
       ticker: 'AAPL', source: 'alpaca', feed: 'iex', status: 'ok', currentPrice: '200.25',
@@ -79,17 +79,17 @@ describe('Mocked: market endpoints and caches', () => {
     expect(fetchHistory).toHaveBeenCalledTimes(LIVE_SYMBOLS.length);
   });
 
-  test('price expires at eight seconds while daily history stays cached independently', async () => {
+  test('price expires at four seconds while daily history expires at one minute', async () => {
     const { service, fetchQuote, fetchHistory, advance } = fixture();
     await service.getStock('AAPL');
-    advance(7_999);
+    advance(3_999);
     await service.getStock('AAPL');
     expect(fetchQuote).toHaveBeenCalledTimes(1);
     advance(1);
     await service.getStock('AAPL');
     expect(fetchQuote).toHaveBeenCalledTimes(2);
     expect(fetchHistory).toHaveBeenCalledTimes(1);
-    advance(HISTORY_TTL_MS - 8_000);
+    advance(HISTORY_TTL_MS - 4_000);
     await service.getHistory('AAPL');
     expect(fetchHistory).toHaveBeenCalledTimes(2);
     expect(fetchQuote).toHaveBeenCalledTimes(2);

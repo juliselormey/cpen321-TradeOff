@@ -26,6 +26,31 @@
       private readonly inFlight = new Map<string, Promise<void>>();
       private blockedUntil = 0;
       private providerIssue: MarketIssue | null = null;
+      private readonly listeners = new Set<() => void>();
+
+      subscribe(listener: () => void): () => void {
+        this.listeners.add(listener);
+        return () => { this.listeners.delete(listener); };
+      }
+
+      private changed(): void {
+        for (const listener of this.listeners) {
+          try { listener(); } catch { /* Delivery cannot fail a cache refresh. */ }
+        }
+      }
+
+      /** Pure cache read: connecting clients never cause extra Alpaca requests. */
+      getCachedStocks(): MarketStock[] {
+        return STOCK_CATALOG.map(stock => this.cachedStock(stock.ticker));
+      }
+
+      async refreshQuotes(): Promise<void> {
+        await Promise.all(LIVE_SYMBOLS.map(symbol => this.ensurePrice(symbol)));
+      }
+
+      async refreshHistories(): Promise<void> {
+        await Promise.all(LIVE_SYMBOLS.map(symbol => this.ensureHistory(symbol)));
+      }
 
       constructor(
         private readonly provider: QuoteProvider = new AlpacaProvider(),
@@ -37,13 +62,18 @@
       }
 
       async getStock(ticker: string): Promise<MarketStock> {
+        if (!LIVE_SYMBOLS.includes(ticker)) throw new Error('Unsupported market symbol');
+        await Promise.all([this.ensurePrice(ticker), this.ensureHistory(ticker)]);
+        return this.cachedStock(ticker);
+      }
+
+      private cachedStock(ticker: string): MarketStock {
         const stock = STOCK_CATALOG.find(item => item.ticker === ticker);
         if (!stock) throw new Error('Unsupported market symbol');
         const base = {
           ticker: stock.ticker, companyName: stock.companyName,
           currency: 'USD' as const, isFavorite: stock.isFavorite,
         };
-        await Promise.all([this.ensurePrice(ticker), this.ensureHistory(ticker)]);
         const cached = this.prices.get(ticker);
         const quote = cached?.value;
         const history = this.historyResult(ticker);
@@ -152,7 +182,7 @@
           }));
         })();
         this.inFlight.set(key, work);
-        try { await work; } finally { this.inFlight.delete(key); }
+        try { await work; } finally { this.inFlight.delete(key); this.changed(); }
       }
 
       private async refresh<T>(key: string, entry: CacheEntry<T>, ttl: number, load: () => Promise<T>): Promise<void> {
@@ -166,7 +196,7 @@
         }
         const work = this.load(entry, ttl, load);
         this.inFlight.set(key, work);
-        try { await work; } finally { this.inFlight.delete(key); }
+        try { await work; } finally { this.inFlight.delete(key); this.changed(); }
       }
 
       private async load<T>(entry: CacheEntry<T>, ttl: number, load: () => Promise<T>): Promise<void> {

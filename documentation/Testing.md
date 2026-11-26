@@ -4,6 +4,36 @@ For complete one-time database, Google, Alpaca and Android setup, follow
 [Local E2E Setup](Local_E2E_Setup.md). No Docker or special server is required.
 The normal backend runs with `npm run dev`; then use one of the documented test runners.
 
+## Market live updates — 2026-11-25
+
+The normal backend now refreshes shared quotes on a 4-second loop and daily
+history on a 60-second loop, each waiting after completion. Android Market uses
+`/api/market/events` snapshots instead of recurring HTTP polling. Favorites and
+account data are unchanged. Provider retry/cooldown takes precedence over timers.
+
+- `backend/tests/mock/marketLive.test.ts`: automatic cold start for all 100 stocks,
+  independent quote/history timing, no overlapping slow requests, rate-limit
+  cooldown, shutdown cleanup, immediate cache-only socket snapshots, broadcast to
+  multiple clients, reconnect resynchronization, stale-price broadcasts and
+  coexistence with the friend WebSocket handler. Uses local test sockets with
+  mocked Alpaca/database, not the E2E application server.
+- Android `MarketStreamTest`: pushed prices without HTTP polling, older-frame
+  rejection, socket cancellation, stale prices after disconnect, one REST recovery,
+  reconnect with a restarted revision counter and state recovery.
+- Verification: all backend mock suites **302 passed, 1 TODO**; Android Market
+  unit tests and debug APK build passed. An already-running real local backend
+  delivered successive WebSocket snapshots containing **100/100 available quotes**.
+  NFR tests **8/8** passed. Two recovery assertions now wait for the provider's
+  actual `retryAt`, independently of the shorter successful-quote TTL.
+  Browse Stocks E2E was attempted but stopped during account-evidence preparation
+  with **HTTP 401 (expired login)**; this is not a passing E2E run. The other four
+  Android E2E suites have not been rerun for this change.
+
+From `backend/`: `npx.cmd jest tests/mock --runInBand --coverage=false`.
+From `frontend/`: `./gradlew.bat :app:testDebugUnitTest --tests '*Market*Test' :app:assembleDebug`.
+The existing five-use-case runner below remains the full E2E check; run it with
+the normal backend, disposable test database, emulator and real Google login.
+
 ## Commands for the five formal use cases
 
 After integrating `fb-nfr-thing`, Send Friend Request uses **usernames**, not UUID

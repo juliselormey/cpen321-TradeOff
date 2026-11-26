@@ -125,4 +125,17 @@ object ApiClient {
             .build()
             .create(MarketApiService::class.java)
     }
+
+    private fun marketBaseUrl(): String = BuildConfig.MARKET_API_BASE_URL.ifBlank {
+        BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91:3000" }
+    }.trimEnd('/')
+
+    fun marketEventsUrl(): String = marketBaseUrl()
+        .replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/market/events"
+
+    fun createMarketEventsClient(context: Context): OkHttpClient =
+        getOkHttpClient(context, marketBaseUrl()).newBuilder()
+            .callTimeout(0, TimeUnit.MILLISECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
 }

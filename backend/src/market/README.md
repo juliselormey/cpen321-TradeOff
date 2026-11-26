@@ -55,7 +55,7 @@ The override affects Market only, not authentication.
 | Request | Response |
 | --- | --- |
 | GET /health | Development server liveness, not Alpaca connectivity |
-| GET /api/market/stocks | {liveSymbols, refreshIntervalMs:8000, stocks:[...]} |
+| GET /api/market/stocks | {liveSymbols, refreshIntervalMs:4000, stocks:[...]} |
 | GET /api/market/stocks/:symbol | One supported stock, case-insensitive symbol |
 | GET /api/market/stocks/:symbol/history | That stock's real chart history |
 
@@ -85,9 +85,12 @@ bars are raw/unadjusted, so splits can create discontinuities.
 
 Android teammates should reuse ApiClient.createMarket(context),
 MarketApiService, MarketRepository and MarketStock in ui/market/data/.
-Keep screen state in each feature's ViewModel; use lifecycle-aware polling
-only while visible. The list already includes histories: do not fetch all
-histories again every eight seconds. MarketSparkline accepts points, color
+MarketScreen collects `/api/market/events` over a lifecycle-aware WebSocket
+only while STARTED. Each `market.snapshot` includes the full stock list, histories,
+a revision and checkedAt. There is no recurring Android HTTP polling. A failed
+socket triggers one REST recovery request and reconnects with 1–30s backoff;
+every connection receives the current cache without triggering an Alpaca fetch.
+MarketSparkline accepts points, color
 and a symbol. Company logos are bundled in Android drawable resources.
 Backend features should reuse the exported marketService singleton from
 service.ts, e.g. await marketService.getStock('MSFT'). Do not create a new
@@ -97,26 +100,31 @@ execution still needs separate server-side freshness and business checks.
 ## Alpaca calls, caching and failure behavior
 
 - Snapshots: GET /v2/stocks/snapshots?symbols=...&feed=iex. One batch for all
-  due symbols, cached for eight seconds after success.
+  due symbols, cached for four seconds after success.
 - History: GET /v2/stocks/bars?symbols=...&timeframe=1Day&feed=iex&... . A
-  separate batch cached for 15 minutes. Queries cover 45 calendar days and
-  exclude today's incomplete New York daily bar; keep 30 daily closes per
+  separate batch cached for one minute. Queries cover 45 calendar days and
+  end at UTC midnight; keep 30 daily closes per
   stock. Each page contains up to 1000 bars across all symbols. The provider
-  follows next_page_token for up to ten pages and reports an error if
-  pagination repeats or reaches the page cap before the final page.
+  follows next_page_token and reports an error if pagination repeats.
 - Concurrent list/individual/history requests share in-flight batch promises.
-  Even a cold single-symbol request warms every due catalog symbol. No
-  recurring backend timers: no client demand means no Alpaca polling.
+  Even a cold single-symbol request warms every due catalog symbol. The normal
+  server starts two independent background loops immediately: quotes every 4s,
+  history every 60s. Each waits its interval after completion so slow requests
+  never overlap. Timers stop on shutdown; provider cooldown still takes priority.
+  Cache changes (including failures) broadcast to Market WebSocket subscribers.
 - Each symbol has its own quote/history/rolling-sample cache. A malformed or
   missing quote affects that symbol; successful symbols remain usable.
 - Real quote samples are deduplicated by trade timestamp, max 120 per symbol.
   Combined chart is sorted, deduplicated and capped at 30+120 points per stock.
   Repeated closed-market quotes do not fabricate movement. Fewer than two
   valid timestamps draws no line; flat prices draw a horizontal line.
-- Normally about 7.5 snapshot batches/minute plus history every 15 minutes.
+- At most about 15 normal snapshot batches/minute plus history every minute
+  (typically 3–4 history pages, depending on returned bars). Network time and
+  cooldown reduce the background rate; separate processes/keys and other callers
+  must be considered when estimating total API usage.
   Each backend process has its own in-memory cache, which clears on restart.
 - Each HTTP request has a four-second timeout, a response-size limit and no
-  redirects. No immediate retry loops. Generic errors cool down 30 seconds;
+  redirects. No immediate retry loops. Generic errors use their configured cooldown;
   config/auth errors 60 seconds. HTTP 429 waits at least 60 seconds and honors
   longer Retry-After/X-RateLimit-Reset. Provider-wide cooldown is shared.
 - Previously successful quotes and graphs survive errors as stale data. A
@@ -154,14 +162,13 @@ full-suite Prisma/Jest resolver issue remains outside this module.
 ```powershell
 # From frontend/ (requires configured SDK/JDK)
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest
-# Emulator + backend + real credentials required for MarketFlowTest
-.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.example.cpen321application.e2e.MarketChartTest,com.example.cpen321application.e2e.MarketFlowTest'
+# Emulator + full backend + real Google login required for Browse Stocks
+.\gradlew.bat :app:connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.class=com.example.cpen321application.e2e.BrowseStocksE2ETest'
 ```
 
-MarketChartTest uses explicit rendering fixtures; MarketFlowTest checks the
-real backend connection plus all six symbols' names, logos and charts.
-Manually verify that fetchedAt stays fixed within the cache TTL, advances
-after a successful refresh, and that navigating away stops polling. Stop
+BrowseStocksE2ETest checks the real backend catalog of all 100 stocks.
+Manually verify that fetchedAt advances after successful cache refreshes and
+that navigating away closes the Market socket. Stop
 and restart the server to check retained values and automatic recovery.
 # Local acceptance testing
 

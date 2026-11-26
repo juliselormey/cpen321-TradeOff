@@ -1,5 +1,7 @@
 import { createApp } from './app';
 import { attachFriendEvents } from './realtime/friendEvents';
+import { attachMarketEvents } from './realtime/marketEvents';
+import { startMarketRefresh } from './market/refreshWorker';
 import { env } from './config/env';
 import fs from 'fs';
 import path from 'path';
@@ -26,16 +28,21 @@ const server = localHttp
     }, app);
 
 const closeFriendEvents = attachFriendEvents(server);
+const closeMarketEvents = attachMarketEvents(server);
+let stopMarketRefresh: (() => void) | undefined;
 
 server.listen(env.port, localHttp ? '127.0.0.1' : '0.0.0.0', () => {
     console.log("Server listening");
     startLimitOrderWorker();
+    stopMarketRefresh = startMarketRefresh();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     stopLimitOrderWorker();
     closeFriendEvents();
+    stopMarketRefresh?.();
+    closeMarketEvents();
     server.close(() => {
       db.$disconnect().catch((error: unknown) => {
         console.error("Database shutdown failed", error);

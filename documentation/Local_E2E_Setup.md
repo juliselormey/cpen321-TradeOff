@@ -156,6 +156,15 @@ Leave it open. Expect `Server listening`. In a browser or another terminal,
 server liveness, not Google/Alpaca connectivity; check Market quotes in the app too.
 Open the installed app, sign in through Google and return to Market.
 
+The normal server also starts shared background quote/history refresh loops
+(4 seconds / 60 seconds, waiting after each completed request and respecting
+provider cooldown). Market receives full cache snapshots at `/api/market/events`
+through WebSocket; Android does not poll the stock list periodically. Restart
+the backend and rebuild/install Android after updating this feature. Cloud/reverse
+proxy setups must forward WebSocket upgrades for this path as well as the existing
+`/api/friends/events`. Local HTTP uses `ws://`; HTTPS uses `wss://` through the
+same base URL and certificate configuration. No additional server is required.
+
 Terminal 2, from the repository root, choose one command:
 
 | Tests | Command |

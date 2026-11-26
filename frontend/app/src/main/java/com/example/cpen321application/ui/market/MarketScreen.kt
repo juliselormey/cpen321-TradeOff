@@ -33,6 +33,7 @@ import com.example.cpen321application.ApiService
 import com.example.cpen321application.ui.StockLogo
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
+import com.example.cpen321application.ui.market.data.MarketStream
 import com.example.cpen321application.util.SessionManager
 import java.io.IOException
 import java.text.NumberFormat
@@ -40,8 +41,6 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import retrofit2.HttpException
@@ -134,6 +133,9 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
         MarketViewModel.Factory(MarketRepository(ApiClient.createMarket(context)))
     }
     val model: MarketViewModel = viewModel(factory = factory)
+    val stream = remember(context) {
+        MarketStream(ApiClient.createMarketEventsClient(context), ApiClient.marketEventsUrl())
+    }
     val state by model.state.collectAsState()
     val tokens = remember(context) { SessionManager.observeToken(context) }
     val token by tokens.collectAsState(initial = SessionManager.getToken(context))
@@ -144,12 +146,9 @@ fun MarketScreen(api: ApiService, onStockSelected: (String) -> Unit, onSignInReq
     }
 
     LaunchedEffect(favorites) { favorites.load() }
-    LaunchedEffect(model, lifecycle) {
+    LaunchedEffect(model, lifecycle, stream) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                model.refresh()
-                delay(8_000)
-            }
+            model.observeMarket(stream)
         }
     }
     MarketContent(
@@ -296,7 +295,7 @@ private fun ConnectionCard(state: MarketUiState, onRetry: () -> Unit) {
             }
             Text("$available/${state.stocks.size} quotes available · shared backend cache", color = Muted, fontSize = 12.sp)
             if (state.checkedAt != null) {
-                Text("Backend checked ${time(state.checkedAt)} · refresh every 8s", color = Muted, fontSize = 11.sp)
+                Text("Backend checked ${time(state.checkedAt)} · live updates", color = Muted, fontSize = 11.sp)
             }
             if (issue != null) {
                 Text(issue, color = Red, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))

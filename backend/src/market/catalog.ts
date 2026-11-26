@@ -1,5 +1,5 @@
-export const REFRESH_INTERVAL_MS = 8_000;
-export const HISTORY_TTL_MS = 15 * 60_000;
+export const REFRESH_INTERVAL_MS = 4_000;
+export const HISTORY_TTL_MS = 60_000;
 export const HISTORY_LOOKBACK_DAYS = 45;
 export const MAX_DAILY_POINTS = 30;
 export const MAX_ROLLING_POINTS = 120;

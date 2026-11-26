@@ -24,7 +24,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 ### **3.1. List of Features**
 
 1. **Authentication** - Registration and signins happen through the Google authentication service, which then links to a personal virtual trading account and profile-specific settings (such as managing account info, app preferences, signing out).
-2. **Market** - Live market information retrieved from the Alpaca Market Data API which includes browsing and searching through current stock prices and their changes, with updates being cached ~every 8 seconds.
+2. **Market** - Live market information retrieved from the Alpaca Market Data API, including browsing and searching current stock prices and changes. The backend refreshes all 100 stocks in shared batches: quotes on a 4-second loop and daily history on a 60-second loop. Each loop waits after completion to prevent overlap and respects provider cooldown. Cache updates reach the visible Android Market screen through WebSocket snapshots, with reconnect and initial cache synchronization.
 3. **Trading** - People can buy or sell shares using virtual money through a trading system, which governs validating funds and shares, updating account balances and stock positions, and recording transactions completed.
 4. **Portfolio** - View your personal virtual investment portfolio through its respective screen, including available cash, held stocks, total portfolio value, allocation of assets, profits and losses, and transaction history.
 5. **Social** - People can send, cancel, accept and decline friend requests between other users, and compare statistics with accepted friends, displaying rankings that can be sorted in a leaderboard.
@@ -228,7 +228,7 @@ Users can practice virtual stock trading using virtual funds, and in real-time s
 ### **4.1. Main Components**
 
 All error responses are JSON of the form { "error": string }. Market data responses distinguish between fresh, stale, and unavailable data using a per-stock status:
-- **ok**: A successfully retrieved quote is within its 8-second cache lifetime.
+- **ok**: A successfully retrieved quote is within its 4-second cache lifetime.
 - **stale**: A previously retrieved quote exists, but its cache lifetime has expired and the latest refresh attempt failed. The last-known quote may be displayed, but must not be used for trading or portfolio valuation.
 - **unavailable**: No successful quote is available for the stock.
   The Market Service supports partial results when retrieving quotes for multiple stocks. If some stocks cannot be refreshed, the service retains their last-known quotes when available and returns the status of each stock alongside the available data. This allows the Market screen to display functioning stock information even when data for another stock is unavailable.
@@ -250,7 +250,7 @@ Individual stock-detail requests return the stock's available data and status wh
       5. `verifyIdToken(idToken) → GoogleIdentity` (User Service → Google Authentication Service)
          - **Purpose**: Validates a Google ID token and returns the verified identity.
 2. **Market Service**
-    - **Purpose**: Retrieves quotes and price history from Alpaca, keeps recent quotes in an internal cache (8-second lifetime), serves the market endpoints, and provides a price lookup to other components.
+    - **Purpose**: Retrieves quotes and price history from Alpaca, keeps shared quotes (4-second lifetime) and daily history (60-second lifetime), serves the market endpoints, and provides a price lookup to other components. The normal server independently refreshes these caches and publishes full `market.snapshot` messages at `/api/market/events` (WS locally, WSS with HTTPS). The public stream contains market data only; user favorites and account data remain in authenticated APIs and MySQL. Connections receive an immediate snapshot; reconnects resynchronize missed state.
     - **Rationale**: One component talks to Alpaca, which limits external calls and keeps NFR-1 to NFR-3 testable in one place. The cache is a layer inside this component, not a component of its own.
     - **Interfaces**:
         1. `GET /api/market/stocks → StockList`

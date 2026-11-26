@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.example.cpen321application.ui.market.data.MarketRepository
 import com.example.cpen321application.ui.market.data.MarketStock
+import com.example.cpen321application.ui.market.data.MarketStream
 import com.example.cpen321application.ui.market.data.initialMarketStocks
 import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -25,20 +29,46 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
     private val mutableState = MutableStateFlow(MarketUiState())
     val state = mutableState.asStateFlow()
     private val refreshLock = Mutex()
+    private var streamGeneration = 0L
+
+    /** Lifecycle owns this collector; cancellation closes the socket and retry loop. */
+    suspend fun observeMarket(stream: MarketStream) {
+        var retryDelay = 1_000L
+        while (currentCoroutineContext().isActive) {
+            try {
+                stream.snapshots().collect { snapshot ->
+                    streamGeneration++
+                    retryDelay = 1_000L
+                    mutableState.value = MarketUiState(stocks = snapshot.stocks, checkedAt = snapshot.checkedAt)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: IOException) {
+                // One REST recovery per failed connection, never a second polling loop.
+                refresh()
+                showFailure("Live market disconnected. Reconnecting…")
+            }
+            delay(retryDelay)
+            retryDelay = (retryDelay * 2).coerceAtMost(30_000L)
+        }
+    }
 
     suspend fun refresh() = refreshLock.withLock {
         mutableState.value = mutableState.value.copy(refreshing = true)
+        val generation = streamGeneration
         try {
             val stocks = repository.loadStocks()
-            mutableState.value = MarketUiState(stocks = stocks, checkedAt = Instant.now().toString())
+            if (generation == streamGeneration) {
+                mutableState.value = MarketUiState(stocks = stocks, checkedAt = Instant.now().toString())
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (_: IOException) {
-            showFailure("Cannot reach the backend. Check the server and your connection.")
+            if (generation == streamGeneration) showFailure("Cannot reach the backend. Check the server and your connection.")
         } catch (error: HttpException) {
-            showFailure("Market endpoint returned HTTP " + error.code() + ". Check the backend version.")
+            if (generation == streamGeneration) showFailure("Market endpoint returned HTTP " + error.code() + ". Check the backend version.")
         } catch (_: com.google.gson.JsonParseException) {
-            showFailure("Could not read market data. Try again shortly.")
+            if (generation == streamGeneration) showFailure("Could not read market data. Try again shortly.")
         } finally {
             mutableState.value = mutableState.value.copy(refreshing = false)
         }

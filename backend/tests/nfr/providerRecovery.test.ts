@@ -80,7 +80,7 @@ test('NFR-3: trading rejects stale quotes and resumes with a recovered quote', a
   await expect(getServerPrice(SYMBOL)).rejects.toMatchObject({ status: 503 });
   f.state.fail = false;
   f.state.price = 125;
-  await jest.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS + 1);
+  await jest.advanceTimersByTimeAsync(Date.parse(f.stale.retryAt!) - Date.now() + 1);
   expect((await getServerPrice(SYMBOL)).toNumber()).toBe(125);
 });
 
@@ -113,7 +113,8 @@ test('NFR-3: cold cache recovers and portfolio valuation uses the newly retrieve
   expect(missing.status).toBe('unavailable');
   f.state.fail = false;
   f.state.price = 125;
-  await jest.advanceTimersByTimeAsync(REFRESH_INTERVAL_MS + 1);
+  const retryAt = Math.max(Date.parse(missing.retryAt!), Date.parse(missing.history!.retryAt!));
+  await jest.advanceTimersByTimeAsync(retryAt - Date.now() + 1);
   useService(f.service);
   const prices = await loadPrices([SYMBOL]);
   const valuation = valuePortfolio({ account: null, pendingBuyOrders: [],

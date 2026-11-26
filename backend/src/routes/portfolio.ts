@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../prisma/db";
-import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 
 export const portfolioRouter = Router();
@@ -10,7 +10,7 @@ export const portfolioRouter = Router();
  * Cash, reserved cash, holdings valued at current prices, total value, profit/loss, allocation,
  * pending orders and recent trades. Returns 503 when a held stock's price is unavailable (UC-13 3a).
  */
-portfolioRouter.get("/", asyncHandler(async (req, res) => {
+portfolioRouter.get("/", authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
 
     try {

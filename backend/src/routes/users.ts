@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticatedHandler } from "../middleware/auth";
+import { requireAuth } from "../middleware/auth";
 import { db } from "../prisma/db";
 import { asyncHandler } from "../util/asyncHandler";
 import { hasErrorCode } from "../util/dbErrors";

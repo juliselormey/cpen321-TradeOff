@@ -1,7 +1,7 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
-import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { LIVE_SYMBOLS } from "../market/catalog";
 import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable, Tx } from "../market/settlement";
 import { STARTING_BALANCE } from "../market/valuation";
@@ -190,7 +190,7 @@ async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma
     };
 }
 
-const placeOrder = (type: OrderType) => asyncHandler(async (req: Request, res: Response) => {
+const placeOrder = (type: OrderType) => authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
     try {
         const input = parseOrder(req.body, type);

@@ -5,12 +5,14 @@ let n = 0;
 
 // Children before parents so foreign keys never block the deletes.
 export async function resetDb() {
-  await db.trade.deleteMany();
-  await db.order.deleteMany();
-  await db.position.deleteMany();
-  await db.friendship.deleteMany();
-  await db.account.deleteMany();
-  await db.user.deleteMany();
+  await db.$transaction([
+    db.trade.deleteMany(),
+    db.order.deleteMany(),
+    db.position.deleteMany(),
+    db.friendship.deleteMany(),
+    db.account.deleteMany(),
+    db.user.deleteMany(),
+  ]);
 }
 
 export async function createUser(o: { cash?: number; name?: string; username?: string } = {}) {

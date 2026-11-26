@@ -1,4 +1,4 @@
-import { Router, Response } from "express";
+import { Router } from "express";
 import { db } from "../prisma/db";
 import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
@@ -10,8 +10,8 @@ export const portfolioRouter = Router();
  * Cash, reserved cash, holdings valued at current prices, total value, profit/loss, allocation,
  * pending orders and recent trades. Returns 503 when a held stock's price is unavailable (UC-13 3a).
  */
-portfolioRouter.get("/", authenticatedHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.userId;
+portfolioRouter.get("/", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
 
     try {
         const [account, positions, recentTrades, pendingOrders] = await Promise.all([
@@ -21,10 +21,7 @@ portfolioRouter.get("/", authenticatedHandler(async (req: AuthenticatedRequest, 
             db.order.findMany({ where: { userId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
         ]);
 
-        const heldTickers = positions
-            .filter(p => p.quantity.greaterThan(0))
-            .map(p => String(p.ticker)) as string[];
-        const prices = await loadPrices(heldTickers);
+        const prices = await loadPrices(positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker));
         const valuation = valuePortfolio({
             account, positions,
             pendingBuyOrders: pendingOrders.filter(o => o.side === "BUY" && o.type === "LIMIT"),

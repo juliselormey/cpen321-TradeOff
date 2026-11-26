@@ -1,6 +1,9 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  transform: {
+    '^.+\\.ts$': ['ts-jest', { tsconfig: { module: 'commonjs' } }],
+  },
   // Prisma's generated TypeScript uses .js extensions for NodeNext imports.
   moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
   roots: ['<rootDir>/src', '<rootDir>/tests'],
@@ -12,6 +15,11 @@ module.exports = {
   coveragePathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    '/coverage/'
+    '/coverage/',
+    '/src/generated/',
+    '/src/index.ts',
+    '/src/db.ts',
+    '/src/prisma/db.ts',
+    '/src/market/dev.ts'
   ],
 };

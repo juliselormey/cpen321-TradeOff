@@ -77,3 +77,51 @@ describe("Mocked: DELETE /api/notif/device", () => {
         });
     });
 });
+
+// Interface: /api/notif/device input validation and ownership
+describe("Mocked: /api/notif/device validation and ownership", () => {
+    const invalidIds: unknown[] = [
+        undefined, 5, ["cABCDEFGHIJKLMNOPQRSTU"], "xABCDEFGHIJKLMNOPQRSTU", "cshort", "cABCDEFGHIJKLMNOPQRST!",
+    ];
+    const authed = `Bearer ${token}`;
+
+    test.each(["put", "delete"] as const)("%s without authentication returns 401", async (method) => {
+        await request(app)[method]("/api/notif/device").send({ installationId }).expect(401);
+        expect(devices.upsert).not.toHaveBeenCalled();
+        expect(devices.deleteMany).not.toHaveBeenCalled();
+    });
+
+    test.each(invalidIds)("PUT rejects invalid installation id %j", async (id) => {
+        const res = await request(app).put("/api/notif/device").set("Authorization", authed)
+            .send({ installationId: id }).expect(400);
+        expect(res.body).toEqual({ error: "Invalid installation ID" });
+        expect(devices.upsert).not.toHaveBeenCalled();
+    });
+
+    test.each(invalidIds)("DELETE rejects invalid installation id %j", async (id) => {
+        await request(app).delete("/api/notif/device").set("Authorization", authed)
+            .send({ installationId: id }).expect(400);
+        expect(devices.deleteMany).not.toHaveBeenCalled();
+    });
+
+    test("PUT registers the device for the caller", async () => {
+        devices.upsert.mockResolvedValue({ installationId, userId } as never);
+        await request(app).put("/api/notif/device").set("Authorization", authed).send({ installationId }).expect(204);
+        expect(devices.upsert).toHaveBeenCalledWith({
+            where: { installationId }, update: {}, create: { installationId, userId },
+        });
+    });
+
+    test("PUT refuses an installation that belongs to another user", async () => {
+        devices.upsert.mockResolvedValue({ installationId, userId: "someone-else" } as never);
+        const res = await request(app).put("/api/notif/device").set("Authorization", authed)
+            .send({ installationId }).expect(409);
+        expect(res.body).toEqual({ error: "Installation belongs to another user" });
+    });
+
+    test("DELETE unregisters only the caller's device", async () => {
+        devices.deleteMany.mockResolvedValue({ count: 1 } as never);
+        await request(app).delete("/api/notif/device").set("Authorization", authed).send({ installationId }).expect(204);
+        expect(devices.deleteMany).toHaveBeenCalledWith({ where: { installationId, userId } });
+    });
+});

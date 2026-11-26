@@ -31,8 +31,8 @@ export async function findOrCreateUser(google: {
             displayName: google.name ?? null,
             account: {
                 create: {
-                    cashBalance: STARTING_BALANCE.toString(),
-                    startingBalance: STARTING_BALANCE.toString(),
+                    cashBalance: 10000,
+                    startingBalance: 10000,
                 },
             },
         },

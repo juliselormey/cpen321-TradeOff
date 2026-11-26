@@ -108,3 +108,41 @@ describe('Mocked API: GET /api/portfolio', () => {
     expectError(await get(), 500);
   });
 });
+
+describe('Mocked API: GET /api/portfolio edge cases', () => {
+  it('PF-09 no account → default starting balance', async () => {
+    stub();
+    (db.account.findUnique as unknown as jest.Mock).mockResolvedValue(null);
+    const res = await get();
+    expect(res.body).toMatchObject({ cashBalance: 10000, startingBalance: 10000, totalValue: 10000, profitLoss: 0, holdings: [] });
+  });
+  it('PF-10 zero-quantity positions are neither priced nor listed', async () => {
+    stub({ positions: [{ ...aapl, quantity: 0 }] });
+    (marketService.getStock as unknown as jest.Mock).mockClear();
+    const res = await get();
+    expect(marketService.getStock).not.toHaveBeenCalled();
+    expect(res.body.holdings).toEqual([]);
+  });
+  it('PF-11 holding without a cost basis → zero cost, unknown profit/loss', async () => {
+    stub();
+    (db.position.findMany as unknown as jest.Mock).mockResolvedValue([{ userId: U, ticker: 'AAPL', quantity: decimal(2) }]);
+    const res = await get();
+    expect(res.body.holdings[0]).toEqual(expect.objectContaining({ ticker: 'AAPL', averageCost: 0, price: 100, value: 200, profitLoss: null }));
+  });
+  it('PF-12 only buy limits reserve cash; pending orders are serialized as stored', async () => {
+    stub({ orders: [
+      pendingBuy,
+      { ...pendingBuy, id: 'o2', side: 'SELL' },
+      { ...pendingBuy, id: 'o3', type: 'MARKET', limitPrice: null },
+    ] });
+    const res = await get();
+    expect(res.body.reservedCash).toBe(180);
+    expect(res.body.totalValue).toBe(1180);
+    expect(res.body.pendingOrders.map((o: { limitPrice: number | null }) => o.limitPrice)).toEqual([90, 90, null]);
+  });
+  it('PF-13 stale quote → 503', async () => {
+    stub({ positions: [aapl] });
+    (marketService.getStock as unknown as jest.Mock).mockResolvedValue({ currentPrice: '100', status: 'stale' });
+    expectError(await get(), 503);
+  });
+});

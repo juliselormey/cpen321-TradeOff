@@ -5,7 +5,12 @@ import { createE2ERouter } from '../../src/routes/e2e';
 import { db } from '../../src/prisma/db';
 
 jest.mock('../../src/prisma/db', () => ({ db: {
-    user: { findUnique: jest.fn(), deleteMany: jest.fn(), updateMany: jest.fn() },
+    user: { findUnique: jest.fn(), findMany: jest.fn(), deleteMany: jest.fn(), updateMany: jest.fn() },
+    account: { findMany: jest.fn() },
+    position: { findMany: jest.fn() },
+    trade: { findMany: jest.fn() },
+    order: { findMany: jest.fn() },
+    friendship: { findMany: jest.fn() },
     $transaction: jest.fn(),
 } }));
 
@@ -98,4 +103,31 @@ describe('POST /__e2e/account/reset - fixture safeguards (mock database)', () =>
             where: { id: 'current-user', username: update.data.username }, data: { username: null },
         });
     });
+    test.each(['/__e2e/account/snapshot', '/__e2e/leaderboard/snapshot'])('%s requires authentication', async path => {
+        await request(app()).get(path).expect(401);
+        expect(db.user.findMany).not.toHaveBeenCalled();
+    });
+    test.each(['/__e2e/account/snapshot', '/__e2e/leaderboard/snapshot'])(
+        '%s returns every table scoped to the caller and their fixtures', async path => {
+            const token = jwt.sign({ sub: 'current-user' }, process.env.JWT_SECRET!);
+            (db.user.findMany as jest.Mock).mockResolvedValue([{ id: 'current-user' }, { id: 'fixture-0' }]);
+            (db.account.findMany as jest.Mock).mockResolvedValue([{ userId: 'current-user' }]);
+            (db.position.findMany as jest.Mock).mockResolvedValue([{ id: 1 }]);
+            (db.trade.findMany as jest.Mock).mockResolvedValue([{ id: 2 }]);
+            (db.order.findMany as jest.Mock).mockResolvedValue([{ id: 3 }]);
+            (db.friendship.findMany as jest.Mock).mockResolvedValue([{ id: 4 }]);
+            const res = await request(app()).get(path).set('Authorization', `Bearer ${token}`).expect(200);
+            expect(res.body).toEqual({
+                accounts: [{ userId: 'current-user' }], positions: [{ id: 1 }], trades: [{ id: 2 }],
+                orders: [{ id: 3 }], friendships: [{ id: 4 }],
+            });
+            expect(db.user.findMany).toHaveBeenCalledWith({ where: { OR: [
+                { id: 'current-user' }, { googleSub: { startsWith: 'e2e-leaderboard:current-user:' } },
+            ] }, select: { id: true } });
+            const ids = ['current-user', 'fixture-0'];
+            expect(db.account.findMany).toHaveBeenCalledWith({ where: { userId: { in: ids } }, orderBy: { userId: 'asc' } });
+            expect(db.friendship.findMany).toHaveBeenCalledWith({
+                where: { OR: [{ senderId: { in: ids } }, { recipientId: { in: ids } }] }, orderBy: { id: 'asc' },
+            });
+        });
 });

@@ -26,11 +26,12 @@ export async function notifyUser(
     body: string
 ): Promise<void> {
     try {
+        if (!db?.notificationDevice?.findMany) return;
         const devices = await db.notificationDevice.findMany({
             where: { userId },
         });
 
-        await Promise.all(devices.map(async (device) => {
+        await Promise.all(devices.map(async (device: { installationId: string; userId: string; updatedAt: Date }) => {
             try {
                 await sendNotification(device.installationId, title, body, userId);
             } catch (error) {

@@ -60,5 +60,25 @@ describe('Mocked API: POST /api/auth/google', () => {
     expect(db.user.create).not.toHaveBeenCalled();
   });
 
+  it('AUTH-06 banned account → 403 and no access token', async () => {
+    const banned = { ...USER, isBanned: true };
+    jest.mocked(verifyGoogleToken).mockResolvedValue(identity);
+    jest.mocked(db.user.findUnique).mockResolvedValue(banned as never);
+    jest.mocked(db.user.update).mockResolvedValue(banned as never);
+    const res = await signIn();
+    expectError(res, 403);
+    expect(res.body.accessToken).toBeUndefined();
+  });
+
+  it.each([[{ idToken: 123 }], [{ idToken: '' }], [{ idToken: null }]])(
+    'AUTH-07 invalid idToken %j → 400 without calling the verifier', async (body) => {
+      expectError(await signIn(body), 400);
+      expect(verifyGoogleToken).not.toHaveBeenCalled();
+    });
+
+  it('AUTH-08 no request body → 400', async () => {
+    expectError(await request(app).post('/api/auth/google'), 400);
+  });
+
   it.todo('AUTH-05 verifier throws because Google is unreachable → (spec) 503 or 401');
 });

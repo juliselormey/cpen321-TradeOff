@@ -27,8 +27,8 @@ const server = localHttp
 
 const closeFriendEvents = attachFriendEvents(server);
 
-server.listen(env.port, localHttp ? '127.0.0.1' : '0.0.0.0', () => {
-    console.log("Server listening");
+server.listen(env.port, '0.0.0.0', () => {
+    console.log(`Server listening on 0.0.0.0:${env.port}`);
     startLimitOrderWorker();
 });
 

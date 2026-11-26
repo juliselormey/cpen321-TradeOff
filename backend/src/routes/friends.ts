@@ -1,6 +1,8 @@
-import { Router } from "express";
-import { authenticatedHandler } from "../middleware/auth";
+import { Request, Response, Router } from "express";
+import { requireAuth } from "../middleware/auth";
 import { db } from "../prisma/db";
+import { asyncHandler } from "../util/asyncHandler";
+import { hasErrorCode } from "../util/dbErrors";
 import { notifyUser } from "../firebase/notifier";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 import { publishFriendsChanged } from "../realtime/friendEvents";
@@ -9,8 +11,21 @@ export const friendsRouter = Router();
 const publicProfile = { id: true, username: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
 
-friendsRouter.get("/leaderboard", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
+const orderedByNewest = [{ createdAt: "desc" as const }, { id: "asc" as const }];
+const involving = (userId: string) => ({ OR: [{ senderId: userId }, { recipientId: userId }] });
+
+/** Same valuation rule as GET /api/portfolio; null when a held price is unavailable. */
+function tryValuePortfolio(...args: Parameters<typeof valuePortfolio>) {
+    try {
+        return valuePortfolio(...args);
+    } catch (error) {
+        if (error instanceof PriceUnavailableError) return null; // entry shows "Unavailable"
+        throw error;
+    }
+}
+
+friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
     // Query relationships in the same statement as profiles, so only currently
     // accepted friends (in either direction) and the caller are returned.
     const users = await db.user.findMany({
@@ -26,26 +41,14 @@ friendsRouter.get("/leaderboard", authenticatedHandler(async (req, res) => {
         },
         orderBy: { id: "asc" },
     });
-    // Same valuation rule as GET /api/portfolio; one market-cache lookup per distinct symbol.
+    // One market-cache lookup per distinct symbol.
     const prices = await loadPrices(users.flatMap(user =>
         user.positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker)));
     res.setHeader("Cache-Control", "no-store");
     res.json({ entries: users.map(user => {
-        if (!user.account) {
-            return {
-                user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
-                isYou: user.id === userId,
-                cashBalance: null,
-                totalPortfolioValue: null,
-                returnPercent: null,
-            };
-        }
-        let valuation: ReturnType<typeof valuePortfolio> | null = null;
-        try {
-            valuation = valuePortfolio({ account: user.account, positions: user.positions, pendingBuyOrders: user.orders }, prices);
-        } catch (error) {
-            if (!(error instanceof PriceUnavailableError)) throw error; // entry shows "Unavailable"
-        }
+        const valuation = user.account
+            ? tryValuePortfolio({ account: user.account, positions: user.positions, pendingBuyOrders: user.orders }, prices)
+            : null;
         return {
             user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
             isYou: user.id === userId,
@@ -56,12 +59,12 @@ friendsRouter.get("/leaderboard", authenticatedHandler(async (req, res) => {
     }) });
 }));
 
-friendsRouter.get("/", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
+friendsRouter.get("/", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
     const rows = await db.friendship.findMany({
-        where: { status: "ACCEPTED", OR: [{ senderId: userId }, { recipientId: userId }] },
+        where: { status: "ACCEPTED", ...involving(userId) },
         include: profiles,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        orderBy: orderedByNewest,
     });
     res.json({ friends: rows.map(row => ({
         friendshipId: row.id,
@@ -69,19 +72,19 @@ friendsRouter.get("/", authenticatedHandler(async (req, res) => {
     })) });
 }));
 
-friendsRouter.get("/requests", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
+friendsRouter.get("/requests", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
     const rows = await db.friendship.findMany({
-        where: { status: "PENDING", OR: [{ senderId: userId }, { recipientId: userId }] },
+        where: { status: "PENDING", ...involving(userId) },
         include: profiles,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        orderBy: orderedByNewest,
     });
     res.json({ incoming: rows.filter(row => row.recipientId === userId),
         outgoing: rows.filter(row => row.senderId === userId) });
 }));
 
-friendsRouter.post("/requests", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
+friendsRouter.post("/requests", asyncHandler(async (req, res) => {
+    const userId = req.userId!;
     const target: unknown = req.body?.username;
     const username = typeof target === "string" ? target.trim().toLowerCase() : "";
     if (!/^[a-z0-9_]{3,24}$/.test(username)) {
@@ -112,7 +115,7 @@ friendsRouter.post("/requests", authenticatedHandler(async (req, res) => {
         );
     } catch (error: unknown) {
         // The database constraint also protects simultaneous reciprocal requests.
-        if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+        if (hasErrorCode(error, "P2002")) {
             res.status(409).json({ error: "Already friends or a request is pending" });
             return;
         }
@@ -120,68 +123,61 @@ friendsRouter.post("/requests", authenticatedHandler(async (req, res) => {
     }
 }));
 
-friendsRouter.post("/requests/:id/accept", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
-    // Conditional writes prevent outsiders, senders, and stale requests from changing state.
-    const participants = await db.friendship.findFirst({ where: {
-        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
-    }, select: { senderId: true, recipientId: true } });
-    const result = await db.friendship.updateMany({
-        where: { id: String(req.params.id), recipientId: userId, status: "PENDING" },
-        data: { status: "ACCEPTED" },
+/**
+ * Shared flow for accept / decline / unfriend. `write` is a conditional write scoped to the
+ * caller, so outsiders, senders and stale requests change nothing and get a 404.
+ * Returns the friendship id on success, or null after responding 404.
+ */
+async function changeFriendship(
+    req: Request, res: Response, notFound: string,
+    write: (id: string, userId: string) => Promise<{ count: number }>,
+): Promise<string | null> {
+    const userId = req.userId!;
+    const id = String(req.params.id);
+    const participants = await db.friendship.findFirst({
+        where: { id, ...involving(userId) }, select: { senderId: true, recipientId: true },
     });
-    if (!result.count) {
-        res.status(404).json({ error: "Incoming request not found" });
-        return;
+    const { count } = await write(id, userId);
+    if (!count) {
+        res.status(404).json({ error: notFound });
+        return null;
     }
     if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
     res.status(204).send();
-    void db.friendship.findUnique({
-        where: { id: String(req.params.id) },
-        include: profiles,
-    }).then(friendship => {
+    return id;
+}
+
+async function notifyAccepted(id: string): Promise<void> {
+    try {
+        if (!db?.friendship?.findUnique) return;
+        const friendship = await db.friendship.findUnique({ where: { id }, include: profiles });
         if (friendship) {
-            return notifyUser(
+            await notifyUser(
                 friendship.senderId,
                 "Friend request accepted",
                 `${friendship.recipient.displayName} accepted your friend request.`,
             );
         }
-    }).catch(error => {
+    } catch (error) {
         console.error("Friend request notification failed", error);
-    });
+    }
+}
+
+friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
+    const id = await changeFriendship(req, res, "Incoming request not found", (friendshipId, userId) =>
+        db.friendship.updateMany({
+            where: { id: friendshipId, recipientId: userId, status: "PENDING" },
+            data: { status: "ACCEPTED" },
+        }));
+    if (id) void notifyAccepted(id);
 }));
 
-friendsRouter.delete("/requests/:id", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
-    const participants = await db.friendship.findFirst({ where: {
-        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
-    }, select: { senderId: true, recipientId: true } });
-    const result = await db.friendship.deleteMany({ where: {
-        id: String(req.params.id), status: "PENDING",
-        OR: [{ senderId: userId }, { recipientId: userId }],
-    } });
-    if (!result.count) {
-        res.status(404).json({ error: "Request not found" });
-        return;
-    }
-    if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
-    res.status(204).send();
+friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
+    await changeFriendship(req, res, "Request not found", (id, userId) =>
+        db.friendship.deleteMany({ where: { id, status: "PENDING", ...involving(userId) } }));
 }));
 
-friendsRouter.delete("/:id", authenticatedHandler(async (req, res) => {
-    const userId = req.userId;
-    const participants = await db.friendship.findFirst({ where: {
-        id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
-    }, select: { senderId: true, recipientId: true } });
-    const result = await db.friendship.deleteMany({ where: {
-        id: String(req.params.id), status: "ACCEPTED",
-        OR: [{ senderId: userId }, { recipientId: userId }],
-    } });
-    if (!result.count) {
-        res.status(404).json({ error: "Friendship not found" });
-        return;
-    }
-    if (participants) publishFriendsChanged([participants.senderId, participants.recipientId]);
-    res.status(204).send();
+friendsRouter.delete("/:id", asyncHandler(async (req, res) => {
+    await changeFriendship(req, res, "Friendship not found", (id, userId) =>
+        db.friendship.deleteMany({ where: { id, status: "ACCEPTED", ...involving(userId) } }));
 }));

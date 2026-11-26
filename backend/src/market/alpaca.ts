@@ -39,6 +39,9 @@ export function parseAlpacaSnapshot(data: unknown): ProviderQuote {
 
 export function parseAlpacaBars(data: unknown): PricePoint[] {
   const root = object(data);
+  if (!Object.hasOwn(root, 'bars')) {
+    throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an invalid historical response.');
+  }
   if (root.bars === null || root.bars === undefined || (Array.isArray(root.bars) && root.bars.length === 0)) {
     return [];
   }

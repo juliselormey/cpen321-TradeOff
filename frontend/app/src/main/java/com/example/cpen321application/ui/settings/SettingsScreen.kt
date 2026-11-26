@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cpen321application.ApiService
+import com.example.cpen321application.notif.NotificationPermission
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,6 +56,7 @@ fun SettingsScreen(
         Text("Settings", fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text("Make TradeOff yours", color = MaterialTheme.colorScheme.onSurfaceVariant)
         AppearanceSettings(darkMode, onDarkModeChange)
+        NotificationSettings()
         AccountSettings(state, onSignIn)
         Text(
             "TradeOff • Practice investing",
@@ -78,6 +80,18 @@ private fun AppearanceSettings(darkMode: Boolean, onDarkModeChange: (Boolean) ->
             }
             Switch(checked = darkMode, onCheckedChange = onDarkModeChange)
         }
+        Text(
+            "Saved on this device.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun NotificationSettings() {
+    SettingsCard {
+        Text("Notifications", style = MaterialTheme.typography.titleLarge)
+        NotificationPermission()
         Text(
             "Saved on this device.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -133,7 +147,7 @@ private fun ProfileEditor(state: SettingsState, onSave: () -> Unit) {
         value = state.username, onValueChange = state::updateUsername,
         label = { Text("Username") }, prefix = { Text("@") }, enabled = !state.busy && !state.expired,
         singleLine = true, modifier = Modifier.fillMaxWidth(),
-        supportingText = { Text("3–24 letters, numbers or underscores") }
+        supportingText = { Text("Your friend ID; 3–24 letters, numbers or underscores") }
     )
     Button(enabled = state.canSave, onClick = onSave) {
         Text(if (state.busy) "Please wait…" else "Save profile")

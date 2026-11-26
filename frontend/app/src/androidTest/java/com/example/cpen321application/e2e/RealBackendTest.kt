@@ -50,7 +50,7 @@ abstract class RealBackendTest {
         check(it.isSuccessful) { "Portfolio HTTP ${it.code()}" }; requireNotNull(it.body())
     } }
     protected fun seedHolding(quantity: Double = 2.0) = runBlocking {
-        val result = api.executeMarketOrder(ExecuteMarketOrderRequest("MSFT", "BUY", quantity, 0.0))
+        val result = api.executeMarketOrder(ExecuteMarketOrderRequest("MSFT", "BUY", quantity))
         check(result.isSuccessful) { "Real setup buy failed: HTTP ${result.code()}" }
     }
     protected fun waitText(text: String, substring: Boolean = false, timeout: Long = 30_000) {

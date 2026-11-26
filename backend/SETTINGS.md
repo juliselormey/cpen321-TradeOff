@@ -1,5 +1,9 @@
 # Settings and profile deployment
 
+For local acceptance-test setup with the ordinary backend, see
+[Local E2E Setup](../documentation/Local_E2E_Setup.md). The Compose rollout below
+is separate from local testing and is not required to run the five E2E features.
+
 The Android app has a Settings tab with Google sign-in/sign-out, a persistent
 device-local light/dark preference, and account display-name/username editing.
 

@@ -21,8 +21,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.util.SessionManager
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,10 +33,10 @@ private val FriendGreen: Color @Composable get() = MaterialTheme.colorScheme.pri
 private val FriendMuted: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
 
 internal fun friendsError(code: Int): String = when (code) {
-    400 -> "Enter a valid friend's user ID. You cannot add yourself."
+    400 -> "Enter a valid friend's username. You cannot add yourself."
     401 -> "Your session expired. Sign out and sign in again from the account tab."
     403 -> "Your account cannot use friends right now."
-    404 -> "This user or request is no longer available. Refresh and try again."
+    404 -> "This username or request was not found. Refresh and try again."
     409 -> "You're already friends or have a pending request. Check incoming requests."
     else -> "The server couldn't complete this request. Please try again."
 }
@@ -54,6 +52,8 @@ private fun <T> Response<T>.checked(): Response<T> {
 fun FriendsPanel(modifier: Modifier = Modifier) {
     val context = LocalContext.current.applicationContext
     val api = remember(context) { ApiClient.createFriends(context) }
+    val eventsClient = remember(context) { ApiClient.createFriendEventsClient(context) }
+    var live by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val clipboard = LocalClipboardManager.current
@@ -137,17 +137,26 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
 
     LaunchedEffect(context, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                refresh()
-                delay(15_000)
-            }
+            refresh()
+            try {
+                friendUpdates(eventsClient, ApiClient.friendEventsUrl()).collect { update ->
+                    when (update) {
+                        FriendUpdate.REFRESH -> { live = true; refresh() }
+                        FriendUpdate.RECONNECTING -> { live = false }
+                        FriendUpdate.UNAUTHORIZED -> {
+                            live = false
+                            error = friendsError(401)
+                        }
+                    }
+                }
+            } finally { live = false }
         }
     }
 
     LazyColumn(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             FriendProfileCard(me, busy,
-                onCopy = { me?.let { clipboard.setText(AnnotatedString(it.id)); notice = "Friend ID copied." } },
+                onCopy = { me?.username?.let { clipboard.setText(AnnotatedString(it)); notice = "Username copied." } },
                 onRefresh = { scope.launch { refresh() } },
                 onAdd = { error = null; adding = true })
         }
@@ -161,14 +170,14 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
             onCancel = { id -> mutate("Friend request cancelled.") { api.deleteRequest(it, id) } })
         acceptedFriends(friends, loaded, busy, ascending,
             onSort = { ascending = !ascending }, onRemove = { removing = it })
-        item { Text("Updates automatically every 15 seconds while this screen is open.", color = FriendMuted) }
+        item { Text(if (live) "Live updates connected." else "Live updates disconnected. Reconnecting when possible; you can tap Refresh.", color = FriendMuted) }
     }
 
     if (adding) {
         AddFriendDialog(target, busy, error, onChange = { target = it }, onDismiss = { adding = false }) {
-            val id = target.trim()
-            if (id.equals(me?.id, ignoreCase = true)) error = "You cannot add yourself."
-            else mutate("Friend request sent.") { api.send(it, AddFriendRequest(id)) }
+            val username = target.trim()
+            if (username.equals(me?.username, ignoreCase = true)) error = "You cannot add yourself."
+            else mutate("Friend request sent.") { api.send(it, AddFriendRequest(username)) }
         }
     }
     removing?.let { friend ->
@@ -187,7 +196,7 @@ private fun FriendCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun FriendIdentity(profile: FriendProfile) {
     Text(profile.label, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-    Text(profile.id, color = FriendMuted, style = MaterialTheme.typography.bodySmall)
+    Text(profile.username ?: "Username not set", color = FriendMuted, style = MaterialTheme.typography.bodySmall)
 }
 
 private fun LazyListScope.incomingRequests(
@@ -225,9 +234,9 @@ private fun AddFriendDialog(
         title = { Text("Add friend") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Ask your friend to copy their ID from this screen.")
+                Text("Enter your friend’s unique username from Settings or their Friends screen.")
                 OutlinedTextField(value = target, onValueChange = onChange, enabled = !busy,
-                    label = { Text("Friend ID") }, singleLine = true)
+                    label = { Text("Friend username") }, singleLine = true)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
@@ -265,13 +274,13 @@ private fun FriendProfileCard(
 ) {
 
     FriendCard {
-        Text("Your friend ID", color = FriendGreen, fontWeight = FontWeight.Bold)
-        Text(me?.id ?: "Loading your profile…", color = MaterialTheme.colorScheme.onSurface)
-        Text("Share this ID so someone can send you a request.", color = FriendMuted)
+        Text("Your username (friend ID)", color = FriendGreen, fontWeight = FontWeight.Bold)
+        Text(if (me == null) "Loading your profile…" else me.username ?: "Set a username in Settings", color = MaterialTheme.colorScheme.onSurface)
+        Text("Share your username so someone can send you a request.", color = FriendMuted)
         Row {
-            TextButton(enabled = me != null, onClick = {
+            TextButton(enabled = !me?.username.isNullOrBlank(), onClick = {
                 onCopy()
-            }) { Text("Copy ID") }
+            }) { Text("Copy username") }
             TextButton(enabled = !busy, onClick = { onRefresh() }) { Text("Refresh") }
             TextButton(enabled = !busy && me != null, onClick = { onAdd() }) { Text("Add friend") }
         }

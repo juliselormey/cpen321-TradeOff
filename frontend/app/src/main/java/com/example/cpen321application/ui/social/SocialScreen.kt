@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -171,15 +173,17 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (loaded && entries.none { !it.isYou }) Text("Accept a friend request to compare with friends.", color = Muted)
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.weight(1f).testTag("leaderboard-list"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(if (showAll) ranked else ranked.take(5), key = { _, entry -> entry.user.id }) { index, entry ->
-                Row(Modifier.fillMaxWidth().background(if (entry.isYou) Green.copy(alpha = 0.12f) else Panel,
+                Row(Modifier.fillMaxWidth().testTag("leaderboard-row-${entry.user.id}")
+                    .semantics(mergeDescendants = true) {}.background(if (entry.isYou) Green.copy(alpha = 0.12f) else Panel,
                     RoundedCornerShape(12.dp)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val hasRankingValue = if (byReturn) entry.returnPercent != null else entry.totalPortfolioValue != null
                     Text(if (!hasRankingValue) "—" else "${index + 1}", color = Green)
                     Column(Modifier.weight(1f)) {
                         Text(entry.user.label + if (entry.isYou) " (You)" else "", color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.SemiBold)
+                        Text(entry.user.username ?: "Username not set", color = Muted, style = MaterialTheme.typography.bodySmall)
                         Text(entry.returnPercent?.let { String.format(Locale.US, "%+.1f%% total return", it) }
                             ?: "Return unavailable", color = Muted, style = MaterialTheme.typography.bodySmall)
                     }

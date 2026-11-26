@@ -30,8 +30,8 @@ beforeEach(() => {
 });
 
 const target = (exists: boolean) =>
-  (db.user.findUnique as unknown as jest.Mock).mockImplementation(({ where }: { where: { id: string } }) =>
-    Promise.resolve(where.id === U || exists ? { id: where.id, name: where.id, username: where.id } : null));
+  (db.user.findUnique as unknown as jest.Mock).mockImplementation(async ({ where }: { where: { id?: string; username?: string } }) =>
+    where.id === U || exists ? { id: where.id ?? 'u2', username: where.username } : null);
 const as = (id = U) => ({ get: (p: string) => request(app).get(p).set(bearer(id)),
   post: (p: string, b: object = {}) => request(app).post(p).set(bearer(id)).send(b),
   del: (p: string) => request(app).delete(p).set(bearer(id)) });
@@ -58,25 +58,25 @@ describe('Mocked API: friends routes (auth)', () => {
 });
 
 describe('Mocked API: POST /api/friends/requests', () => {
-  it.each([[{}], [{ userId: '' }]])('SOC-02 body %j → 400', async (b) => {
+  it.each([[{}], [{ username: '' }]])('SOC-02 body %j → 400', async (b) => {
     expectError(await as().post('/api/friends/requests', b), 400);
   });
   it('SOC-03 unknown user → 404 (UC-14 7a)', async () => {
     target(false);
-    expectError(await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000000' }), 404);
+    expectError(await as().post('/api/friends/requests', { username: 'missing_user' }), 404);
   });
-  it('SOC-04 own id → 400 (UC-14 7c)', async () => {
-    expectError(await as().post('/api/friends/requests', { userId: U }), 400);
+  it('SOC-04 own username → 400 (UC-14 7c)', async () => {
+    expectError(await as().post('/api/friends/requests', { username: 'self_user' }), 400);
   });
   it('SOC-07 already friends / pending → 409', async () => {
     target(true);
     (db.friendship.create as unknown as jest.Mock).mockRejectedValue({ code: 'P2002' });
-    expectError(await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000002' }), 409);
+    expectError(await as().post('/api/friends/requests', { username: 'other_user' }), 409);
   });
   it('SOC-08 valid request → 201 with pending status (UC-14)', async () => {
     target(true);
     (db.friendship.create as unknown as jest.Mock).mockResolvedValue(reqRow());
-    const res = await as().post('/api/friends/requests', { userId: '00000000-0000-0000-0000-000000000002' });
+    const res = await as().post('/api/friends/requests', { username: 'other_user' });
     expect(res.status).toBe(201);
     expect(res.body.request).toEqual(expect.objectContaining({ id: 'r1', status: 'PENDING', receiverId: 'u2' }));
   });
@@ -155,7 +155,7 @@ describe('Mocked API: GET /api/friends and /api/friends/requests', () => {
       row.status = 'ACCEPTED';
       return Promise.resolve({ count: 1 });
     });
-    await request(app).post('/api/friends/requests').set(bearer(sender)).send({ userId: recipient }).expect(201);
+    await request(app).post('/api/friends/requests').set(bearer(sender)).send({ username: 'bob' }).expect(201);
     const pending = await request(app).get('/api/friends/requests').set(bearer(sender)).expect(200);
     expect(pending.body.outgoing[0].id).toBe('stable-request');
   });

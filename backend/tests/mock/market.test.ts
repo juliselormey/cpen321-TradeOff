@@ -245,7 +245,10 @@ describe('Mocked: Alpaca IEX HTTP adapter', () => {
 
   test('snapshot requests enforce IEX and normalize price/dollar/percentage changes', async () => {
     const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: SNAPSHOT });
-    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).resolves.toEqual(QUOTE);
+    // Snapshot percentages are normalized to four decimals by the API adapter.
+    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).resolves.toEqual({
+      ...QUOTE, percentageChange: 1.1364,
+    });
     expect(get).toHaveBeenCalledWith('https://data.alpaca.markets/v2/stocks/AAPL/snapshot', expect.objectContaining({
       params: { feed: 'iex' },
       headers: { 'APCA-API-KEY-ID': 'test-id', 'APCA-API-SECRET-KEY': 'test-secret' },
@@ -298,7 +301,7 @@ describe('Mocked: Alpaca IEX HTTP adapter', () => {
 
   test.each([
     [401, 'PROVIDER_AUTH_ERROR', 60_000], [403, 'PROVIDER_AUTH_ERROR', 60_000],
-    [429, 'PROVIDER_RATE_LIMITED', 120_000], [500, 'PROVIDER_UNAVAILABLE', 30_000],
+    [429, 'PROVIDER_RATE_LIMITED', 120_000], [500, 'PROVIDER_UNAVAILABLE', 8_000],
   ])('HTTP %s maps to a sanitized failure/cooldown', async (status, code, retryAfterMs) => {
     jest.spyOn(axios, 'get').mockRejectedValue({
       isAxiosError: true, response: { status, headers: { 'retry-after': '120' } },

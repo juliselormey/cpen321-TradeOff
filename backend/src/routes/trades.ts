@@ -1,14 +1,12 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
 import { LIVE_SYMBOLS } from "../market/catalog";
 import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable, Tx } from "../market/settlement";
 import { STARTING_BALANCE } from "../market/valuation";
-import { asyncHandler } from "../util/asyncHandler";
 
 export const tradesRouter = Router();
-tradesRouter.use(requireAuth);
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZERO = new Prisma.Decimal(0);
@@ -16,12 +14,8 @@ const MAX_QUANTITY = 1_000_000;
 const MAX_PRICE = 1_000_000;
 
 /** GET /api/trades/position/:ticker: cash balance and position info for a ticker */
-tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Response) => {
+tradesRouter.get("/position/:ticker", authenticatedHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     const tickerParam = req.params.ticker;
     if (typeof tickerParam !== "string") {
@@ -51,12 +45,8 @@ tradesRouter.get("/position/:ticker", asyncHandler(async (req: Request, res: Res
 }));
 
 /** GET /api/trades/orders/pending: active pending limit orders for the user */
-tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Response) => {
+tradesRouter.get("/orders/pending", authenticatedHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     const pendingOrders = await db.order.findMany({
         where: { userId, status: "PENDING" },
@@ -79,12 +69,8 @@ tradesRouter.get("/orders/pending", asyncHandler(async (req: Request, res: Respo
 }));
 
 /** POST /api/trades/orders/:id/cancel: cancels a pending limit order and releases reserved funds/shares */
-tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req: Request, res: Response) => {
+tradesRouter.post("/orders/:id/cancel", authenticatedHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     const orderId = req.params.id;
     if (typeof orderId !== "string" || !uuid.test(orderId)) {
@@ -166,7 +152,7 @@ function parseOrder(body: unknown, type: OrderType): OrderInput {
         side: sideRaw,
         type,
         quantity,
-        limitPrice: type === "LIMIT" ? (limitPrice as number) : null,
+        limitPrice: type === "LIMIT" && typeof limitPrice === "number" ? limitPrice : null,
     };
 }
 
@@ -218,12 +204,8 @@ async function placeOrderTx(tx: Tx, userId: string, o: OrderInput, price: Prisma
     };
 }
 
-async function handlePlaceOrder(type: OrderType, req: Request, res: Response): Promise<void> {
+async function handlePlaceOrder(type: OrderType, req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     try {
         const input = parseOrder(req.body, type);
         const price = await getServerPrice(input.ticker);
@@ -244,7 +226,7 @@ async function handlePlaceOrder(type: OrderType, req: Request, res: Response): P
 }
 
 const placeOrder = (type: OrderType) =>
-    asyncHandler((req: Request, res: Response) => handlePlaceOrder(type, req, res));
+    authenticatedHandler((req: AuthenticatedRequest, res: Response) => handlePlaceOrder(type, req, res));
 
 tradesRouter.post("/execute/market", placeOrder("MARKET"));
 tradesRouter.post("/execute/limit", placeOrder("LIMIT"));

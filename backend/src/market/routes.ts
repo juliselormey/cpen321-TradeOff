@@ -24,7 +24,7 @@ export function createMarketRouter(service: MarketService = marketService): Rout
       return;
     }
     const stock = await service.getStock(symbol);
-    res.json(stock);
+    res.status(stock.currentPrice == null ? 503 : 200).json(stock);
   }));
 
   router.get('/stocks/:symbol/history', asyncHandler(async (req, res) => {
@@ -34,7 +34,7 @@ export function createMarketRouter(service: MarketService = marketService): Rout
       return;
     }
     const history = await service.getHistory(symbol);
-    res.json(history);
+    res.status(history.error != null && history.points.length === 0 ? 503 : 200).json(history);
   }));
   return router;
 }

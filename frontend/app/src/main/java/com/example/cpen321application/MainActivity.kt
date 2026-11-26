@@ -1,88 +1,17 @@
 package com.example.cpen321application
 
-import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.runtime.DisposableEffect
-import com.example.cpen321application.ui.settings.SettingsScreen
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.NoCredentialException
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import com.example.cpen321application.ui.market.MarketScreen
-import com.example.cpen321application.ui.portfolio.PortfolioScreen
-import com.example.cpen321application.ui.social.SocialScreen
-import com.example.cpen321application.ui.theme.CPEN321ApplicationTheme
-import com.example.cpen321application.ui.trade.TradeScreen
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import kotlinx.coroutines.Dispatchers
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
-import com.example.cpen321application.util.SessionManager
-
-
-data class BottomNavItem(
-    val title: String,
-    val route: String,
-    val icon: ImageVector
-)
+import com.example.cpen321application.notif.createNotificationChannel
+import com.example.cpen321application.notif.NotificationRegistration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel(this)
+        NotificationRegistration.register(applicationContext)
         val api = ApiClient.create(applicationContext)
         enableEdgeToEdge()
         setContent { TradeOffApp(api) }
@@ -160,16 +89,40 @@ private fun AppDestinations(
     onDarkModeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val openTrade: (String) -> Unit = { ticker -> navController.navigate("Trade/" + ticker) }
+    val scope = rememberCoroutineScope()
+
+    val signOut: () -> Unit = {
+        scope.launch {
+            if (NotificationRegistration.signOut(context)) {
+                navController.navigate(Routes.Settings)
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Sign-out failed. Please try again.",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    val openTrade: (String) -> Unit = { ticker ->
+        navController.navigate("Trade/" + ticker)
+    }
+
     val goBack: () -> Unit = { navController.popBackStack() }
+
     NavHost(navController, startDestination = Routes.Market, modifier = modifier) {
         composable(Routes.Portfolio) {
             ProtectedView(apiService = api, onBack = goBack) {
-                PortfolioScreen(apiService = api, onBack = { navController.showMarket() },
+                PortfolioScreen(
+                    apiService = api,
+                    onBack = { navController.showMarket() },
                     onStockSelected = openTrade,
-                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+                    onSignOut = signOut
+                )
             }
         }
+
         composable(Routes.Market) {
             MarketScreen(
                 api = api,
@@ -177,30 +130,51 @@ private fun AppDestinations(
                 onSignInRequired = { navController.navigate(Routes.Login) },
             )
         }
+
         composable(Routes.Social) {
             ProtectedView(apiService = api, onBack = goBack) {
-                SocialScreen(onBack = { navController.showMarket() },
-                    onSignOut = { SessionManager.clearSession(context); navController.navigate(Routes.Settings) })
+                SocialScreen(
+                    onBack = { navController.showMarket() },
+                    onSignOut = signOut
+                )
             }
         }
+
         composable(Routes.Settings) {
-            SettingsScreen(api, darkMode, onDarkModeChange, onSignIn = { navController.navigate(Routes.Login) })
+            SettingsScreen(
+                api,
+                darkMode,
+                onDarkModeChange,
+                onSignIn = { navController.navigate(Routes.Login) }
+            )
         }
+
         composable(Routes.Trade) { entry ->
             ProtectedView(apiService = api, onBack = goBack) {
-                TradeScreen(ticker = entry.arguments?.getString("ticker").orEmpty(), apiService = api,
-                    onBack = goBack)
+                TradeScreen(
+                    ticker = entry.arguments?.getString("ticker").orEmpty(),
+                    apiService = api,
+                    onBack = goBack
+                )
             }
         }
+
         composable(Routes.Login) {
-            LoginView(apiService = api, onBack = goBack, onSuccess = {
-                navController.navigate(Routes.Market) {
-                    popUpTo(Routes.Market) { inclusive = true }
-                    launchSingleTop = true
+            LoginView(
+                apiService = api,
+                onBack = goBack,
+                onSuccess = {
+                    navController.navigate(Routes.Market) {
+                        popUpTo(Routes.Market) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 }
-            })
+            )
         }
-        composable(Routes.home) { HomeScreen(navController) }
+
+        composable(Routes.home) {
+            HomeScreen(navController)
+        }
     }
 }
 
@@ -280,6 +254,7 @@ private suspend fun attemptLogin(
 
         if (response.isSuccessful && body != null) {
             SessionManager.saveToken(context, body.accessToken)
+            NotificationRegistration.register(context)
             LoginOutcome.Success
         } else {
             val errorBody = response.errorBody()?.string()
@@ -292,8 +267,9 @@ private suspend fun attemptLogin(
         LoginOutcome.Failure("Could not read the Google credential. Please try signing in again.")
     } catch (e: GetCredentialException) {
         LoginOutcome.Failure(e.message ?: "Sign-in cancelled or failed")
-    } catch (_: java.io.IOException) {
-        LoginOutcome.Failure("Could not connect. Please try again.")
+    } catch (e: java.io.IOException) {
+        Log.e("AUTH_ERROR", "Network connection error during sign-in", e)
+        LoginOutcome.Failure("Could not connect to ${BuildConfig.API_BASE_URL}: ${e.message ?: "Connection failed"}")
     } catch (_: com.google.gson.JsonParseException) {
         LoginOutcome.Failure("Could not read the sign-in response.")
     } catch (e: IllegalStateException) {

@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 // Machine-specific config (SDK path, backend URL, OAuth client ID) lives in
@@ -35,7 +36,7 @@ android {
         buildConfigField(
             "String",
             "API_BASE_URL",
-            "\"${localProperty("API_BASE_URL", "https://34.105.116.91:3000//")}\""
+            "\"${localProperty("API_BASE_URL", "https://34.105.116.91/")}\""
         )
         buildConfigField(
             "String",
@@ -49,8 +50,21 @@ android {
         )
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // An optional shared key stays local; fresh clones use Android's default debug key.
+            if (file("debug.keystore").exists()) {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = localProperty("DEBUG_APPLICATION_ID_SUFFIX")
         }
         release {
@@ -105,4 +119,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 }

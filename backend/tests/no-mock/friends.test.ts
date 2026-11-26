@@ -29,7 +29,10 @@ const as = (id: string) => ({
   patch: (p: string, b: object = {}) => request(app).patch(p).set(bearer(id)).send(b),
   del: (p: string) => request(app).delete(p).set(bearer(id)),
 });
-const sendReq = (from: string, to: string) => as(from).post('/api/friends/requests', { userId: to });
+const sendReq = async (from: string, to: string) => {
+  const user = await db.user.findUniqueOrThrow({ where: { id: to }, select: { username: true } });
+  return as(from).post('/api/friends/requests', { username: user.username });
+};
 const incoming = async (id: string) => (await as(id).get('/api/friends/requests')).body.incoming;
 const outgoing = async (id: string) => (await as(id).get('/api/friends/requests')).body.outgoing;
 const friendsOf = async (id: string) => (await as(id).get('/api/friends')).body.friends.map((f: { user: { id: string } }) => f.user.id);
@@ -91,12 +94,13 @@ describe('Unmocked API: friend requests', () => {
   });
   it('renaming preserves pending and accepted friendships and uses the new username/displayName', async () => {
     const { body } = await sendReq(A, B);
-    await as(B).patch('/api/auth/me', { name: 'Bob Updated' });
+    const bob = await db.user.findUniqueOrThrow({ where: { id: B }, select: { username: true } });
+    await as(B).patch('/api/auth/me', { displayName: 'Bob Updated', username: bob.username });
     const pending = await as(A).get('/api/friends/requests');
     expect(pending.status).toBe(200);
     expect(pending.body.outgoing[0].recipient.displayName).toBe('Bob Updated');
     await as(B).post(`/api/friends/requests/${body.request.id}/accept`);
-    await as(B).patch('/api/auth/me', { name: 'Bob Latest' });
+    await as(B).patch('/api/auth/me', { displayName: 'Bob Latest', username: bob.username });
     const accepted = await as(A).get('/api/friends');
     expect(accepted.status).toBe(200);
     expect(accepted.body.friends[0].user.displayName).toBe('Bob Latest');
@@ -136,5 +140,105 @@ describe('Unmocked API: GET /api/friends/leaderboard', () => {
     const f = await befriend(A, B);
     await as(A).del(`/api/friends/${f.id}`);
     expect((await board(A)).entries.map((e: { user: { id: string } }) => e.user.id)).toEqual([A]);
+  });
+});
+
+describe('Unmocked API: friends authentication and input validation', () => {
+  it.each<['get' | 'post' | 'delete', string]>([
+    ['get', '/api/friends'], ['get', '/api/friends/requests'], ['get', '/api/friends/leaderboard'],
+    ['post', '/api/friends/requests'], ['post', '/api/friends/requests/x/accept'],
+    ['delete', '/api/friends/requests/x'], ['delete', '/api/friends/x'],
+  ])('SOC-N13 %s %s without JWT → 401', async (method, path) => {
+    expect((await request(app)[method](path)).status).toBe(401);
+  });
+  it.each([[{}], [{ username: 12 }], [{ username: 'bad name' }], [{ username: 'ab' }], [{ username: 'a'.repeat(25) }]])(
+    'SOC-N14 invalid target %j → 400 and no request is stored', async (body) => {
+      expect((await as(A).post('/api/friends/requests', body)).status).toBe(400);
+      expect(await db.friendship.count()).toBe(0);
+    });
+  it('SOC-N15 unknown user → 404, yourself → 400, banned user → 404; nothing is stored', async () => {
+    expect((await as(A).post('/api/friends/requests', { username: 'no_such_user' })).status).toBe(404);
+    const me = await db.user.findUniqueOrThrow({ where: { id: A }, select: { username: true } });
+    expect((await as(A).post('/api/friends/requests', { username: me.username })).status).toBe(400);
+    await db.user.update({ where: { id: C }, data: { isBanned: true } });
+    expect((await sendReq(A, C)).status).toBe(404);
+    expect(await db.friendship.count()).toBe(0);
+  });
+  it('SOC-N16 the target username is trimmed and case-insensitive; the response shows both profiles', async () => {
+    const b = await db.user.findUniqueOrThrow({ where: { id: B }, select: { username: true } });
+    const res = await as(A).post('/api/friends/requests', { username: `  ${(b.username as string).toUpperCase()}  ` });
+    expect(res.status).toBe(201);
+    expect(res.body.request).toEqual(expect.objectContaining({ status: 'PENDING', senderId: A, recipientId: B }));
+    expect(res.body.request.sender.id).toBe(A);
+    expect(res.body.request.recipient.id).toBe(B);
+  });
+});
+
+describe('Unmocked API: who may change a friendship', () => {
+  it('SOC-N17 the sender cannot accept their own request', async () => {
+    const { body } = await sendReq(A, B);
+    expect((await as(A).post(`/api/friends/requests/${body.request.id}/accept`)).status).toBe(404);
+    expect(await countFriendshipsBetween(A, B)).toBe(0);
+    expect(await incoming(B)).toHaveLength(1);
+  });
+  it('SOC-N18 outsiders cannot decline, cancel or unfriend', async () => {
+    const { body } = await sendReq(A, B);
+    expect((await as(C).del(`/api/friends/requests/${body.request.id}`)).status).toBe(404);
+    expect(await countRequestsBetween(A, B)).toBe(1);
+    const f = await befriend(D, E);
+    expect((await as(C).del(`/api/friends/${f.id}`)).status).toBe(404);
+    expect(await countFriendshipsBetween(D, E)).toBe(1);
+  });
+  it('SOC-N19 a request cannot be removed as a friend, and a friend cannot be removed as a request', async () => {
+    const f = await befriend(A, B);
+    expect((await as(A).del(`/api/friends/requests/${f.id}`)).status).toBe(404);
+    expect(await countFriendshipsBetween(A, B)).toBe(1);
+    const { body } = await sendReq(A, C);
+    expect((await as(A).del(`/api/friends/${body.request.id}`)).status).toBe(404);
+    expect(await countRequestsBetween(A, C)).toBe(1);
+  });
+  it('SOC-N20 an unknown id → 404 on accept, decline and unfriend', async () => {
+    expect((await as(A).post('/api/friends/requests/does-not-exist/accept')).status).toBe(404);
+    expect((await as(A).del('/api/friends/requests/does-not-exist')).status).toBe(404);
+    expect((await as(A).del('/api/friends/does-not-exist')).status).toBe(404);
+  });
+  it('SOC-N21 the friends list shows only the other user’s public profile, from either side', async () => {
+    await befriend(A, B);
+    for (const [viewer, other] of [[A, B], [B, A]]) {
+      const user = (await as(viewer as string).get('/api/friends')).body.friends[0].user;
+      expect(user.id).toBe(other);
+      expect(Object.keys(user).sort()).toEqual(['avatarUrl', 'displayName', 'id', 'username']);
+    }
+  });
+});
+
+describe('Unmocked API: leaderboard edge cases', () => {
+  const board = async (id: string) => (await as(id).get('/api/friends/leaderboard')).body.entries as {
+    user: { id: string }; isYou: boolean; totalPortfolioValue: string | null; returnPercent: number | null }[];
+
+  it('SOC-N22 banned friends are excluded', async () => {
+    await befriend(A, B);
+    await db.user.update({ where: { id: B }, data: { isBanned: true } });
+    expect((await board(A)).map((e) => e.user.id)).toEqual([A]);
+  });
+  it('SOC-N23 a price outage hides only the totals that need a price', async () => {
+    await giveShares(B, T, 2, 100);
+    await befriend(A, B);
+    mockMarket.fail = true; expireCache();
+    const entries = await board(A);
+    expect(entries.find((e) => e.user.id === A)).toEqual(expect.objectContaining({ totalPortfolioValue: '1000', isYou: true }));
+    expect(entries.find((e) => e.user.id === B)).toEqual(expect.objectContaining({ totalPortfolioValue: null, returnPercent: null, isYou: false }));
+  });
+  it('SOC-N24 is uncached, flags only the caller, and never exposes emails', async () => {
+    await befriend(A, B);
+    const res = await as(A).get('/api/friends/leaderboard');
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body.entries.filter((e: { isYou: boolean }) => e.isYou)).toHaveLength(1);
+    expect(JSON.stringify(res.body)).not.toContain('"email"');
+  });
+  it('SOC-N25 an empty social graph shows just the caller', async () => {
+    const entries = await board(A);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(expect.objectContaining({ isYou: true, totalPortfolioValue: '1000' }));
   });
 });

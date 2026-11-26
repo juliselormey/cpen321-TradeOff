@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { createMarketRouter } from '../../src/market/routes';
 import { MarketService } from '../../src/market/service';
 import { AlpacaProvider, parseAlpacaSnapshot, parseAlpacaBars } from '../../src/market/alpaca';
@@ -230,6 +230,42 @@ describe('Mocked: market endpoints and caches', () => {
     expect(response.text).not.toContain('private-secret');
     expect(response.headers['cache-control']).toBe('no-store');
   });
+
+  test('an unexpected price error on a cold cache is reported as temporarily unavailable', async () => {
+    const { service, fetchQuote } = fixture();
+    fetchQuote.mockRejectedValue(new Error('socket hang up'));
+    const stock = await service.getStock('AAPL');
+    expect(stock).toMatchObject({ currentPrice: null, status: 'unavailable', error: { code: 'PROVIDER_UNAVAILABLE' } });
+    expect(typeof stock.retryAt).toBe('string');
+  });
+
+  test('a rate limit on one symbol pauses the other symbols until it expires', async () => {
+    const { service, fetchQuote, advance } = fixture();
+    fetchQuote.mockRejectedValueOnce(new MarketProviderError('PROVIDER_RATE_LIMITED', 'Limit', 60_000));
+    await service.getStock('AAPL');
+    const blocked = await service.getStock('MSFT');
+    expect(blocked.error?.code).toBe('PROVIDER_RATE_LIMITED');
+    expect(fetchQuote).toHaveBeenCalledTimes(1);
+    advance(60_001);
+    expect((await service.getStock('MSFT')).status).toBe('ok');
+    expect(fetchQuote).toHaveBeenLastCalledWith('MSFT');
+  });
+
+  test('a cold history failure is reported with a retry time', async () => {
+    const { service, fetchHistory } = fixture();
+    fetchHistory.mockRejectedValue(new MarketProviderError('PROVIDER_UNAVAILABLE', 'down', 8_000));
+    const history = await service.getHistory('AAPL');
+    expect(history).toMatchObject({ status: 'unavailable', points: [], error: { code: 'PROVIDER_UNAVAILABLE' } });
+    expect(typeof history.retryAt).toBe('string');
+  });
+
+  test('unsupported symbols are rejected without touching the provider', async () => {
+    const { service, fetchQuote, fetchHistory } = fixture();
+    await expect(service.getStock('NOPE')).rejects.toThrow('Unsupported market symbol');
+    await expect(service.getHistory('NOPE')).rejects.toThrow('Unsupported market symbol');
+    expect(fetchQuote).not.toHaveBeenCalled();
+    expect(fetchHistory).not.toHaveBeenCalled();
+  });
 });
 
 describe('Mocked: Alpaca IEX HTTP adapter', () => {
@@ -245,7 +281,10 @@ describe('Mocked: Alpaca IEX HTTP adapter', () => {
 
   test('snapshot requests enforce IEX and normalize price/dollar/percentage changes', async () => {
     const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: SNAPSHOT });
-    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).resolves.toEqual(QUOTE);
+    // Snapshot percentages are normalized to four decimals by the API adapter.
+    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).resolves.toEqual({
+      ...QUOTE, percentageChange: 1.1364,
+    });
     expect(get).toHaveBeenCalledWith('https://data.alpaca.markets/v2/stocks/AAPL/snapshot', expect.objectContaining({
       params: { feed: 'iex' },
       headers: { 'APCA-API-KEY-ID': 'test-id', 'APCA-API-SECRET-KEY': 'test-secret' },
@@ -298,7 +337,7 @@ describe('Mocked: Alpaca IEX HTTP adapter', () => {
 
   test.each([
     [401, 'PROVIDER_AUTH_ERROR', 60_000], [403, 'PROVIDER_AUTH_ERROR', 60_000],
-    [429, 'PROVIDER_RATE_LIMITED', 120_000], [500, 'PROVIDER_UNAVAILABLE', 30_000],
+    [429, 'PROVIDER_RATE_LIMITED', 120_000], [500, 'PROVIDER_UNAVAILABLE', 8_000],
   ])('HTTP %s maps to a sanitized failure/cooldown', async (status, code, retryAfterMs) => {
     jest.spyOn(axios, 'get').mockRejectedValue({
       isAxiosError: true, response: { status, headers: { 'retry-after': '120' } },
@@ -312,5 +351,56 @@ describe('Mocked: Alpaca IEX HTTP adapter', () => {
     await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).rejects.toMatchObject({
       code: 'PROVIDER_UNAVAILABLE', message: 'Alpaca market data is temporarily unavailable.',
     });
+  });
+  const httpError = (status: number, headers: Record<string, string> = {}) =>
+    new AxiosError('http', 'ERR_BAD_RESPONSE', undefined, undefined,
+      { status, statusText: '', headers, data: {}, config: {} } as never);
+
+  test.each<[string, Record<string, string>, number]>([
+    ['no hint', {}, 60_000],
+    ['retry-after seconds', { 'retry-after': '120' }, 120_000],
+    ['retry-after below the minimum', { 'retry-after': '5' }, 60_000],
+    ['retry-after HTTP date', { 'retry-after': new Date(START + 300_000).toUTCString() }, 300_000],
+    ['rate-limit reset epoch', { 'x-ratelimit-reset': String(START / 1000 + 200) }, 200_000],
+    ['unparseable hints', { 'retry-after': 'soon', 'x-ratelimit-reset': 'later' }, 60_000],
+  ])('HTTP 429 with %s', async (_name, headers, expected) => {
+    jest.spyOn(Date, 'now').mockReturnValue(START);
+    jest.spyOn(axios, 'get').mockRejectedValue(httpError(429, headers));
+    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).rejects.toMatchObject({
+      code: 'PROVIDER_RATE_LIMITED', retryAfterMs: expected,
+    });
+  });
+
+  test('an HTTP error without a response is temporarily unavailable', async () => {
+    jest.spyOn(axios, 'get').mockRejectedValue(new AxiosError('timeout', 'ECONNABORTED'));
+    await expect(new AlpacaProvider(credentials).fetchQuote('AAPL')).rejects.toMatchObject({ code: 'PROVIDER_UNAVAILABLE' });
+  });
+
+  test('credentials default to the trimmed environment variables', async () => {
+    const saved = { id: process.env.ALPACA_API_KEY_ID, secret: process.env.ALPACA_API_SECRET_KEY };
+    try {
+      delete process.env.ALPACA_API_KEY_ID;
+      delete process.env.ALPACA_API_SECRET_KEY;
+      await expect(new AlpacaProvider().fetchQuote('AAPL')).rejects.toMatchObject({ code: 'MARKET_NOT_CONFIGURED' });
+      process.env.ALPACA_API_KEY_ID = ' key ';
+      process.env.ALPACA_API_SECRET_KEY = ' sec ';
+      const get = jest.spyOn(axios, 'get').mockResolvedValue({ data: SNAPSHOT });
+      await new AlpacaProvider().fetchQuote('AAPL');
+      expect(get).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+        headers: { 'APCA-API-KEY-ID': 'key', 'APCA-API-SECRET-KEY': 'sec' },
+      }));
+    } finally {
+      if (saved.id === undefined) delete process.env.ALPACA_API_KEY_ID; else process.env.ALPACA_API_KEY_ID = saved.id;
+      if (saved.secret === undefined) delete process.env.ALPACA_API_SECRET_KEY; else process.env.ALPACA_API_SECRET_KEY = saved.secret;
+    }
+  });
+
+  test('historical bars keep only the latest 30 after sorting', () => {
+    const day = (i: number) => new Date(Date.UTC(2026, 9, 1 + i)).toISOString();
+    const bars = Array.from({ length: 35 }, (_, i) => ({ t: day(34 - i), c: 100 + i }));
+    const points = parseAlpacaBars({ bars });
+    expect(points).toHaveLength(30);
+    expect(points[0]?.timestamp).toBe(day(5));
+    expect(points[29]?.timestamp).toBe(day(34));
   });
 });

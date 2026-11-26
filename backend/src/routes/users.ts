@@ -1,17 +1,12 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../util/asyncHandler";
 
 export const usersRouter = Router();
 
 // TODO: the app should read the profile with GET /me; remove this POST once nothing else calls it.
-usersRouter.post("/me", requireAuth, asyncHandler(async (req, res) => {
+usersRouter.post("/me", authenticatedHandler(async (req, res) => {
         const userId = req.userId;
-        if (!userId) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
 
         const [user, account] = await Promise.all([
             db.user.findUnique({ where: { id: userId } }),
@@ -22,21 +17,13 @@ usersRouter.post("/me", requireAuth, asyncHandler(async (req, res) => {
     }),
 );
 const editableProfile = { id: true, email: true, displayName: true, username: true } as const;
-usersRouter.get("/me", requireAuth, asyncHandler(async (req, res) => {
+usersRouter.get("/me", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     const user = await db.user.findUnique({ where: { id: userId }, select: editableProfile });
     res.json({ user });
 }));
-usersRouter.patch("/me", requireAuth, asyncHandler(async (req, res) => {
+usersRouter.patch("/me", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     const body: unknown = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) {
         res.status(400).json({ error: "Invalid profile" }); return;
@@ -61,12 +48,8 @@ usersRouter.patch("/me", requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // UC-05 Delete Account. Account, positions, orders, trades, tokens and friendships are removed by the schema's cascades.
-usersRouter.delete("/me", requireAuth, asyncHandler(async (req, res) => {
+usersRouter.delete("/me", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
     await db.user.delete({ where: { id: userId } });
     res.status(204).send();
 }));

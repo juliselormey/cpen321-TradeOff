@@ -1,9 +1,10 @@
+import { STARTING_BALANCE } from "../config/trading";
 import { Prisma } from "../generated/prisma/client";
 import { marketService } from "./service";
 
 type Decimal = Prisma.Decimal;
 const ZERO = new Prisma.Decimal(0);
-export const STARTING_BALANCE = new Prisma.Decimal(10000);
+export { STARTING_BALANCE } from "../config/trading";
 
 export class PriceUnavailableError extends Error {
     constructor(public readonly ticker: string) {

@@ -1,24 +1,18 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../util/asyncHandler";
 
 export const notifRouter = Router();
 
-notifRouter.use(requireAuth);
 
 function isValidInstallationId(value: unknown): value is string {
     return typeof value === "string" &&
         /^[cdef][A-Za-z0-9_-]{21}$/.test(value);
 }
 
-notifRouter.put("/device", asyncHandler(async (req, res) => {
+notifRouter.put("/device", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
 
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     const installationId: unknown = req.body?.installationId;
 
@@ -43,13 +37,9 @@ notifRouter.put("/device", asyncHandler(async (req, res) => {
     res.status(204).end();
 }));
 
-notifRouter.delete("/device", asyncHandler(async (req, res) => {
+notifRouter.delete("/device", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
 
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     const installationId: unknown = req.body?.installationId;
 

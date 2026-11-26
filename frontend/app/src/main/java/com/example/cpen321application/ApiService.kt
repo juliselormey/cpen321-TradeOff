@@ -27,22 +27,19 @@ data class ExecuteOrderRequest(
     val side: String, // "BUY" or "SELL"
     val type: String = "MARKET", // "MARKET" or "LIMIT", default is MARKET
     val quantity: Double,
-    val pricePerShare: Double,
     val limitPrice: Double? = null
 )
 
 data class ExecuteMarketOrderRequest(
     val ticker: String,
     val side: String, // "BUY" or "SELL"
-    val quantity: Double,
-    val pricePerShare: Double
+    val quantity: Double
 )
 
 data class ExecuteLimitOrderRequest(
     val ticker: String,
     val side: String, // "BUY" or "SELL"
     val quantity: Double,
-    val pricePerShare: Double,
     val limitPrice: Double
 )
 

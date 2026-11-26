@@ -1,23 +1,17 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import { db } from "../prisma/db";
-import { requireAuth } from "../middleware/auth";
-import { asyncHandler } from "../util/asyncHandler";
+import { authenticatedHandler, AuthenticatedRequest } from "../middleware/auth";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 
 export const portfolioRouter = Router();
-portfolioRouter.use(requireAuth);
 
 /**
  * GET /api/portfolio
  * Cash, reserved cash, holdings valued at current prices, total value, profit/loss, allocation,
  * pending orders and recent trades. Returns 503 when a held stock's price is unavailable (UC-13 3a).
  */
-portfolioRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
+portfolioRouter.get("/", authenticatedHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.userId;
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
 
     try {
         const [account, positions, recentTrades, pendingOrders] = await Promise.all([

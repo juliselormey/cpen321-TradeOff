@@ -1,7 +1,6 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { authenticatedHandler } from "../middleware/auth";
 import { db } from "../prisma/db";
-import { asyncHandler } from "../util/asyncHandler";
 import { notifyUser } from "../firebase/notifier";
 import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/valuation";
 import { publishFriendsChanged } from "../realtime/friendEvents";
@@ -9,11 +8,9 @@ import { publishFriendsChanged } from "../realtime/friendEvents";
 export const friendsRouter = Router();
 const publicProfile = { id: true, username: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
-friendsRouter.use(requireAuth);
 
-friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
+friendsRouter.get("/leaderboard", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     // Query relationships in the same statement as profiles, so only currently
     // accepted friends (in either direction) and the caller are returned.
     const users = await db.user.findMany({
@@ -59,9 +56,8 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
     }) });
 }));
 
-friendsRouter.get("/", asyncHandler(async (req, res) => {
+friendsRouter.get("/", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const rows = await db.friendship.findMany({
         where: { status: "ACCEPTED", OR: [{ senderId: userId }, { recipientId: userId }] },
         include: profiles,
@@ -73,9 +69,8 @@ friendsRouter.get("/", asyncHandler(async (req, res) => {
     })) });
 }));
 
-friendsRouter.get("/requests", asyncHandler(async (req, res) => {
+friendsRouter.get("/requests", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const rows = await db.friendship.findMany({
         where: { status: "PENDING", OR: [{ senderId: userId }, { recipientId: userId }] },
         include: profiles,
@@ -85,9 +80,8 @@ friendsRouter.get("/requests", asyncHandler(async (req, res) => {
         outgoing: rows.filter(row => row.senderId === userId) });
 }));
 
-friendsRouter.post("/requests", asyncHandler(async (req, res) => {
+friendsRouter.post("/requests", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const target: unknown = req.body?.username;
     const username = typeof target === "string" ? target.trim().toLowerCase() : "";
     if (!/^[a-z0-9_]{3,24}$/.test(username)) {
@@ -126,9 +120,8 @@ friendsRouter.post("/requests", asyncHandler(async (req, res) => {
     }
 }));
 
-friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
+friendsRouter.post("/requests/:id/accept", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     // Conditional writes prevent outsiders, senders, and stale requests from changing state.
     const participants = await db.friendship.findFirst({ where: {
         id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
@@ -159,9 +152,8 @@ friendsRouter.post("/requests/:id/accept", asyncHandler(async (req, res) => {
     });
 }));
 
-friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
+friendsRouter.delete("/requests/:id", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const participants = await db.friendship.findFirst({ where: {
         id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
     }, select: { senderId: true, recipientId: true } });
@@ -177,9 +169,8 @@ friendsRouter.delete("/requests/:id", asyncHandler(async (req, res) => {
     res.status(204).send();
 }));
 
-friendsRouter.delete("/:id", asyncHandler(async (req, res) => {
+friendsRouter.delete("/:id", authenticatedHandler(async (req, res) => {
     const userId = req.userId;
-    if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
     const participants = await db.friendship.findFirst({ where: {
         id: String(req.params.id), OR: [{ senderId: userId }, { recipientId: userId }],
     }, select: { senderId: true, recipientId: true } });

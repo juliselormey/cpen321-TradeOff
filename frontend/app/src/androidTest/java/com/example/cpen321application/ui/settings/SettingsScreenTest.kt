@@ -28,7 +28,6 @@ class SettingsScreenTest {
         override suspend fun removeStockFavorite(authorization: String, ticker: String): Unit = error("Unused")
         // Settings tests do not execute trades, but retain the combined API contract.
         override suspend fun getPosition(ticker: String): Response<UserPositionResponse> = error("Unused")
-        override suspend fun executeTrade(request: ExecuteOrderRequest): Response<ExecuteOrderResponse> = error("Unused")
         override suspend fun executeMarketOrder(request: ExecuteMarketOrderRequest): Response<ExecuteOrderResponse> = error("Unused")
         override suspend fun executeLimitOrder(request: ExecuteLimitOrderRequest): Response<ExecuteOrderResponse> = error("Unused")
         override suspend fun getPendingOrders(): Response<PendingOrdersResponse> = error("Unused")
@@ -44,7 +43,7 @@ class SettingsScreenTest {
     }
     @Before fun prepare() {
         originalToken = SessionManager.getToken(context)
-        SessionManager.saveToken(context, "settings-test")
+        SessionManager.saveToken(context, "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzZXR0aW5ncy10ZXN0IiwiZXhwIjo0MTAyNDQ0ODAwfQ.test-signature")
     }
     @After fun restore() {
         originalToken?.let { SessionManager.saveToken(context, it) } ?: SessionManager.clearSession(context)

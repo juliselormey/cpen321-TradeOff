@@ -1,7 +1,7 @@
 import { Prisma } from "../../src/generated/prisma/client";
 import { db } from "../../src/prisma/db";
-import { getServerPrice } from "../../src/market/settlement";
-import { processPendingLimitOrders, startLimitOrderWorker, stopLimitOrderWorker } from "../../src/market/limitWorker";
+import { getServerPrice } from "../../src/trading/settlement";
+import { processPendingLimitOrders, startLimitOrderWorker, stopLimitOrderWorker } from "../../src/trading/limitWorker";
 import { notifyUser } from "../../src/firebase/notifier";
 
 jest.mock("../../src/prisma/db", () => ({
@@ -11,7 +11,7 @@ jest.mock("../../src/prisma/db", () => ({
     },
 }));
 
-jest.mock("../../src/market/settlement", () => ({
+jest.mock("../../src/trading/settlement", () => ({
     getServerPrice: jest.fn(),
     fillOrder: jest.fn(),
 }));
@@ -192,15 +192,15 @@ describe("Mocked: limit order worker lifecycle", () => {
         jest.useRealTimers();
     });
 
-    test("polls on the interval, ignores a second start, and stops cleanly", () => {
+    test("polls on the interval, ignores a second start, and stops cleanly", async () => {
         jest.useFakeTimers();
         orders.mockResolvedValue([]);
         startLimitOrderWorker(1000);
         startLimitOrderWorker(1000);
         expect(orders).not.toHaveBeenCalled();
-        jest.advanceTimersByTime(1000);
+        await jest.advanceTimersByTimeAsync(1000);
         expect(orders).toHaveBeenCalledTimes(1);
-        jest.advanceTimersByTime(1000);
+        await jest.advanceTimersByTimeAsync(1000);
         expect(orders).toHaveBeenCalledTimes(2);
         stopLimitOrderWorker();
         stopLimitOrderWorker();

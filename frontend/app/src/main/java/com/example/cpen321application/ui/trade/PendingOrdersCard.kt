@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.example.cpen321application.PendingOrderItem
 
 @Composable
-internal fun PendingOrdersCard(orders: List<PendingOrderItem>, onCancelOrder: (String) -> Unit) {
+internal fun PendingOrdersCard(orders: List<PendingOrderItem>, onCancelOrder: (String) -> Unit, enabled: Boolean = true) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -44,7 +44,7 @@ internal fun PendingOrdersCard(orders: List<PendingOrderItem>, onCancelOrder: (S
                         )
                         Text("Limit Order • ${order.status}", fontSize = 12.sp, color = Color.Gray)
                     }
-                    OutlinedButton(onClick = { onCancelOrder(order.id) }, shape = RoundedCornerShape(8.dp)) {
+                    OutlinedButton(enabled = enabled, onClick = { onCancelOrder(order.id) }, shape = RoundedCornerShape(8.dp)) {
                         Text("Cancel", fontSize = 12.sp, color = Red)
                     }
                 }

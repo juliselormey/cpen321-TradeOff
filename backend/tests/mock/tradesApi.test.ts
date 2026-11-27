@@ -6,7 +6,7 @@ import { T, bearer, expectError, expiredBearer, tamperedBearer } from '../helper
 import { db } from '../../src/prisma/db';
 import { marketService } from '../../src/market/service';
 import { Prisma } from '../../src/generated/prisma/client';
-import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable } from '../../src/market/settlement';
+import { OrderError, availableShares, fillOrder, getServerPrice, runSerializable } from '../../src/trading/settlement';
 
 const decimal = (v: number) => new Prisma.Decimal(v);
 const mock = (f: unknown) => f as jest.Mock;

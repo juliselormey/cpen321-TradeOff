@@ -10,6 +10,7 @@ const decimal = (v: number) => new Prisma.Decimal(v);
 
 jest.mock('../../src/prisma/db', () => ({
   db: {
+    $transaction: jest.fn((callback: (tx: unknown) => unknown) => callback(db)),
     user: { findUnique: jest.fn() },
     account: { findUnique: jest.fn() },
     position: { findMany: jest.fn() },
@@ -72,6 +73,7 @@ describe('Mocked API: GET /api/portfolio', () => {
     expect(res.body.cashBalance).toBe(1000);
     expect(res.body.holdings).toEqual([]);
     expect(res.body.totalValue).toBe(1000);
+    expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     expect(res.body.profitLoss).toBe(0);
   });
   it('PF-03 prices unavailable → 503 (UC-13 3a)', async () => {
@@ -84,11 +86,13 @@ describe('Mocked API: GET /api/portfolio', () => {
     const res = await get();
     expect(res.body.totalValue).toBe(1000 + 2 * 100 + 180);
     expect(res.body.reservedCash).toBe(180);
+    expect(res.body.allocation.find((slice: { label: string }) => slice.label === 'Cash').value).toBe(1180);
   });
   it('PF-05 holding profit/loss = (price − avgCost) × quantity', async () => {
     stub({ positions: [aapl] });
     const res = await get();
     expect(res.body.holdings[0]).toEqual(expect.objectContaining({ ticker: 'AAPL', value: 200, profitLoss: 20 }));
+    expect(res.body.holdings[0].returnPercent).toBeCloseTo(20 / 180 * 100);
   });
   it('PF-06 allocation percentages sum to 100', async () => {
     stub({ cash: 800, positions: [aapl] });
@@ -137,6 +141,7 @@ describe('Mocked API: GET /api/portfolio edge cases', () => {
     ] });
     const res = await get();
     expect(res.body.reservedCash).toBe(180);
+    expect(res.body.allocation.find((slice: { label: string }) => slice.label === 'Cash').value).toBe(1180);
     expect(res.body.totalValue).toBe(1180);
     expect(res.body.pendingOrders.map((o: { limitPrice: number | null }) => o.limitPrice)).toEqual([90, 90, null]);
   });

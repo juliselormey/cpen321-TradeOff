@@ -29,7 +29,7 @@ internal fun OrderEntryCard(state: TradeState) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Order Details", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            OrderTypeSelector(state.selectedOrderType, state::selectOrderType)
+            OrderTypeSelector(state.selectedOrderType, state::selectOrderType, !state.isSubmitting)
             OrderInputFields(state)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Estimated Total", fontSize = 15.sp, color = Color.Gray)
@@ -55,11 +55,12 @@ internal fun OrderEntryCard(state: TradeState) {
 private val ORDER_TYPES = listOf("MARKET" to "Market Order", "LIMIT" to "Limit Order")
 
 @Composable
-private fun OrderTypeSelector(selected: String, onSelect: (String) -> Unit) {
+private fun OrderTypeSelector(selected: String, onSelect: (String) -> Unit, enabled: Boolean) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ORDER_TYPES.forEach { (type, label) ->
             Button(
                 onClick = { onSelect(type) },
+                enabled = enabled,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (selected == type) MaterialTheme.colorScheme.primary else Color.LightGray
@@ -72,22 +73,24 @@ private fun OrderTypeSelector(selected: String, onSelect: (String) -> Unit) {
 @Composable
 private fun OrderInputFields(state: TradeState) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        DecimalField(state.quantityText, "Quantity (Shares)", "e.g. 10", state::updateQuantity)
+        DecimalField(state.quantityText, "Quantity (Shares)", "e.g. 10", state::updateQuantity, !state.isSubmitting)
         if (state.selectedOrderType == "LIMIT") {
             DecimalField(
                 value = state.limitPriceText,
                 label = "Limit Price ($)",
                 placeholder = "e.g. ${state.currentMarketPrice?.fmt() ?: "--"}",
-                onChange = state::updateLimitPrice
+                onChange = state::updateLimitPrice,
+                enabled = !state.isSubmitting
             )
         }
     }
 }
 
 @Composable
-private fun DecimalField(value: String, label: String, placeholder: String, onChange: (String) -> Unit) {
+private fun DecimalField(value: String, label: String, placeholder: String, onChange: (String) -> Unit, enabled: Boolean) {
     OutlinedTextField(
         value = value,
+        enabled = enabled,
         onValueChange = { if (it.matches(DECIMAL)) onChange(it) },
         label = { Text(label) },
         placeholder = { Text(placeholder) },

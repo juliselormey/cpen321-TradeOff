@@ -31,8 +31,9 @@ fun PortfolioScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val service = remember(context, apiService) { apiService ?: ApiClient.create(context) }
-    val marketApi = remember(context) { ApiClient.createMarket(context) }
-    val state = remember(context, service, marketApi) { PortfolioState(context, service, marketApi) }
+    val state = remember(context, service) {
+        PortfolioState({ com.example.cpen321application.util.SessionManager.isLoggedIn(context) }, service)
+    }
     PortfolioPolling(state)
     MaterialTheme {
         LazyColumn(
@@ -55,9 +56,6 @@ private fun PortfolioPolling(state: PortfolioState) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             launch {
                 while (isActive) { state.loadPortfolioData(); delay(8_000) }
-            }
-            launch {
-                while (isActive) { state.refreshPrices(); delay(8_000) }
             }
         }
     }

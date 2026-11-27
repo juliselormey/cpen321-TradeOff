@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import com.example.cpen321application.PortfolioAllocation
 
 internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioOverview(state: PortfolioState) {
     with(state) {
@@ -48,12 +49,10 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioOverview(st
             )
         }
 
-        if (evaluatedHoldings.isNotEmpty() && !hasUnavailablePrices) {
+        if (allocation.isNotEmpty() && !hasUnavailablePrices) {
             item {
                 AssetAllocationCard(
-                    holdings = evaluatedHoldings,
-                    cashBalance = totalCash,
-                    totalValue = totalPortfolioValue ?: 0.0
+                    slices = allocation
                 )
             }
         }
@@ -64,19 +63,19 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioOverview(st
 @Composable
 private fun PortfolioSummaryCard(
     totalValue: Double?,
-    cashBalance: Double,
+    cashBalance: Double?,
     totalProfitLoss: Double?,
     totalReturnPercent: Double?
 ) {
     PortfolioPanel(tint = MaterialTheme.colorScheme.primaryContainer) {
         Text("Total Portfolio Value", color = PortfolioMuted, fontSize = 16.sp)
         Text(totalValue?.let(::money) ?: "Unavailable", modifier = Modifier.testTag("portfolio-total"), fontSize = 36.sp, fontWeight = FontWeight.Bold)
-        Text("Holdings + available virtual cash", color = PortfolioMuted, fontSize = 12.sp)
+        Text("Holdings + available and reserved virtual cash", color = PortfolioMuted, fontSize = 12.sp)
         HorizontalDivider(Modifier.padding(vertical = 16.dp), color = PortfolioBorder)
         Text("Available Virtual Cash", color = PortfolioMuted, fontSize = 14.sp)
-        Text(money(cashBalance), modifier = Modifier.testTag("portfolio-cash"), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text(cashBalance?.let(::money) ?: "Unavailable", modifier = Modifier.testTag("portfolio-cash"), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(16.dp))
-        Text("Total Unrealized Profit/Loss", color = PortfolioMuted, fontSize = 14.sp)
+        Text("Total Profit/Loss", color = PortfolioMuted, fontSize = 14.sp)
         ProfitLoss(totalProfitLoss, totalReturnPercent, Modifier.testTag("portfolio-profit"))
     }
 }
@@ -88,11 +87,8 @@ private val AllocationColors = listOf(
 
 @Composable
 private fun AssetAllocationCard(
-    holdings: List<EvaluatedHolding>,
-    cashBalance: Double,
-    totalValue: Double
+    slices: List<PortfolioAllocation>,
 ) {
-    val slices = holdings.map { it.ticker to (it.currentValue ?: return) } + ("Cash" to cashBalance)
     PortfolioPanel {
         SectionTitle("Asset Allocation", "")
         Text("Share of total portfolio", color = PortfolioMuted, fontSize = 12.sp)
@@ -106,8 +102,8 @@ private fun AssetAllocationCard(
                 },
             ) {
                 var startAngle = -90f
-                slices.forEachIndexed { index, (_, value) ->
-                    val sweep = if (totalValue > 0) (value / totalValue * 360).toFloat() else 0f
+                slices.forEachIndexed { index, slice ->
+                    val sweep = (slice.percent / 100 * 360).toFloat()
                     drawArc(
                         color = AllocationColors[index % AllocationColors.size],
                         startAngle = startAngle,
@@ -123,7 +119,9 @@ private fun AssetAllocationCard(
                 Text("100% of portfolio", color = PortfolioMuted, fontSize = 12.sp)
             }
         }
-        slices.forEachIndexed { index, (symbol, value) ->
+        slices.forEachIndexed { index, slice ->
+            val symbol = slice.label
+            val value = slice.value
             Row(
                 modifier = Modifier.fillMaxWidth().testTag("allocation-$symbol").semantics(mergeDescendants = true) {}.padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -131,9 +129,9 @@ private fun AssetAllocationCard(
             ) {
                 Box(Modifier.size(10.dp).background(AllocationColors[index % AllocationColors.size], CircleShape))
                 Text(symbol, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                val pct = if (totalValue > 0) (value / totalValue) * 100 else 0.0
+                val pct = slice.percent
                 Text(String.format(Locale.US, "%.1f%%", pct), color = PortfolioMuted, fontSize = 13.sp)
-                Text(money(value), fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                Text(value?.let(::money) ?: "Unavailable", fontWeight = FontWeight.Medium, fontSize = 13.sp)
             }
         }
     }

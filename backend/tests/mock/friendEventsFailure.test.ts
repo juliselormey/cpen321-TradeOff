@@ -2,7 +2,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import jwt from 'jsonwebtoken';
-import { WebSocket } from 'ws';
+import { WebSocket, WebSocketServer } from 'ws';
 import { db } from '../../src/prisma/db';
 import * as authMiddleware from '../../src/middleware/auth';
 import { attachFriendEvents, publishFriendsChanged } from '../../src/realtime/friendEvents';
@@ -216,5 +216,26 @@ describe('Mocked: handshake edge cases', () => {
     expect(() => raw!.emit('error', new Error('ECONNRESET'))).not.toThrow();
     release({ id: 'u1', isBanned: false });
     expect(await ready).toEqual(READY);
+  });
+
+  it('FEF-14 an error on an accepted WebSocket terminates that client', async () => {
+    await start();
+    let accepted: WebSocket | undefined;
+    const original = WebSocketServer.prototype.handleUpgrade;
+    spy(jest.spyOn(WebSocketServer.prototype, 'handleUpgrade')).mockImplementation(function (
+      this: WebSocketServer, req, socket, head, callback,
+    ) {
+      return original.call(this, req, socket, head, client => {
+        accepted = client;
+        callback(client, head);
+      });
+    });
+
+    await connect();
+    await until(() => accepted !== undefined);
+    const closed = new Promise<void>(resolve => accepted!.once('close', () => resolve()));
+    accepted!.emit('error', new Error('socket failed'));
+    await closed;
+    expect(accepted!.readyState).toBe(WebSocket.CLOSED);
   });
 });

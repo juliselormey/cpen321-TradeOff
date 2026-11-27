@@ -16,6 +16,7 @@
     "test:market:api:live": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/no-mock/market.test.ts --runInBand",
     "test:api:mock": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/mock --coverageDirectory=coverage/mock",
     "test:api:nomock": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/no-mock --runInBand --coverageDirectory=coverage/no-mock",
+    "test:api:combined": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/mock tests/no-mock --runInBand --coverageDirectory=coverage/combined",
     "test:nfr": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --config jest.nfr.config.js --runInBand --json --outputFile=reports/nfr/results.json",
     "lint": "tsc -p tsconfig.lint.json && node .lint-tools/lint.js"
   },

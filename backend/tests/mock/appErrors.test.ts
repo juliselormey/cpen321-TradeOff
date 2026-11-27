@@ -48,6 +48,23 @@ describe('Mocked: app error handler', () => {
     expect(console.error).toHaveBeenCalledTimes(1);
   });
 
+  it('APP-4 rejected null values from route and authentication handlers become server errors', async () => {
+    const token = `Bearer ${jwt.sign({ sub: 'u1' }, secret)}`;
+
+    m(db.friendship.findMany).mockRejectedValue(null);
+    await request(app).get('/api/friends').set('Authorization', token).expect(500);
+
+    m(db.user.findUnique).mockRejectedValueOnce(null);
+    await request(app).get('/api/friends').set('Authorization', token).expect(500);
+
+    m(db.user.findUnique).mockRejectedValueOnce(null);
+    await request(app).get('/api/trades/position/AAPL').set('Authorization', token).expect(500);
+
+    m(db.user.findUnique).mockResolvedValue({ id: '', isBanned: false });
+    const emptyIdToken = `Bearer ${jwt.sign({ sub: '' }, secret)}`;
+    await request(app).get('/api/trades/position/AAPL').set('Authorization', emptyIdToken).expect(500);
+  });
+
   it('APP-3 once a response has started, the error is handed to the default handler instead of a second reply', () => {
     const anyApp = app as unknown as { _router?: { stack: { handle: (...a: unknown[]) => void }[] }; router?: { stack: { handle: (...a: unknown[]) => void }[] } };
     const stack = (anyApp._router ?? anyApp.router)!.stack;

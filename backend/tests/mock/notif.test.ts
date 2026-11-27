@@ -23,11 +23,16 @@ const token = jwt.sign({ sub: userId }, secret);
 
 beforeEach(() => {
     jest.resetAllMocks();
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     process.env.JWT_SECRET = secret;
     users.mockResolvedValue({
         id: userId,
         isBanned: false,
     } as never);
+});
+
+afterEach(() => {
+    jest.restoreAllMocks();
 });
 
 // Interface: PUT /api/notif/device

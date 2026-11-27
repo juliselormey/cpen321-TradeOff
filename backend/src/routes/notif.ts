@@ -18,7 +18,7 @@ notifRouter.use("/device", (req, res, next) => {
     next();
 });
 
-notifRouter.put("/device", asyncHandler(async (req, res) => {
+notifRouter.put("/device", authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
     const installationId = req.body.installationId as string;
 
@@ -35,7 +35,7 @@ notifRouter.put("/device", asyncHandler(async (req, res) => {
     res.status(204).end();
 }));
 
-notifRouter.delete("/device", asyncHandler(async (req, res) => {
+notifRouter.delete("/device", authenticatedHandler(async (req, res) => {
     await db.notificationDevice.deleteMany({
         where: { installationId: req.body.installationId as string, userId: req.userId! },
     });

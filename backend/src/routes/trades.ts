@@ -16,7 +16,7 @@ const MAX_QUANTITY = 1_000_000;
 const MAX_PRICE = 1_000_000;
 
 /** GET /api/trades/position/:ticker: cash balance and position info for a ticker */
-tradesRouter.get("/position/:ticker", asyncHandler(async (req, res) => {
+tradesRouter.get("/position/:ticker", authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
     const ticker = String(req.params.ticker).toUpperCase();
 
@@ -40,7 +40,7 @@ tradesRouter.get("/position/:ticker", asyncHandler(async (req, res) => {
 }));
 
 /** GET /api/trades/orders/pending: active pending limit orders for the user */
-tradesRouter.get("/orders/pending", asyncHandler(async (req, res) => {
+tradesRouter.get("/orders/pending", authenticatedHandler(async (req, res) => {
     const pendingOrders = await db.order.findMany({
         where: { userId: req.userId!, status: "PENDING" },
         orderBy: { createdAt: "desc" },
@@ -62,7 +62,7 @@ tradesRouter.get("/orders/pending", asyncHandler(async (req, res) => {
 }));
 
 /** POST /api/trades/orders/:id/cancel: cancels a pending limit order and releases reserved funds/shares */
-tradesRouter.post("/orders/:id/cancel", asyncHandler(async (req, res) => {
+tradesRouter.post("/orders/:id/cancel", authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
     const orderId = String(req.params.id);
     if (!uuid.test(orderId)) {

@@ -50,7 +50,7 @@ describe('Unmocked API: PATCH /api/auth/me', () => {
     await createUser({ username: 'taken_name' });
     expectError(await patch(a, { displayName: '' }), 400);
     expectError(await patch(a, { displayName: 'x'.repeat(500) }), 400);
-    expectError(await patch(a, { username: 'taken_name' }), 409);
+    expectError(await patch(a, { displayName: 'Valid Name', username: 'taken_name' }), 409);
   });
   it('AUTH-N7 cannot change cash or id through PATCH', async () => {
     const id = await createUser({ cash: 500 });

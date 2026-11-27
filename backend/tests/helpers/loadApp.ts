@@ -11,7 +11,7 @@ export function loadApp(...services: string[]) {
     if (s === 'services/googleVerifier' || s === 'auth/service') return authService;
     if (s === 'services/tradingService' || s === 'market/service') return marketService;
     if (s === 'services/marketService' || s === 'services/alpacaProvider' || s === 'market/alpaca') return marketService;
-    if (s === 'services/limitOrderWorker') return limitWorker;
+    if (s === 'services/limitOrderWorker' || s === 'market/limitWorker') return limitWorker;
     return {};
   });
   return { app, mods };

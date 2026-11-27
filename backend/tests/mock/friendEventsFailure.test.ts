@@ -70,6 +70,7 @@ afterEach(async () => {
   for (const c of clients) c.terminate();
   clients = [];
   try { stop?.(); } catch { /* already stopped by the test */ }
+  server?.closeAllConnections();
   await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
   server = undefined; stop = undefined;
 });
@@ -160,10 +161,9 @@ describe('Mocked: connection lifetime', () => {
 describe('Mocked: handshake edge cases', () => {
   it('FEF-9 upgrade requests for other URLs are left alone', async () => {
     await start();
-    const socket = new WebSocket(url.replace('/api/friends/events', '/somewhere-else'), { handshakeTimeout: 300 });
-    clients.push(socket);
-    const error = await new Promise<Error>((resolve) => socket.once('error', resolve));
-    expect(error.message).toMatch(/timed out/i);
+    const socket = { destroyed: false, on: jest.fn() } as unknown as Duplex;
+    server!.emit('upgrade', { url: '/somewhere-else', headers: {} }, socket, Buffer.alloc(0));
+    expect(socket.on).not.toHaveBeenCalled();
     expect(m(db.user.findUnique)).not.toHaveBeenCalled();
   });
 
@@ -195,8 +195,9 @@ describe('Mocked: handshake edge cases', () => {
     clients.push(socket);
     socket.on('error', () => undefined);
     await until(() => m(db.user.findUnique).mock.calls.length > 0);
+    const socketClosed = closed(socket);
     socket.terminate();
-    await until(async () => (await openConnections()) === 0);
+    await socketClosed;
     if (outcome === 'authorised') settle({ id: 'u1', isBanned: false }); else fail(new Error('db down'));
     for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
     expect(() => publishFriendsChanged(['u1'])).not.toThrow();

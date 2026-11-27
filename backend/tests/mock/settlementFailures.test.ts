@@ -41,7 +41,7 @@ describe('Mocked: runSerializable write conflicts', () => {
   it('SET-4 gives up after the allowed attempts', async () => {
     m(db.$transaction).mockRejectedValue(conflict);
     await expect(runSerializable(async () => 'x')).rejects.toBe(conflict);
-    expect(db.$transaction).toHaveBeenCalledTimes(3);
+    expect(db.$transaction).toHaveBeenCalledTimes(10);
   });
   it('SET-5 honours a custom attempt count', async () => {
     m(db.$transaction).mockRejectedValue(conflict);

@@ -9,7 +9,7 @@ import {
 
 const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 
 interface LimitOrderWorker { processPendingLimitOrders: () => Promise<{ processedCount: number; filledCount: number }> }
 
@@ -275,7 +275,7 @@ describe('Unmocked API: order validation and authentication', () => {
 });
 
 describe('Unmocked API: GET /api/trades/position/:ticker', () => {
-  const position = (uid: string, ticker = T) => request(app).get(`/api/trades/position/${ticker}`).set(bearer(uid));
+  const position = (uid: string, ticker: string = T) => request(app).get(`/api/trades/position/${ticker}`).set(bearer(uid));
 
   it('TRD-N29 a new user has the starting balance and no position', async () => {
     expect((await position(A)).body).toEqual({ cashBalance: 10000, ownedQuantity: 0, averageCost: 0, availableQuantity: 0 });

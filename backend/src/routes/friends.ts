@@ -8,6 +8,8 @@ import { PriceUnavailableError, loadPrices, valuePortfolio } from "../market/val
 import { publishFriendsChanged } from "../realtime/friendEvents";
 
 export const friendsRouter = Router();
+friendsRouter.use(requireAuth);
+
 const publicProfile = { id: true, username: true, displayName: true, avatarUrl: true } as const;
 const profiles = { sender: { select: publicProfile }, recipient: { select: publicProfile } };
 

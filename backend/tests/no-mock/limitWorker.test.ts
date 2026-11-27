@@ -8,7 +8,7 @@ import { notifyUser } from '../../src/firebase/notifier';
 
 const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 jest.mock('../../src/firebase/notifier', () => ({ notifyUser: jest.fn() })); // Firebase is external
 
 interface Worker {

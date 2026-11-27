@@ -31,7 +31,7 @@ export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
 }
 
 /** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */
-export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 3): Promise<T> {
+export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 10): Promise<T> {
     for (let attempt = 1; ; attempt++) {
         try {
             return (await db.$transaction(work, {

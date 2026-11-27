@@ -11,7 +11,7 @@ import { notifyUser } from '../../src/firebase/notifier';
 // eslint-disable-next-line no-var
 var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 jest.mock('../../src/firebase/notifier', () => ({ notifyUser: jest.fn() })); // Firebase is external
 
 let app: Express, A: string, B: string, C: string, D: string, E: string;

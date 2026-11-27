@@ -69,13 +69,13 @@ describe('Mocked API: database failures degrade to clean 500s', () => {
     expect(res.body).toEqual({ error });
   });
 
-  it('DBF-2 write conflicts that never clear → 503 "busy" after three attempts', async () => {
+  it('DBF-2 write conflicts that never clear → 503 "busy" after ten attempts', async () => {
     m(db.$transaction).mockRejectedValue({ code: 'P2034' });
     const res = await request(app).post('/api/trades/execute/market').set('Authorization', auth())
       .send({ ticker: SYMBOL, side: 'buy', quantity: 1 });
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ error: 'The server is busy. Please try again.' });
-    expect(db.$transaction).toHaveBeenCalledTimes(3);
+    expect(db.$transaction).toHaveBeenCalledTimes(10);
   });
 
   it('DBF-3 a friend request failing with an unrelated database error is not reported as a duplicate', async () => {
@@ -99,12 +99,13 @@ describe('Mocked API: database failures degrade to clean 500s', () => {
     expect(db.account.findUnique).not.toHaveBeenCalled();
   });
 
-  it('DBF-6 malformed stored data fails the leaderboard instead of ranking a wrong total', async () => {
+  it('DBF-6 malformed stored data has unavailable totals instead of a wrong ranking', async () => {
     m(db.user.findMany).mockResolvedValue([{
       id: 'u1', username: 'me', displayName: 'Me', avatarUrl: null, positions: [], orders: [],
       account: { cashBalance: 1, startingBalance: 1 }, // plain numbers instead of Decimals
     }]);
     const res = await request(app).get('/api/friends/leaderboard').set('Authorization', auth());
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(200);
+    expect(res.body.entries[0]).toEqual(expect.objectContaining({ totalPortfolioValue: null, returnPercent: null }));
   });
 });

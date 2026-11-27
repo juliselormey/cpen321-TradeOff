@@ -48,7 +48,7 @@ export async function loadPrices(tickers: Iterable<string>): Promise<Map<string,
         try {
             const stock = await marketService.getStock(ticker);
             const price = stock.status !== "ok" || stock.currentPrice == null ? null : new Prisma.Decimal(stock.currentPrice);
-            return [ticker, price?.isFinite() && price.greaterThan(0) ? price : null] as const;
+            return [ticker, price && price.greaterThan(0) ? price : null] as const;
         } catch {
             return [ticker, null] as const;
         }

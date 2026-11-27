@@ -1,8 +1,10 @@
 import http from 'node:http';
+import jwt from 'jsonwebtoken';
+import { requireEnv } from '../../src/config/env';
 import request from 'supertest';
 import { WebSocket } from 'ws';
 import { createApp } from '../../src/app';
-import { attachFriendEvents } from '../../src/realtime/friendEvents';
+import { attachFriendEvents, publishFriendsChanged } from '../../src/realtime/friendEvents';
 import { bearer } from '../helpers/testkit';
 import { befriend, createUser, db, resetDb } from '../helpers/fixtures';
 
@@ -121,5 +123,51 @@ describe('Unmocked: friend events (WebSocket)', () => {
   it('FEV-N6 a banned account is refused with 403', async () => {
     await db.user.update({ where: { id: A }, data: { isBanned: true } });
     expect(await rejected(headers(A))).toBe(403);
+  });
+  const closeClient = (c: { socket: WebSocket }) => new Promise<number>((resolve) => { c.socket.once('close', (code) => resolve(code)); c.socket.close(); });
+  const openWith = async (target: string, token: string) => {
+    const socket = new WebSocket(target, { headers: { Authorization: `Bearer ${token}` } });
+    clients.push(socket);
+    const first = await new Promise<string>((resolve, reject) => { socket.once('error', reject); socket.once('message', (d) => resolve(String(d))); });
+    expect(JSON.parse(first)).toEqual({ type: 'friends.ready' });
+    return socket;
+  };
+
+  it('FEV-N7 a query string on the events URL is accepted', async () => {
+    await openWith(`${url}?client=android`, jwt.sign({ sub: A }, requireEnv('JWT_SECRET'), { expiresIn: '5m' }));
+  });
+
+  it('FEV-N8 a token without an expiry is accepted', async () => {
+    await openWith(url, jwt.sign({ sub: A }, requireEnv('JWT_SECRET')));
+  });
+
+  it('FEV-N9 every open socket of a user is notified, and removing sockets one by one never breaks delivery', async () => {
+    const a1 = await connect(A);
+    const a2 = await connect(A);
+    await connect(B);
+    const both = [a1, a2].map(nextMessage);
+    const requestId = await sendRequest(A, B);
+    expect(await Promise.all(both)).toEqual([{ type: 'friends.changed' }, { type: 'friends.changed' }]);
+    await closeClient(a1);
+    const remaining = nextMessage(a2);
+    expect((await request(server).delete(`/api/friends/requests/${requestId}`).set(bearer(B))).status).toBe(204);
+    expect(await remaining).toEqual({ type: 'friends.changed' });
+    await closeClient(a2);
+    expect((await request(server).post('/api/friends/requests').set(bearer(A)).send({ username: await usernameOf(B) })).status).toBe(201);
+  });
+
+  it('FEV-N10 the same user listed twice is notified once', async () => {
+    const a = await connect(A);
+    publishFriendsChanged([A, A]);
+    publishFriendsChanged(['nobody-is-connected']);
+    await roundTrip(a);
+    expect(a.messages).toEqual([READY, JSON.stringify({ type: 'friends.changed' })]);
+  });
+
+  it('FEV-N11 a client message over the size limit closes the connection', async () => {
+    const a = await connect(A);
+    const closed = new Promise<number>((resolve) => a.socket.once('close', (code) => resolve(code)));
+    a.socket.send('x'.repeat(2048));
+    expect(await closed).toBe(1009);
   });
 });

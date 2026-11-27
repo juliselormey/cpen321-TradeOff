@@ -5,7 +5,8 @@ import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import { createUser, db, getCash, giveShares, resetDb } from '../helpers/fixtures';
 
-const mockMarket = { price: 100, fail: false };
+
+var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
   jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
 

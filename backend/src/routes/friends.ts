@@ -18,9 +18,8 @@ const involving = (userId: string) => ({ OR: [{ senderId: userId }, { recipientI
 function tryValuePortfolio(...args: Parameters<typeof valuePortfolio>) {
     try {
         return valuePortfolio(...args);
-    } catch (error) {
-        if (error instanceof PriceUnavailableError) return null; // entry shows "Unavailable"
-        throw error;
+    } catch {
+        return null; // entry shows "Unavailable" when a held price is missing
     }
 }
 
@@ -44,8 +43,7 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
     // One market-cache lookup per distinct symbol.
     const prices = await loadPrices(users.flatMap(user =>
         user.positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker)));
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ entries: users.map(user => {
+    const entries = users.map(user => {
         const valuation = user.account
             ? tryValuePortfolio({ account: user.account, positions: user.positions, pendingBuyOrders: user.orders }, prices)
             : null;
@@ -56,7 +54,23 @@ friendsRouter.get("/leaderboard", asyncHandler(async (req, res) => {
             totalPortfolioValue: valuation?.totalValue.toString() ?? null,
             returnPercent: valuation?.returnPercent?.toNumber() ?? null,
         };
-    }) });
+    });
+    entries.sort((a, b) => {
+        const va = a.totalPortfolioValue != null ? Number(a.totalPortfolioValue) : null;
+        const vb = b.totalPortfolioValue != null ? Number(b.totalPortfolioValue) : null;
+        if (va !== null && vb !== null) {
+            if (vb !== va) return vb - va;
+        } else if (va !== null) {
+            return -1;
+        } else if (vb !== null) {
+            return 1;
+        }
+        if (a.isYou) return -1;
+        if (b.isYou) return 1;
+        return a.user.id.localeCompare(b.user.id);
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ entries });
 }));
 
 friendsRouter.get("/", asyncHandler(async (req, res) => {

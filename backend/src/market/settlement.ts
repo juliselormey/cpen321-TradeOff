@@ -21,7 +21,13 @@ export class OrderError extends Error {
 export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
     const stock = await marketService.getStock(ticker).catch(() => null);
     if (stock?.status !== "ok" || !stock.currentPrice) throw new OrderError(503, `Price unavailable for ${ticker}`);
-    return new Prisma.Decimal(stock.currentPrice);
+    try {
+        const price = new Prisma.Decimal(stock.currentPrice);
+        if (price.lte(0) || price.isNaN()) throw new OrderError(503, `Price unavailable for ${ticker}`);
+        return price;
+    } catch (_: unknown) {
+        throw new OrderError(503, `Price unavailable for ${ticker}`);
+    }
 }
 
 /** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */

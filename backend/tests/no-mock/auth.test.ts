@@ -114,7 +114,7 @@ describe('Unmocked: bearer token handling', () => {
   it('AUTH-N15 a banned user is refused on every protected route with a still-valid token', async () => {
     const id = await createUser();
     await db.user.update({ where: { id }, data: { isBanned: true } });
-    for (const path of ['/api/auth/me', '/api/portfolio', '/api/friends', '/api/users/me/favorites']) {
+    for (const path of ['/api/auth/me', '/api/portfolio', '/api/friends', '/api/auth/me/favorites']) {
       expect((await request(app).get(path).set(bearer(id))).status).toBe(403);
     }
   });

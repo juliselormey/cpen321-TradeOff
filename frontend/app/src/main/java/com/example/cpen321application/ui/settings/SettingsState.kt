@@ -103,11 +103,7 @@ internal class SettingsState(private val api: ApiService, private val context: C
 
     suspend fun signOut() {
         busy = true
-        if (!NotificationRegistration.signOut(context)) {
-            busy = false
-            error = "Could not unregister notifications. Please try again."
-            return
-        }
+        NotificationRegistration.signOut(context)
         signedIn = false
         profile = null
         name = ""

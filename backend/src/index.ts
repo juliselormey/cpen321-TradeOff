@@ -1,3 +1,4 @@
+import { attachMarketEvents } from './realtime/marketEvents';
 import { createApp } from './app';
 import { attachFriendEvents } from './realtime/friendEvents';
 import { env } from './config/env';
@@ -6,7 +7,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { db } from './prisma/db';
-import { startLimitOrderWorker, stopLimitOrderWorker } from './market/limitWorker';
+import { startLimitOrderWorker, stopLimitOrderWorker } from './trading/limitWorker';
 
 const app = createApp();
 
@@ -26,6 +27,7 @@ const server = localHttp
     }, app);
 
 const closeFriendEvents = attachFriendEvents(server);
+const closeMarketEvents = attachMarketEvents(server);
 
 server.listen(env.port, '0.0.0.0', () => {
     console.log(`Server listening on 0.0.0.0:${env.port}`);
@@ -36,6 +38,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     stopLimitOrderWorker();
     closeFriendEvents();
+    closeMarketEvents();
     server.close(() => {
       db.$disconnect().catch((error: unknown) => {
         console.error("Database shutdown failed", error);

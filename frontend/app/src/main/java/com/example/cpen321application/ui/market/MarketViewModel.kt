@@ -44,6 +44,16 @@ class MarketViewModel(private val repository: MarketRepository) : ViewModel() {
         }
     }
 
+    internal fun onMarketUpdate(update: MarketUpdate) {
+        when (update) {
+            is MarketUpdate.Snapshot -> mutableState.value = MarketUiState(
+                stocks = update.stocks, checkedAt = update.checkedAt ?: Instant.now().toString(),
+            )
+            MarketUpdate.Reconnecting -> showFailure("Live market updates disconnected. Reconnecting…")
+            MarketUpdate.Unavailable -> showFailure("Market data is temporarily unavailable. Waiting for the server…")
+        }
+    }
+
     private fun showFailure(message: String) {
         mutableState.value = mutableState.value.copy(
             stocks = mutableState.value.stocks.map {

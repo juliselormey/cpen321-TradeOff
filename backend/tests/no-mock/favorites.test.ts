@@ -5,7 +5,7 @@ import { createApp } from "../../src/app";
 import { requireEnv } from "../../src/config/env";
 import { db } from "../../src/prisma/db";
 
-const endpoint = "/api/users/me/favorites";
+const endpoint = "/api/auth/me/favorites";
 
 describe("Stock favorites", () => {
     const app = createApp();

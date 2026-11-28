@@ -3,9 +3,16 @@ import jwt from "jsonwebtoken";
 import { createApp } from "../../src/app";
 import { db } from "../../src/prisma/db";
 import { requireEnv } from "../../src/config/env";
-import { processPendingLimitOrders, stopLimitOrderWorker } from "../../src/market/limitWorker";
-import { getServerPrice } from "../../src/market/settlement";
+import { processPendingLimitOrders, stopLimitOrderWorker } from "../../src/trading/limitWorker";
+import { getServerPrice } from "../../src/trading/settlement";
 import { Prisma } from "../../src/generated/prisma/client";
+import type * as StubProvider from "../helpers/stubprovider";
+
+const mockMarket = { price: 100, fail: false };
+jest.mock('../../src/market/alpaca', () => ({
+    AlpacaProvider: jest.requireActual<typeof StubProvider>("../helpers/stubprovider")
+        .createStubProviderClass(() => mockMarket),
+}));
 
 const app = createApp();
 const JWT_SECRET = requireEnv("JWT_SECRET");

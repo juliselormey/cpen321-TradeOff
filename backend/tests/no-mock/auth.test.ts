@@ -50,7 +50,7 @@ describe('Unmocked API: PATCH /api/auth/me', () => {
     await createUser({ username: 'taken_name' });
     expectError(await patch(a, { displayName: '' }), 400);
     expectError(await patch(a, { displayName: 'x'.repeat(500) }), 400);
-    expectError(await patch(a, { username: 'taken_name' }), 409);
+    expectError(await patch(a, { displayName: 'Valid Name', username: 'taken_name' }), 409);
   });
   it('AUTH-N7 cannot change cash or id through PATCH', async () => {
     const id = await createUser({ cash: 500 });
@@ -114,7 +114,7 @@ describe('Unmocked: bearer token handling', () => {
   it('AUTH-N15 a banned user is refused on every protected route with a still-valid token', async () => {
     const id = await createUser();
     await db.user.update({ where: { id }, data: { isBanned: true } });
-    for (const path of ['/api/auth/me', '/api/portfolio', '/api/friends', '/api/users/me/favorites']) {
+    for (const path of ['/api/auth/me', '/api/portfolio', '/api/friends', '/api/auth/me/favorites']) {
       expect((await request(app).get(path).set(bearer(id))).status).toBe(403);
     }
   });

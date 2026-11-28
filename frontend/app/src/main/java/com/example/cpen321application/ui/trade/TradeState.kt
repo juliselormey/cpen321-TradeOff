@@ -1,223 +1,148 @@
 package com.example.cpen321application.ui.trade
 
-import com.example.cpen321application.util.runOrReportNetworkFailure
-import com.example.cpen321application.TradingDefaults
-import android.util.Log
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import com.example.cpen321application.ApiService
-import com.example.cpen321application.ExecuteLimitOrderRequest
-import com.example.cpen321application.ExecuteMarketOrderRequest
-import com.example.cpen321application.PendingOrderItem
+import com.example.cpen321application.TradingDefaults
 import com.example.cpen321application.ui.market.data.MarketApiService
+import com.example.cpen321application.ui.market.data.MarketStock
+import com.example.cpen321application.PendingOrderItem
+import com.example.cpen321application.util.runOrReportNetworkFailure
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import retrofit2.Response
-import java.util.Locale
-
-private const val TAG = "TradeScreen"
-
-private fun <T> Response<T>.bodyOrNull(): T? = if (isSuccessful) body() else null
-
 
 internal class TradeState(
     val ticker: String,
     private val isLoggedIn: () -> Boolean,
-    private val apiService: ApiService?,
+    apiService: ApiService?,
     private val marketApi: MarketApiService,
     private val scope: CoroutineScope,
 ) {
+    private val repository = apiService?.let(::TradeRepository)
     private val accountRefreshLock = Mutex()
-
-    // null until the first successful fetch
     var currentMarketPrice by mutableStateOf<Double?>(null)
     var marketChange by mutableStateOf<Double?>(null)
     var quoteFailed by mutableStateOf(false)
-
     var availableCash by mutableDoubleStateOf(TradingDefaults.STARTING_BALANCE)
     var ownedShares by mutableDoubleStateOf(0.0)
     private var liveAvailableShares by mutableStateOf<Double?>(null)
-    val availableShares get() = if (isLive) liveAvailableShares ?: 0.0 else ownedShares
-
-
-    var selectedOrderType by mutableStateOf("MARKET") // "MARKET" or "LIMIT"
+    var isSubmitting by mutableStateOf(false)
+        private set
+    var selectedOrderType by mutableStateOf("MARKET")
+        private set
     var quantityText by mutableStateOf("")
+        private set
     var limitPriceText by mutableStateOf("")
+        private set
     var pendingOrders by mutableStateOf(emptyList<PendingOrderItem>())
-
     var successMessage by mutableStateOf<String?>(null)
     var errorMessage by mutableStateOf<String?>(null)
 
-    private val isLive get() = apiService != null && isLoggedIn()
-
+    private val sessionUsable get() = repository == null || isLoggedIn()
+    val availableShares get() = if (repository != null) liveAvailableShares ?: 0.0 else ownedShares
     val quantity get() = quantityText.toDoubleOrNull() ?: 0.0
     val limitPrice get() = limitPriceText.toDoubleOrNull()
-    val hasPrice get() = currentMarketPrice != null
-    val effectivePrice: Double?
-        get() = if (selectedOrderType == "LIMIT") limitPrice ?: currentMarketPrice else currentMarketPrice
+    val hasPrice get() = currentMarketPrice?.let { it.isFinite() && it > 0 } == true && !quoteFailed
+    val effectivePrice get() = if (selectedOrderType == "LIMIT") limitPrice ?: currentMarketPrice else currentMarketPrice
     val totalAmount get() = quantity * (effectivePrice ?: 0.0)
-
-    // Validation
-    val isQuantityValid get() = quantity > 0
-    val isLimitPriceValid get() = selectedOrderType != "LIMIT" || ((limitPrice ?: 0.0) > 0)
+    val isQuantityValid get() = validOrderAmount(quantityText)
+    val isLimitPriceValid get() = selectedOrderType != "LIMIT" || validOrderAmount(limitPriceText)
     val hasEnoughCash get() = availableCash >= totalAmount
     val hasEnoughShares get() = availableShares >= quantity
-    val isBuyEnabled get() = hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughCash
-    val isSellEnabled get() = hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughShares
-
-    val inputError: String?
-        get() = when {
-            quantityText.isNotEmpty() && !isQuantityValid -> "Please enter a valid quantity greater than 0."
-            selectedOrderType == "LIMIT" && limitPriceText.isNotEmpty() && !isLimitPriceValid ->
-                "Please enter a valid limit price greater than 0."
-            else -> null
-        }
-
-    val buyBlocker: String?
-        get() = if (isQuantityValid && !hasEnoughCash) {
-            "Cannot Buy: Insufficient cash balance (${availableCash.usd()} available)."
-        } else null
-
-    val sellBlocker: String?
-        get() = when {
-            !isQuantityValid || hasEnoughShares -> null
-            ownedShares == 0.0 -> "Cannot Sell: You do not own any shares of $ticker."
-            else -> "Cannot Sell: Insufficient available shares (${availableShares.fmt()} available; pending sells reserve shares)."
-        }
-
-    // Refresh
+    val isBuyEnabled get() = !isSubmitting && sessionUsable && hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughCash
+    val isSellEnabled get() = !isSubmitting && sessionUsable && hasPrice && isQuantityValid && isLimitPriceValid && hasEnoughShares
+    val inputError: String? get() = when {
+        quantityText.isNotEmpty() && !isQuantityValid -> if (quantity <= 0) "Please enter a valid quantity greater than 0."
+            else "Quantity must be at most 1,000,000 with no more than 4 decimal places."
+        selectedOrderType == "LIMIT" && limitPriceText.isNotEmpty() && !isLimitPriceValid ->
+            "Limit price must be positive, at most 1,000,000, with no more than 4 decimal places."
+        else -> null
+    }
+    val buyBlocker: String? get() = if (isQuantityValid && !hasEnoughCash)
+        "Cannot Buy: Insufficient cash balance (${availableCash.usd()} available)." else null
+    val sellBlocker: String? get() = when {
+        !isQuantityValid || hasEnoughShares -> null
+        ownedShares == 0.0 -> "Cannot Sell: You do not own any shares of $ticker."
+        else -> "Cannot Sell: Insufficient available shares (${availableShares.fmt()} available; pending sells reserve shares)."
+    }
 
     suspend fun refreshQuote() {
-        runOrReportNetworkFailure({
-            Log.e(TAG, "Failed to fetch live market price", it)
-            quoteFailed = true
-        }) {
-            val matched = marketApi.getStocks().stocks.find { it.ticker.equals(ticker, ignoreCase = true) }
-            val live = matched?.currentPrice?.toDoubleOrNull()
-            if (live != null) {
-                currentMarketPrice = live
-                matched.percentageChange?.let { marketChange = it }
-                quoteFailed = false
-            } else {
-                quoteFailed = true
-            }
-        }
+        runOrReportNetworkFailure({ quoteFailed = true }) { acceptQuotes(marketApi.getStocks().stocks) }
     }
-
+    internal fun acceptQuotes(stocks: List<MarketStock>) {
+        val matched = stocks.find { it.ticker.equals(ticker, ignoreCase = true) }
+        val price = matched?.currentPrice?.toDoubleOrNull()?.takeIf { matched.status == "ok" && it.isFinite() && it > 0 }
+        quoteFailed = price == null
+        if (price != null) { currentMarketPrice = price; marketChange = matched.percentageChange }
+    }
     suspend fun refreshAccount() {
-        val api = apiService ?: return
+        val live = repository ?: return
         if (!isLoggedIn()) return
         accountRefreshLock.withLock {
-            runOrReportNetworkFailure({ Log.e(TAG, "Error refreshing data", it) }) {
-                api.getPosition(ticker).bodyOrNull()?.let {
-                    availableCash = it.cashBalance
-                    ownedShares = it.ownedQuantity
-                    liveAvailableShares = it.availableQuantity
-                }
-                api.getPendingOrders().bodyOrNull()?.let { res ->
-                    pendingOrders = res.orders.filter { it.ticker.equals(ticker, ignoreCase = true) }
-                }
+            runOrReportNetworkFailure({ reportFailure(it) }) {
+                val account = live.account(ticker)
+                availableCash = account.cash
+                ownedShares = account.owned
+                liveAvailableShares = account.available
+                pendingOrders = account.orders
             }
         }
     }
-
-    // Actions
-
-    fun selectOrderType(value: String) { selectedOrderType = value }
-
-    fun updateQuantity(value: String) {
-        quantityText = value
-        clearMessages()
-    }
-
-    fun updateLimitPrice(value: String) {
-        limitPriceText = value
-        clearMessages()
-    }
+    fun selectOrderType(value: String) { if (!isSubmitting && value in listOf("MARKET", "LIMIT")) selectedOrderType = value }
+    fun updateQuantity(value: String) { if (!isSubmitting) { quantityText = value; clearMessages() } }
+    fun updateLimitPrice(value: String) { if (!isSubmitting) { limitPriceText = value; clearMessages() } }
 
     fun submit(side: String) {
-        if (!(if (side == "BUY") isBuyEnabled else isSellEnabled)) return
-        if (isLive) {
-            scope.launch { executeOrder(side) }
-        } else {
-            // Offline / demo mode: apply locally
-            val direction = if (side == "BUY") 1 else -1
-            availableCash -= direction * totalAmount
-            if (selectedOrderType == "MARKET") ownedShares += direction * quantity
+        if (side !in listOf("BUY", "SELL") || !(if (side == "BUY") isBuyEnabled else isSellEnabled)) return
+        val order = SubmittedOrder(ticker, side, selectedOrderType, quantity, if (selectedOrderType == "LIMIT") limitPrice else null)
+        if (repository == null) {
+            val result = executeDemoOrder(order, requireNotNull(currentMarketPrice), availableCash, ownedShares)
+            availableCash = result.cash
+            ownedShares = result.owned
             resetForm()
             successMessage = "Order submitted successfully!"
+            return
         }
-    }
-
-    private suspend fun executeOrder(side: String) {
-        val api = apiService ?: return
-        val price = currentMarketPrice ?: return
-        runOrReportNetworkFailure({
-            Log.e(TAG, "Order execution error", it)
-            errorMessage = "Network error executing order"
-        }) {
-            val response = if (selectedOrderType == "LIMIT") {
-                api.executeLimitOrder(
-                    ExecuteLimitOrderRequest(
-                        ticker = ticker,
-                        side = side,
-                        quantity = quantity,
-                        limitPrice = limitPrice ?: price
-                    )
-                )
-            } else {
-                api.executeMarketOrder(
-                    ExecuteMarketOrderRequest(
-                        ticker = ticker,
-                        side = side,
-                        quantity = quantity,
-                    )
-                )
-            }
-
-            val body = response.bodyOrNull()
-            if (body != null) {
-                accountRefreshLock.withLock {
-                    availableCash = body.cashBalance
-                    ownedShares = body.ownedQuantity
-                    liveAvailableShares = body.availableQuantity
+        isSubmitting = true // Set before launching, so a second tap cannot enqueue another request.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                runOrReportNetworkFailure({ reportFailure(it) }) {
+                    val result = repository.execute(order)
+                    accountRefreshLock.withLock {
+                        availableCash = result.cashBalance
+                        ownedShares = result.ownedQuantity
+                        liveAvailableShares = result.availableQuantity
+                    }
+                    resetForm()
+                    successMessage = result.message
+                    refreshAccount()
                 }
-                resetForm()
-                successMessage = body.message
-                refreshAccount()
-            } else {
-                errorMessage = response.errorBody()?.string()
-                    ?: "Failed to execute ${side.lowercase(Locale.US)} order"
-            }
+            } finally { isSubmitting = false }
         }
     }
-
     fun cancelOrder(orderId: String) {
-        val api = apiService ?: return
-        scope.launch {
-            runOrReportNetworkFailure({
-                Log.e(TAG, "Failed to cancel order", it)
-                errorMessage = "Failed to cancel order"
-            }) {
-                if (api.cancelOrder(orderId).isSuccessful) {
+        val live = repository ?: return
+        if (isSubmitting || !isLoggedIn()) return
+        isSubmitting = true
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            try {
+                runOrReportNetworkFailure({ reportFailure(it) }) {
+                    live.cancel(orderId)
                     successMessage = "Pending order cancelled successfully"
                     refreshAccount()
-                } else {
-                    errorMessage = "Failed to cancel order"
                 }
-            }
+            } finally { isSubmitting = false }
         }
     }
-
+    private fun reportFailure(error: Exception) {
+        errorMessage = if (error is TradeRequestFailure) error.message else "Could not confirm the request. Refresh before trying again."
+    }
     private fun clearMessages() {
         successMessage = null
         errorMessage = null
     }
-
     private fun resetForm() {
         errorMessage = null
         quantityText = ""

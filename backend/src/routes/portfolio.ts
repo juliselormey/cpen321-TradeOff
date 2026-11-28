@@ -1,3 +1,4 @@
+import { Prisma } from "../generated/prisma/client";
 import { Router } from "express";
 import { db } from "../prisma/db";
 import { authenticatedHandler } from "../middleware/auth";
@@ -14,12 +15,12 @@ portfolioRouter.get("/", authenticatedHandler(async (req, res) => {
     const userId = req.userId!;
 
     try {
-        const [account, positions, recentTrades, pendingOrders] = await Promise.all([
-            db.account.findUnique({ where: { userId } }),
-            db.position.findMany({ where: { userId } }),
-            db.trade.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 100 }),
-            db.order.findMany({ where: { userId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
-        ]);
+        const [account, positions, recentTrades, pendingOrders] = await db.$transaction(async tx => Promise.all([
+            tx.account.findUnique({ where: { userId } }),
+            tx.position.findMany({ where: { userId } }),
+            tx.trade.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 100 }),
+            tx.order.findMany({ where: { userId, status: "PENDING" }, orderBy: { createdAt: "desc" } }),
+        ]), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
         const prices = await loadPrices(positions.filter(p => p.quantity.greaterThan(0)).map(p => p.ticker));
         const valuation = valuePortfolio({
@@ -41,8 +42,14 @@ portfolioRouter.get("/", authenticatedHandler(async (req, res) => {
                 price: h.price.toNumber(),
                 value: h.value.toNumber(),
                 profitLoss: h.profitLoss?.toNumber() ?? null,
+                returnPercent: h.averageCost?.greaterThan(0) && h.profitLoss !== null
+                    ? h.profitLoss.div(h.averageCost.mul(h.quantity)).mul(100).toNumber() : null,
             })),
-            allocation: valuation.allocation,
+            allocation: valuation.allocation.map(slice => ({
+                ...slice,
+                value: slice.label === "Cash" ? valuation.cash.plus(valuation.reservedCash).toNumber()
+                    : valuation.holdings.find(holding => holding.ticker === slice.label)?.value.toNumber() ?? null,
+            })),
             recentTrades: recentTrades.map((t) => ({
                 id: t.id,
                 ticker: t.ticker,

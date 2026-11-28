@@ -12,10 +12,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.cpen321application.HoldingItemResponse
 import com.example.cpen321application.ui.StockLogo
 
 internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioHoldings(
-    evaluatedHoldings: List<EvaluatedHolding>, onStockSelected: (String) -> Unit,
+    evaluatedHoldings: List<HoldingItemResponse>, onStockSelected: (String) -> Unit,
 ) {
     item { SectionTitle("Holdings", "${evaluatedHoldings.size} assets") }
 
@@ -34,7 +35,7 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.portfolioHoldings(
 }
 
 @Composable
-private fun HoldingCard(holding: EvaluatedHolding, onClick: () -> Unit) {
+private fun HoldingCard(holding: HoldingItemResponse, onClick: () -> Unit) {
     PortfolioPanel(modifier = Modifier.testTag("holding-${holding.ticker}").clickable(
         role = Role.Button,
         onClickLabel = "Trade ${holding.ticker}",
@@ -49,8 +50,8 @@ private fun HoldingCard(holding: EvaluatedHolding, onClick: () -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("${quantity(holding.quantity)} shares @ ${holding.currentPrice?.let(::money) ?: "Unavailable"}", color = PortfolioMuted, fontSize = 14.sp)
-            Text(holding.currentValue?.let(::money) ?: "Unavailable", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+            Text("${quantity(holding.quantity)} shares @ ${holding.price?.let(::money) ?: "Unavailable"}", color = PortfolioMuted, fontSize = 14.sp)
+            Text(holding.value?.let(::money) ?: "Unavailable", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
         }
         ProfitLoss(holding.profitLoss, holding.returnPercent)
     }

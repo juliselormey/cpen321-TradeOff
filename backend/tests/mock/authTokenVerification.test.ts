@@ -35,6 +35,6 @@ test('new accounts use the configured starting balance for both fields', async (
     jest.mocked(db.user.findUnique).mockResolvedValue(null);
     await findOrCreateUser({ googleSub: 'new', email: 'new@example.test' });
     expect(db.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-        account: { create: { cashBalance: STARTING_BALANCE.toString(), startingBalance: STARTING_BALANCE.toString() } },
+        account: { create: { cashBalance: 10000, startingBalance: 10000 } },
     }) }));
 });

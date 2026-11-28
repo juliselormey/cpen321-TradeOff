@@ -18,8 +18,8 @@ jobs:
       DATABASE_URL: "mysql://root:rootpassword@127.0.0.1:3306/tradeoff_test"
       JWT_SECRET: "ci-secret-key-12345-mock-fallback"
       GOOGLE_CLIENT_ID: "ci-google-client-id"
-      ALPACA_API_KEY_ID: "mock-key-id"
-      ALPACA_API_SECRET_KEY: "mock-secret-key"
+      ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+      ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
       NODE_ENV: "test"
 
     services:
@@ -55,8 +55,14 @@ jobs:
         working-directory: ./backend
         run: npm run typecheck
 
-      - name: Run Database Push and Tests
+      - name: Prepare Test Database
         working-directory: ./backend
-        run: |
-          npx prisma db push --accept-data-loss
-          npx jest tests/mock/
+        run: npx prisma db push --accept-data-loss
+
+      - name: Run Combined Backend Tests
+        working-directory: ./backend
+        run: npm run test:api:combined
+
+      - name: Run Backend NFR Tests
+        working-directory: ./backend
+        run: npm run test:nfr

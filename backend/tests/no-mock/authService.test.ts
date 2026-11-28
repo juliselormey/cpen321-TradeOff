@@ -58,3 +58,16 @@ describe('Unmocked: access tokens (issueAccessToken)', () => {
     expect(() => jwt.verify(issueAccessToken(user.id), 'not-the-secret')).toThrow();
   });
 });
+
+describe('Unmocked: auth service details', () => {
+  it('AUTHSVC-N6 a Google profile without a name creates a user with no display name', async () => {
+    const user = await findOrCreateUser({ googleSub: `google-${randomUUID()}`, email: 'noname@example.com' });
+    expect(user.displayName).toBeNull();
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id }, include: { account: true } })).account).not.toBeNull();
+  });
+  it('AUTHSVC-N7 access tokens last fifteen minutes', async () => {
+    const user = await findOrCreateUser(identity());
+    const decoded = jwt.verify(issueAccessToken(user.id), requireEnv('JWT_SECRET')) as jwt.JwtPayload;
+    expect((decoded.exp as number) - (decoded.iat as number)).toBe(15 * 60);
+  });
+});

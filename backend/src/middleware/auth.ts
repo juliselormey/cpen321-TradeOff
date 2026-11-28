@@ -40,7 +40,7 @@ async function authenticate(req: Request, res: Response, next: NextFunction): Pr
 }
 
 export const requireAuth: RequestHandler = (req, res, next) => {
-    authenticate(req, res, next).catch((error: unknown) => next(error));
+    authenticate(req, res, next).catch((error: unknown) => next(error ?? new Error("Authentication rejected without an error value")));
 };
 
 export type AuthenticatedRequest = Request & { userId: string };
@@ -52,6 +52,7 @@ export const authenticatedHandler = (
     authenticate(req, res, () => {
         const userId = req.userId;
         if (!userId) { next(new Error("Authenticated request has no user ID")); return; }
-        handler(Object.assign(req, { userId }), res).catch((error: unknown) => next(error));
-    }).catch((error: unknown) => next(error));
+        handler(Object.assign(req, { userId }), res).catch((error: unknown) =>
+            next(error ?? new Error("Authenticated handler rejected without an error value")));
+    }).catch((error: unknown) => next(error ?? new Error("Authentication rejected without an error value")));
 };

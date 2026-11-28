@@ -17,6 +17,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.cpen321application.ui.market.marketUpdates
+import com.example.cpen321application.ui.market.MarketUpdate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -34,7 +36,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.ApiService
 import com.example.cpen321application.util.SessionManager
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -56,14 +57,21 @@ fun TradeScreen(ticker: String, apiService: ApiService? = null, onBack: () -> Un
 @Composable
 private fun TradePolling(state: TradeState) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val context = LocalContext.current
+    val client = remember(context) { ApiClient.createMarketEventsClient(context) }
     LaunchedEffect(state, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                coroutineScope {
-                    launch { state.refreshQuote() }
-                    launch { state.refreshAccount() }
+            launch {
+                while (isActive) {
+                    state.refreshAccount()
+                    delay(POLL_INTERVAL_MS)
                 }
-                delay(POLL_INTERVAL_MS)
+            }
+            marketUpdates(client, ApiClient.marketEventsUrl()).collect { update ->
+                when (update) {
+                    is MarketUpdate.Snapshot -> state.acceptQuotes(update.stocks)
+                    else -> state.quoteFailed = true
+                }
             }
         }
     }
@@ -80,7 +88,7 @@ private fun TradeContent(state: TradeState, onBack: () -> Unit) {
         AccountPositionCard(state.availableCash, state.ownedShares)
         OrderEntryCard(state)
         if (state.pendingOrders.isNotEmpty()) {
-            PendingOrdersCard(state.pendingOrders, state::cancelOrder)
+            PendingOrdersCard(state.pendingOrders, state::cancelOrder, !state.isSubmitting)
         }
         state.errorMessage?.let {
             MessageBanner(it, Color(0xFFFFEBEE), Red) { state.errorMessage = null }

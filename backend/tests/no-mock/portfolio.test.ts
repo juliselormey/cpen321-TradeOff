@@ -5,9 +5,10 @@ import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import { createUser, db, getCash, giveShares, resetDb } from '../helpers/fixtures';
 
-const mockMarket = { price: 100, fail: false };
+
+var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 
 let app: Express, A: string, B: string;
 
@@ -42,6 +43,8 @@ describe('Unmocked API: GET /api/portfolio', () => {
   });
   it('PF-N3 after buy then partial sell: holding reduced, two trades newest first (UC-14)', async () => {
     await buy(A, { quantity: 3 });
+    // Keep the timestamps distinct so this checks API ordering, not a database tie.
+    jest.setSystemTime(Date.now() + 1);
     await buy(A, { side: 'SELL', quantity: 1 });
     const res = await portfolio(A);
     expect(res.body.holdings[0].quantity).toBe(2);

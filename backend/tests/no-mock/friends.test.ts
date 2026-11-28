@@ -6,11 +6,13 @@ import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import {
   befriend, countFriendshipsBetween, countRequestsBetween, createUser, db, giveShares, requestFrom, resetDb,
 } from '../helpers/fixtures';
+import { notifyUser } from '../../src/firebase/notifier';
 
 // eslint-disable-next-line no-var
 var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
+jest.mock('../../src/firebase/notifier', () => ({ notifyUser: jest.fn() })); // Firebase is external
 
 let app: Express, A: string, B: string, C: string, D: string, E: string;
 
@@ -240,5 +242,38 @@ describe('Unmocked API: leaderboard edge cases', () => {
     const entries = await board(A);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toEqual(expect.objectContaining({ isYou: true, totalPortfolioValue: '1000' }));
+  });
+});
+
+describe('Unmocked API: friend notifications (Firebase is mocked, everything else is real)', () => {
+  const notify = jest.mocked(notifyUser);
+  // The accept notification is sent after the response, so give it real database round trips to finish.
+  const settle = async () => { for (let i = 0; i < 20; i++) await db.friendship.count(); };
+  beforeEach(() => notify.mockClear());
+
+  it('SOC-N26 sending a request notifies the recipient exactly once', async () => {
+    await sendReq(A, B);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(B, 'New friend request', expect.stringContaining('sent you a friend request'));
+  });
+  it('SOC-N27 accepting notifies the original sender exactly once', async () => {
+    const { body } = await sendReq(A, B);
+    notify.mockClear();
+    await as(B).post(`/api/friends/requests/${body.request.id}/accept`);
+    await settle();
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith(A, 'Friend request accepted', expect.stringContaining('accepted your friend request'));
+  });
+  it('SOC-N28 duplicates, bad input, outsiders, declines, cancels and unfriending notify nobody', async () => {
+    const { body } = await sendReq(A, B);
+    notify.mockClear();
+    expect((await sendReq(A, B)).status).toBe(409);
+    expect((await as(A).post('/api/friends/requests', { username: 'ab' })).status).toBe(400);
+    expect((await as(C).post(`/api/friends/requests/${body.request.id}/accept`)).status).toBe(404);
+    expect((await as(B).del(`/api/friends/requests/${body.request.id}`)).status).toBe(204);
+    const f = await befriend(D, E);
+    expect((await as(D).del(`/api/friends/${f.id}`)).status).toBe(204);
+    await settle();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

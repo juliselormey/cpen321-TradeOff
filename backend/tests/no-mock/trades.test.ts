@@ -9,7 +9,7 @@ import {
 
 const mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 
 interface LimitOrderWorker { processPendingLimitOrders: () => Promise<{ processedCount: number; filledCount: number }> }
 
@@ -19,7 +19,7 @@ const setPrice = (p: number) => { mockMarket.price = p; mockMarket.fail = false;
 
 beforeAll(() => {
   jest.useFakeTimers(FAKE_DATE);
-  const l = loadApp('market/limitWorker');
+  const l = loadApp('trading/limitWorker');
   app = l.app;
   worker = l.mods[0] as LimitOrderWorker;
 });
@@ -275,7 +275,7 @@ describe('Unmocked API: order validation and authentication', () => {
 });
 
 describe('Unmocked API: GET /api/trades/position/:ticker', () => {
-  const position = (uid: string, ticker = T) => request(app).get(`/api/trades/position/${ticker}`).set(bearer(uid));
+  const position = (uid: string, ticker: string = T) => request(app).get(`/api/trades/position/${ticker}`).set(bearer(uid));
 
   it('TRD-N29 a new user has the starting balance and no position', async () => {
     expect((await position(A)).body).toEqual({ cashBalance: 10000, ownedQuantity: 0, averageCost: 0, availableQuantity: 0 });
@@ -283,7 +283,7 @@ describe('Unmocked API: GET /api/trades/position/:ticker', () => {
   it('TRD-N30 shares reserved by a pending sell are owned but not available (case-insensitive ticker)', async () => {
     await giveShares(A, T, 3, 90);
     await limit(A, { side: 'sell', quantity: 1, limitPrice: 150 });
-    const res = await position(A, T.toLowerCase() as any);
+    const res = await position(A, T.toLowerCase());
     expect(res.body).toEqual({ cashBalance: 10000, ownedQuantity: 3, averageCost: 90, availableQuantity: 2 });
   });
 });
@@ -386,5 +386,34 @@ describe('Unmocked: limit order worker', () => {
     await tick();
     expect((await getOrder(filled))?.status).toBe('FILLED');
     expect(await tick()).toEqual({ processedCount: 0, filledCount: 0 });
+  });
+});
+
+describe('Unmocked API: trade boundaries', () => {
+  it('TRD-N41 cash exactly equal to the cost is enough (boundary)', async () => {
+    await db.account.update({ where: { userId: A }, data: { cashBalance: 100 } });
+    expect((await market(A, { quantity: 1 })).status).toBe(200);
+    expect(await getCash(A)).toBe(0);
+  });
+  it('TRD-N42 a client-sent price is ignored; the server price is used', async () => {
+    const res = await market(A, { pricePerShare: 1, price: 1 });
+    expect(res.status).toBe(200);
+    expect(res.body.executedPrice).toBe(100);
+    expect(await getCash(A)).toBe(9900);
+  });
+  it('TRD-N43 selling a stock that was never owned → 400, nothing changes', async () => {
+    const res = await market(A, { side: 'sell' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Insufficient shares owned');
+    expect(await countTrades(A)).toBe(0);
+    expect(await getCash(A)).toBe(10000);
+  });
+  it('TRD-N44 a limit buy needs cash for its whole reservation → 400, nothing reserved', async () => {
+    await db.account.update({ where: { userId: A }, data: { cashBalance: 50 } });
+    const res = await limit(A, { limitPrice: 90, quantity: 1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Insufficient cash balance');
+    expect(await getCash(A)).toBe(50);
+    expect(await db.order.count({ where: { userId: A } })).toBe(0);
   });
 });

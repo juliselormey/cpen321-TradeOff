@@ -1,7 +1,7 @@
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
 import { hasErrorCode } from "../util/dbErrors";
-import { marketService } from "./service";
+import { marketService } from "../market/service";
 
 export type Tx = Prisma.TransactionClient;
 type Order = Prisma.OrderGetPayload<Record<string, never>>;
@@ -21,11 +21,17 @@ export class OrderError extends Error {
 export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
     const stock = await marketService.getStock(ticker).catch(() => null);
     if (stock?.status !== "ok" || !stock.currentPrice) throw new OrderError(503, `Price unavailable for ${ticker}`);
-    return new Prisma.Decimal(stock.currentPrice);
+    try {
+        const price = new Prisma.Decimal(stock.currentPrice);
+        if (price.lte(0) || price.isNaN()) throw new OrderError(503, `Price unavailable for ${ticker}`);
+        return price;
+    } catch (_: unknown) {
+        throw new OrderError(503, `Price unavailable for ${ticker}`);
+    }
 }
 
 /** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */
-export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 3): Promise<T> {
+export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 10): Promise<T> {
     for (let attempt = 1; ; attempt++) {
         try {
             return (await db.$transaction(work, {

@@ -28,7 +28,9 @@ export class MarketService {
 
   constructor(
     private readonly provider: QuoteProvider = new AlpacaProvider(),
-    private readonly now: () => number = Date.now,
+    // Resolve Date.now at call time so fake clocks installed after module import
+    // can advance cache expiry in tests. Runtime behavior remains wall-clock time.
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   async getStocks(): Promise<MarketStock[]> {
@@ -208,5 +210,3 @@ export class MarketService {
 }
 
 export const marketService = new MarketService();
-export { valuePortfolio, loadPrices, PriceUnavailableError, STARTING_BALANCE, valuePortfolio as computePortfolioValue } from './valuation';
-export type { ValuationInput, HoldingValue, Valuation } from './valuation';

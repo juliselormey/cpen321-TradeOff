@@ -22,14 +22,6 @@ data class UserPositionResponse(
     val availableQuantity: Double
 )
 
-data class ExecuteOrderRequest(
-    val ticker: String,
-    val side: String, // "BUY" or "SELL"
-    val type: String = "MARKET", // "MARKET" or "LIMIT", default is MARKET
-    val quantity: Double,
-    val limitPrice: Double? = null
-)
-
 data class ExecuteMarketOrderRequest(
     val ticker: String,
     val side: String, // "BUY" or "SELL"
@@ -76,7 +68,11 @@ data class CancelOrderResponse(
 data class HoldingItemResponse(
     val ticker: String,
     val quantity: Double,
-    val averageCost: Double
+    val averageCost: Double,
+    val price: Double? = null,
+    val value: Double? = null,
+    val profitLoss: Double? = null,
+    val returnPercent: Double? = null,
 )
 
 data class TradeHistoryItemResponse(
@@ -95,8 +91,14 @@ data class PortfolioSummaryResponse(
     val holdings: List<HoldingItemResponse>,
     val recentTrades: List<TradeHistoryItemResponse>,
     val pendingOrders: List<PendingOrderItem>,
-    val reservedCash: Double = 0.0
+    val reservedCash: Double = 0.0,
+    val totalValue: Double? = null,
+    val profitLoss: Double? = null,
+    val returnPercent: Double? = null,
+    val allocation: List<PortfolioAllocation> = emptyList(),
 )
+
+data class PortfolioAllocation(val label: String, val percent: Double, val value: Double? = null)
 
 // User Profile Models
 data class UserProfile(
@@ -144,9 +146,6 @@ interface ApiService {
 
     @GET("/api/trades/position/{ticker}")
     suspend fun getPosition(@Path("ticker") ticker: String): Response<UserPositionResponse>
-
-    @POST("/api/trades/execute")
-    suspend fun executeTrade(@Body request: ExecuteOrderRequest): Response<ExecuteOrderResponse>
 
     @POST("/api/trades/execute/market")
     suspend fun executeMarketOrder(@Body request: ExecuteMarketOrderRequest): Response<ExecuteOrderResponse>

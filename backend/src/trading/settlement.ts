@@ -1,7 +1,7 @@
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
 import { hasErrorCode } from "../util/dbErrors";
-import { marketService } from "./service";
+import { marketService } from "../market/service";
 
 export type Tx = Prisma.TransactionClient;
 type Order = Prisma.OrderGetPayload<Record<string, never>>;

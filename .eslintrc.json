@@ -366,9 +366,9 @@
 		"detect-eval-with-expr": "off",
 		"detect-html-injection": "off",
 		"detect-insecure-randomness": "off",
-		"detect-non-literal-require-calls": "error",
+		"detect-non-literal-require-calls": "error",	
 		"detect-nosql-injection": "error",
-		"detect-option-multiplestatements-in-mysql": "error",
+		"detect-option-multiplestatements-in-mysql": "error", 
 		"detect-option-rejectunauthorized-in-nodejs-httpsrequest": "error",
 		"detect-option-unsafe-in-serialize-javascript-npm-package": "error",
 		"detect-possible-timing-attacks": "off",
@@ -377,8 +377,8 @@
 		"detect-sql-injection": "off",
 		"disable-ssl-across-node-server": "off",
 		"detect-improper-exception-handling": "error",
-		"detect-unhandled-async-errors": "error",
-		"detect-unhandled-event-errors": "error",
+		"detect-unhandled-async-errors": "error", 
+		"detect-unhandled-event-errors": "error", 
 
 		// eslint-plugin
 		"eslint-plugin/fixer-return": "error",

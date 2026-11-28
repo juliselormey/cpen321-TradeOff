@@ -19,7 +19,7 @@ const setPrice = (p: number) => { mockMarket.price = p; mockMarket.fail = false;
 
 beforeAll(() => {
   jest.useFakeTimers(FAKE_DATE);
-  const l = loadApp('market/limitWorker');
+  const l = loadApp('trading/limitWorker');
   app = l.app;
   worker = l.mods[0] as LimitOrderWorker;
 });

@@ -25,55 +25,26 @@ object ApiClient {
                 } else {
                     original
                 }
-                chain.proceed(request)
+                val response = chain.proceed(request)
+                if (response.code == 401) {
+                    request.header("Authorization")?.removePrefix("Bearer ")?.let { SessionManager.invalidate(context, it) }
+                }
+                response
             }
             .build()
     }
 
-    fun create(context: Context): ApiService {
-        val rawUrl = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91" }
-        val baseUrl = rawUrl.trimEnd('/') + "/"
+    private fun <T> service(context: Context, url: String, type: Class<T>): T = Retrofit.Builder()
+        .baseUrl(url).client(getOkHttpClient(context))
+        .addConverterFactory(GsonConverterFactory.create()).build().create(type)
 
-        val retrofit = Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(getOkHttpClient(context))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-        return retrofit.create(ApiService::class.java)
-    }
-
-    fun friendEventsUrl(): String {
-        val base = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91" }.trimEnd('/')
-        return base.replaceFirst("https://", "wss://").replaceFirst("http://", "ws://") + "/api/friends/events"
-    }
-
-    fun createFriendEventsClient(context: Context): OkHttpClient {
-        return getOkHttpClient(context).newBuilder()
-            .callTimeout(0, TimeUnit.MILLISECONDS)
-            .pingInterval(20, TimeUnit.SECONDS)
-            .build()
-    }
-    fun createFriends(context: Context): FriendsApi {
-        val rawUrl = BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91" }
-        val baseUrl = rawUrl.trimEnd('/') + "/"
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(getOkHttpClient(context))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(FriendsApi::class.java)
-    }
-
-    fun createMarket(context: Context): MarketApiService {
-        val rawUrl = BuildConfig.MARKET_API_BASE_URL.ifBlank {
-            BuildConfig.API_BASE_URL.ifBlank { "https://34.105.116.91" }
-        }
-        val baseUrl = rawUrl.trimEnd('/') + "/"
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(getOkHttpClient(context))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(MarketApiService::class.java)
-    }
+    fun create(context: Context): ApiService = service(context, ApiConfiguration.apiBaseUrl, ApiService::class.java)
+    fun createFriends(context: Context): FriendsApi = service(context, ApiConfiguration.apiBaseUrl, FriendsApi::class.java)
+    fun createMarket(context: Context): MarketApiService = service(context, ApiConfiguration.marketBaseUrl, MarketApiService::class.java)
+    fun friendEventsUrl(): String = ApiConfiguration.eventsUrl(ApiConfiguration.apiBaseUrl, "/api/friends/events")
+    fun marketEventsUrl(): String = ApiConfiguration.eventsUrl(ApiConfiguration.marketBaseUrl, "/api/market/events")
+    private fun eventsClient(context: Context): OkHttpClient = getOkHttpClient(context).newBuilder()
+        .callTimeout(0, TimeUnit.MILLISECONDS).pingInterval(20, TimeUnit.SECONDS).build()
+    fun createFriendEventsClient(context: Context): OkHttpClient = eventsClient(context)
+    fun createMarketEventsClient(context: Context): OkHttpClient = eventsClient(context)
 }

@@ -20,9 +20,7 @@ data class GoogleSignInResult(val idToken: String, val displayName: String)
 
 suspend fun googleSignIn(context: Context): GoogleSignInResult {
     val credentialManager = CredentialManager.create(context)
-    val serverClientId = BuildConfig.GOOGLE_CLIENT_ID.ifEmpty {
-        "417938142085-ngdhrek8t9vggugpbcadcjbcrn7vb5r3.apps.googleusercontent.com"
-    }
+    val serverClientId = ApiConfiguration.googleClientId
 
     val googleIdOption = GetSignInWithGoogleOption.Builder(
         serverClientId = serverClientId
@@ -99,8 +97,11 @@ internal suspend fun attemptLogin(
         LoginOutcome.Failure("Could not read the Google credential. Please try signing in again.")
     } catch (e: GetCredentialException) {
         LoginOutcome.Failure(e.message ?: "Sign-in cancelled or failed")
-    } catch (_: java.io.IOException) {
-        LoginOutcome.Failure("Could not connect. Please try again.")
+    } catch (error: java.io.IOException) {
+        Log.e("AUTH_ERROR", "Sign-in connection failed (${error.javaClass.simpleName})", error)
+        LoginOutcome.Failure(if (error is javax.net.ssl.SSLException)
+            "Could not verify the server's HTTPS certificate. Please contact the team."
+            else "Could not reach the sign-in server. Check your connection and try again.")
     } catch (_: com.google.gson.JsonParseException) {
         LoginOutcome.Failure("Could not read the sign-in response.")
     } catch (e: IllegalStateException) {

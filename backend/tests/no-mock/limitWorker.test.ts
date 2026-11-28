@@ -38,7 +38,7 @@ const until = async (check: () => Promise<boolean>, timeoutMs = 10_000) => {
 
 beforeAll(() => {
   jest.useFakeTimers(FAKE_DATE);
-  const l = loadApp('market/limitWorker');
+  const l = loadApp('trading/limitWorker');
   app = l.app;
   worker = l.mods[0] as Worker;
 });

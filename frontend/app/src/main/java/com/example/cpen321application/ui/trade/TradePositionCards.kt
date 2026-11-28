@@ -51,14 +51,14 @@ internal fun StockHeaderCard(ticker: String, price: Double?, change: Double?, qu
                     }
                 )
             }
-            if (price == null) {
+            if (price == null || quoteFailed) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (!quoteFailed) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
                     Text(
-                        text = if (quoteFailed) "Couldn't load price. Retrying…" else "Fetching live price…",
+                        text = if (quoteFailed) "Live price unavailable. Trading paused until it recovers." else "Fetching live price…",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )

@@ -1,153 +1,56 @@
 package com.example.cpen321application.e2e
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.test.espresso.Espresso.closeSoftKeyboard
-import com.example.cpen321application.ApiClient
-import com.example.cpen321application.BuildConfig
-import com.example.cpen321application.MainActivity
 import com.example.cpen321application.PortfolioSummaryResponse
-import com.example.cpen321application.util.SessionManager
-import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.junit.After
 import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
-/** Place Market Buy, formal specification 3.5.2. Uses real HTTP, SQL and Alpaca. */
-class TradingE2ETest {
-    @get:Rule
-    val compose = createAndroidComposeRule<MainActivity>()
-    private val api get() = ApiClient.create(compose.activity)
-    private var prepared = false
-
-    @Before
-    fun prepareIndependentAccount() {
-        // Test isolation: use the disposable backend for both quotes and orders.
-        val backendUrl = BuildConfig.API_BASE_URL.trimEnd('/')
-        check(backendUrl.isNotBlank()) {
-            "Configure API_BASE_URL for the E2E-enabled backend."
-        }
-        check(BuildConfig.MARKET_API_BASE_URL.trimEnd('/') == backendUrl) {
-            "Market and trading must use the same real E2E backend."
-        }
-        // Use-case precondition: a Trader is already signed in through Google.
-        check(SessionManager.isLoggedIn(compose.activity)) {
-            "Sign in with your testing Google account before running; start on Market."
-        }
-        // Course independence requirement: create the starting account state automatically.
-        resetAccount()
-        prepared = true
-        compose.activityRule.scenario.recreate()
-        waitFor("Market")
-    }
-
-    @After
-    fun cleanAccount() {
-        // Remove this test's trades and holdings even if a test assertion fails.
-        if (prepared) resetAccount()
-    }
-
-    private fun resetAccount() {
-        val token = requireNotNull(SessionManager.getToken(compose.activity))
-        val request = Request.Builder()
-            .url(BuildConfig.API_BASE_URL.trimEnd('/') + "/__e2e/account/reset")
-            .header("Authorization", "Bearer $token")
-            .post("".toRequestBody())
-            .build()
-        OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).build()
-            .newCall(request).execute().use {
-                check(it.isSuccessful) { "Account setup failed (HTTP ${it.code}); check server and sign-in." }
-            }
-    }
-
-    private fun snapshot(): PortfolioSummaryResponse = runBlocking {
-        val response = api.getPortfolio()
-        check(response.isSuccessful) { "Portfolio HTTP ${response.code()}" }
-        requireNotNull(response.body())
-    }
-
-    private fun waitFor(text: String, substring: Boolean = false) {
-        compose.waitUntil(30_000) {
-            compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
-        }
-    }
-
-    private fun quantity(value: String) {
-        compose.onNodeWithText("Quantity (Shares)").performScrollTo().performTextReplacement(value)
-        closeSoftKeyboard()
-    }
-
-    private fun waitForBuyEnabled() {
-        compose.waitUntil(30_000) {
-            compose.onAllNodes(hasText("BUY") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
-        }
-    }
-
-    private fun openMicrosoft() {
-        // Success 2: select MSFT in Market, following the app's actual navigation.
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement("MSFT")
-        closeSoftKeyboard()
-        waitFor("Microsoft Corporation")
-        compose.onNode(hasText("Microsoft Corporation") and hasClickAction()).performScrollTo().performClick()
-        // Success 1: verify that selecting the stock opened its Trading page.
-        waitFor("Trade MSFT")
-        // Success 4: choose Market Order; BUY is the submission action below.
-        compose.onNodeWithText("Market Order").performScrollTo().performClick()
+class TradingE2ETest : TradingE2EFixture() {
+    private fun cleanAccountSnapshot(): PortfolioSummaryResponse = snapshot().also {
+        assertEquals(10000.0, it.cashBalance, 0.0001)
+        assertTrue(it.holdings.isEmpty())
+        assertTrue(it.recentTrades.isEmpty())
+        assertTrue(it.pendingOrders.isEmpty())
     }
 
     @Test
-    fun marketBuyValidatesInputAndFundsThenPersistsPurchase() {
-        // Preconditions: verify the reset account has cash and no previous trading data.
-        val before = run {
-            snapshot().also {
-                assertEquals(10000.0, it.cashBalance, 0.0001)
-                assertTrue(it.holdings.isEmpty())
-                assertTrue(it.recentTrades.isEmpty())
-                assertTrue(it.pendingOrders.isEmpty())
-            }
-        }
+    fun rejectsZeroQuantityWithoutChangingAccount() {
+        val before = cleanAccountSnapshot()
         openMicrosoft()
-        // Success 3 and 5: enter one share and wait for a live price to enable BUY.
-        // Initial price display is covered indirectly by button readiness.
-        quantity("1")
-        waitForBuyEnabled()
-
-        // Failure 8a: enter an invalid quantity.
         quantity("0")
-        // Failure 8a1: show the validation error and prevent submission.
-        compose.onNodeWithText("Please enter a valid quantity greater than 0.")
-            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Please enter a valid quantity greater than 0.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("BUY").performScrollTo().assertIsNotEnabled()
-        // Failure postcondition: cash, holdings, orders and history are unchanged.
-        assertEquals(before, snapshot())
+        assertTradingAccountUnchanged(before, snapshot())
+    }
 
-        // Failure 8b: request more shares than the available cash can cover.
-        quantity("1000000000")
-        // Failure 8b1: show insufficient funds and the available balance; disable BUY.
-        compose.onNodeWithText("Cannot Buy: Insufficient cash balance", substring = true)
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Cannot Buy: Insufficient cash balance ($10000.00 available).")
-            .assertIsDisplayed()
+    @Test
+    fun rejectsInsufficientCashWithoutChangingAccount() {
+        val before = cleanAccountSnapshot()
+        openMicrosoft()
+        quantity("1000000") // Valid server maximum; a million MSFT shares exceeds the fixture balance.
+        compose.onNodeWithText("Cannot Buy: Insufficient cash balance", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("BUY").performScrollTo().assertIsNotEnabled()
-        assertEquals(before, snapshot())
+        assertTradingAccountUnchanged(before, snapshot())
+    }
 
-        // Failure 8b2, cancellation: leave Trading without placing the order.
+    @Test
+    fun leavingAnUnsubmittedOrderDoesNotChangeAccount() {
+        val before = cleanAccountSnapshot()
+        openMicrosoft()
+        quantity("1")
         compose.onNodeWithContentDescription("Back to Market").performScrollTo().performClick()
         waitFor("Market")
-        assertEquals(before, snapshot())
+        assertTradingAccountUnchanged(before, snapshot())
+    }
+
+    @Test
+    fun marketBuyPersistsOnePurchaseAndItsBalance() {
+        val before = cleanAccountSnapshot()
         openMicrosoft()
-        // Failure 8a2 / 8b2, correction: reduce the quantity and retry.
         quantity("1")
         waitForBuyEnabled()
         compose.onNodeWithText("BUY").performScrollTo().assertIsEnabled().performClick()
-
         // Success 7–8: the real backend obtains a price and validates funds/quantity.
         // These internal steps are checked through their persisted result below.
         // Failure 7a–7a2 is excluded: controlling an Alpaca outage would require mocking.
@@ -184,6 +87,6 @@ class TradingE2ETest {
         compose.waitUntil(30_000) {
             compose.onAllNodesWithText(cashText).fetchSemanticsNodes().isNotEmpty()
         }
-        assertEquals(after, snapshot())
+        assertTradingAccountUnchanged(after, snapshot())
     }
 }

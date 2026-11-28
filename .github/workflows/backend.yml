@@ -55,11 +55,13 @@ jobs:
         working-directory: ./backend
         run: npm run typecheck
 
-      - name: Prepare Database and Run Combined Coverage
+      - name: Prepare Test Database
         working-directory: ./backend
-        run: |
-          npx prisma db push --accept-data-loss
-          npm run test:api:combined
+        run: npx prisma db push --accept-data-loss
+
+      - name: Run Combined Backend Tests
+        working-directory: ./backend
+        run: npm run test:api:combined
 
       - name: Run Backend NFR Tests
         working-directory: ./backend

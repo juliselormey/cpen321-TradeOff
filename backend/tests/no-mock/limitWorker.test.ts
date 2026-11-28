@@ -7,6 +7,8 @@ import { countTrades, createUser, db, getCash, getOrder, getQty, giveShares, res
 import { notifyUser } from '../../src/firebase/notifier';
 
 const mockMarket = { price: 100, fail: false };
+const realSetTimeout = setTimeout;
+const realSleep = (ms: number) => new Promise<void>((resolve) => realSetTimeout(resolve, ms));
 jest.mock('../../src/market/alpaca', () =>
   ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 jest.mock('../../src/firebase/notifier', () => ({ notifyUser: jest.fn() })); // Firebase is external
@@ -23,13 +25,15 @@ const setPrice = (p: number) => { mockMarket.price = p; mockMarket.fail = false;
 const limit = (uid: string, o: object = {}) =>
   request(app).post('/api/trades/execute/limit').set(bearer(uid)).send({ ticker: T, side: 'buy', quantity: 1, limitPrice: 100, ...o });
 const idOf = (res: { body: unknown }) => (res.body as { orderId: string }).orderId;
-// Each check hits the real database, so real time passes without needing real timers.
-const until = async (check: () => Promise<boolean>, tries = 300) => {
-  for (let i = 0; i < tries; i++) {
+// Poll at a real interval so a busy CI database gets time to finish the worker's
+// asynchronous transaction even though this suite otherwise uses fake timers.
+const until = async (check: () => Promise<boolean>, timeoutMs = 10_000) => {
+  const deadline = process.hrtime.bigint() + BigInt(timeoutMs) * 1_000_000n;
+  while (process.hrtime.bigint() < deadline) {
     if (await check()) return true;
-    await db.order.count();
+    await realSleep(10);
   }
-  return false;
+  return check();
 };
 
 beforeAll(() => {
@@ -111,7 +115,7 @@ describe('Unmocked: limit order worker lifecycle', () => {
     setPrice(85);
     worker.startLimitOrderWorker(1000);
     worker.startLimitOrderWorker(1000); // a second start does not add a second timer
-    jest.advanceTimersByTime(1000);
+    await jest.advanceTimersByTimeAsync(1000);
     expect(await until(async () => (await getOrder(first))?.status === 'FILLED')).toBe(true);
     expect(await countTrades(A)).toBe(1);
 

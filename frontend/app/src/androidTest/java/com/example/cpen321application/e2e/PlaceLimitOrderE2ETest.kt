@@ -45,7 +45,8 @@ class PlaceLimitOrderE2ETest : TradingE2ESupport() {
 
         // Persistence and portfolio: cash + reserve remains the original cash-only total.
         showPortfolio()
-        portfolioNode(hasTestTag("portfolio-total"))
+        // The refactored screen has no demo balance: wait for the real valuation response.
+        portfolioNode(hasTestTag("portfolio-total") and hasText("$10,000.00"))
         compose.onNodeWithTag("portfolio-total").assertTextEquals("$10,000.00")
         portfolioNode(hasText("BUY 2 MSFT"))
         compose.onNodeWithText("Limit @ $1.00 • PENDING").assertExists()

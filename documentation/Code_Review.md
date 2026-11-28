@@ -32,25 +32,25 @@
 
 - **Code Pattern: Unsafe argument of type `any` assigned to a parameter of type `string`.**
     1. **Issue**
-        - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L14)
+        - **Location in Git:** [`../backend/src/trading/limitWorker.ts`](../backend/src/trading/limitWorker.ts#L14)
         - **Justification:** issue regarding line of code that was already fixed
     2. **Issue**
         - **Location in Git:** [`../backend/src/routes/friends.ts`](../backend/src/routes/friends.ts#L62)
         - **Justification:** issue regarding line of code that was already fixed
 - **Code Pattern: Unsafe return of an error typed value.**
     1. **Issue**
-        - **Location in Git:** [`../backend/src/market/settlement.ts`](../backend/src/market/settlement.ts#L21)
+        - **Location in Git:** [`../backend/src/trading/settlement.ts`](../backend/src/trading/settlement.ts#L21)
         - **Justification:** issue regarding line of code that was already fixed
     2. **Issue**
-        - **Location in Git:** [`../backend/src/market/settlement.ts`](../backend/src/market/settlement.ts#L38)
+        - **Location in Git:** [`../backend/src/trading/settlement.ts`](../backend/src/trading/settlement.ts#L38)
         - **Justification:** issue regarding line of code that was already fixed
 - **Code Pattern: 'NodeJS' is not defined.**
     1. **Issue**
-        - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L14)
+        - **Location in Git:** [`../backend/src/trading/limitWorker.ts`](../backend/src/trading/limitWorker.ts#L14)
         - **Justification:** issue regarding line of code that was already fixed
 - **Code Pattern: Unexpected empty arrow function.**
     1. **Issue**
-        - **Location in Git:** [`../backend/src/market/limitWorker.ts`](../backend/src/market/limitWorker.ts#L54)
+        - **Location in Git:** [`../backend/src/trading/limitWorker.ts`](../backend/src/trading/limitWorker.ts#L54)
         - **Justification:** issue regarding line of code that was already fixed
 
 The additional entries below document the supplied TypeScript warning report.

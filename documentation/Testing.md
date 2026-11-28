@@ -67,6 +67,10 @@ test classes. Feature/all runners explicitly execute their listed classes one
 at a time, continue after a failed class, and return failure if any class failed.
 No runner starts the backend/database or performs Google sign-in.
 
+There are twelve use-case classes, not twelve JUnit methods: the refactored
+Market Buy and View Portfolio classes each contain five independent tests,
+with fixture preparation/cleanup before and after each method.
+
 The all-tests order is Search → Details → Favorites → Market Buy → Limit Order →
 Cancel Pending → Sell Shares → View Portfolio → Transaction History → Leaderboard →
 Send Friend Request → **Browse Stocks last**. Ordering does not supply data to
@@ -411,30 +415,18 @@ in an isolated scratch database; only the additive notification-device migration
 was then applied to the existing local test database. The duplicate trading-table
 migration was excluded; see Local E2E Setup before deploying to another database.
 
-Historical merge-check limitations: the mocked backend run reported **280 passed,
-11 failed, 1 TODO**, with all failures in the legacy `tests/mock/market.test.ts`.
-A comparison using the pre-merge Alpaca adapter also failed (13 cases), so this
-merge initially did not have a clean legacy Market suite. The Market failures
-have since been resolved as recorded below. The old Android `TradeStateTest`
-still references removed APIs and prevents compiling the full unit-test suite.
-The Settings instrumentation fake now includes the new notification API methods.
-Android application/instrumentation compilation and installation passed. The
-first merged friend-request E2E attempt stopped in setup with HTTP 401 (expired
-login), before any scenario action. After the tester signed in again, the combined
-runner completed **all five E2E tests successfully**, in order: Browse Stocks,
-Market Buy, View Portfolio, View Leaderboard, Send Friend Request (usernames).
-The corresponding Gradle invocations reported success in 3m 4s, 32s, 34s, 27s
-and 36s. Saved HTML reports are under
-`frontend/app/build/reports/e2e-all/20261118-215113-763/<test-class>/index.html`.
-This is local Pixel 9 API 36 verification using the normal merged backend.
-Real Firebase push delivery is not verified by these E2E/fixture checks.
+Historical merge-check limitations are superseded by the latest backend
+verification in Section 2.5. The old Android `TradeStateTest` still references
+removed APIs and prevents compiling the full unit-test suite. Android
+application/instrumentation compilation and installation passed. The combined
+runner previously completed all five E2E tests on Pixel 9 API 36; those checks
+do not verify real Firebase push delivery.
 
 ### Market backend regression fixes
 
-After fixing the 11 Market failures, the complete mocked backend run reported
-**16 suites passed, 292 tests passed, 0 failed, 1 TODO**. The NFR suite also passed
-all **8 tests**; TypeScript checking and the production build passed.
-The no-mock backend suite was not rerun as part of this fix.
+At the time, the complete mocked backend run reported **16 suites passed,
+292 tests passed, 0 failed, 1 TODO**. See Section 2.5 for the latest run after
+the no-mock and coverage fixes.
 
 - The single-symbol history fallback now uses the shared cache/refresh helper:
   TTLs, in-flight deduplication and provider-wide cooldown are respected.
@@ -683,6 +675,7 @@ No cloud or physical-device execution is claimed.
 | 2026-11-04 | Section 2.1: Renumbered Use Cases | Renumber use cases following the removal of delete account (UC-05 to UC-19). |
 | 2026-11-25 | E2E command guide, feature grouping and test specifications | Group ten cases under Market/Trading/Portfolio, retain two extra formal Social cases, document per-case/feature/all commands, cleanup and verified coverage limits. |
 | 2026-11-18 | Section 3: Non-functional testing | Replace template placeholders with NFR-1/2/3 tests, run instructions, measured results, evidence locations, and the stale-price production fix. |
+| 2026-11-27 | Section 2: Backend tests | Expand endpoint traceability, fix integration and failure tests, record coverage, and run all backend suites in CI. |
 
 ---
 
@@ -692,15 +685,40 @@ No cloud or physical-device execution is claimed.
 
 #### 2.1.1. Tests
 
-| **Interface** | **Describe Group Location, No Mocks** | **Describe Group Location, With Mocks** | **Mocked Component** |
-|---|---|---|---|
-| `GET /api/market/stocks` (UC-05) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol` (UC-07) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol` | Alpaca quote and history provider |
-| `GET /api/market/stocks/:symbol/history` (UC-07) | `backend/tests/no-mock/market.test.ts`: `Unmocked API: GET /api/market/stocks/:symbol/history` | `backend/tests/mock/marketApi.test.ts`: `Mocked API: GET /api/market/stocks/:symbol/history` | Alpaca history provider |
-| `POST /api/trades/execute/market` (UC-08, UC-10) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/market` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/market` | Prisma client, market data lookup |
-| `POST /api/trades/execute/limit` (UC-09, UC-10) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/execute/limit` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/execute/limit` | Prisma client, market data lookup |
-| `POST /api/trades/orders/:id/cancel` (UC-11) | `backend/tests/no-mock/trades.test.ts`: `Unmocked API: POST /api/trades/orders/:id/cancel` | `backend/tests/mock/tradesApi.test.ts`: `Mocked API: POST /api/trades/orders/:id/cancel` | Prisma client |
-| `GET /api/portfolio` (UC-12) | `backend/tests/no-mock/portfolio.test.ts`: `Unmocked API: GET /api/portfolio` | `backend/tests/mock/portfolioApi.test.ts`: `Mocked API: GET /api/portfolio` | Prisma client, market data lookup |
+| **Interface** | **No-mock test file** | **Mock/failure test file** |
+|---|---|---|
+| `GET /health` | `no-mock/health.test.ts` | — |
+| `POST /api/auth/google` | `no-mock/authGoogle.test.ts`, `no-mock/auth.test.ts` | `mock/authApi.test.ts`, `mock/googleVerify.test.ts` |
+| `GET /api/auth/me` | `no-mock/auth.test.ts` | `mock/dbFailures.test.ts` |
+| `POST /api/auth/me` (legacy profile read) | `no-mock/auth.test.ts` | `mock/dbFailures.test.ts` |
+| `PATCH /api/auth/me` | `no-mock/auth.test.ts` | `mock/dbFailures.test.ts` |
+| `DELETE /api/auth/me` | `no-mock/auth.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/auth/me/favorites` | `no-mock/favorites.test.ts` | `mock/dbFailures.test.ts`, `mock/appErrors.test.ts` |
+| `PUT /api/auth/me/favorites/:ticker` | `no-mock/favorites.test.ts` | `mock/dbFailures.test.ts` |
+| `DELETE /api/auth/me/favorites/:ticker` | `no-mock/favorites.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/market/stocks` | `no-mock/market.test.ts` | `mock/marketApi.test.ts`, `mock/marketBatch.test.ts` |
+| `GET /api/market/stocks/:symbol` | `no-mock/market.test.ts` | `mock/marketApi.test.ts`, `mock/marketBatch.test.ts` |
+| `GET /api/market/stocks/:symbol/history` | `no-mock/market.test.ts` | `mock/marketApi.test.ts`, `mock/marketBatch.test.ts` |
+| `GET /api/friends` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/friends/requests` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/friends/leaderboard` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts`, `mock/priceFailures.test.ts` |
+| `POST /api/friends/requests` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `POST /api/friends/requests/:id/accept` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `DELETE /api/friends/requests/:id` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `DELETE /api/friends/:id` | `no-mock/friends.test.ts` | `mock/dbFailures.test.ts` |
+| `PUT /api/notif/device` | `no-mock/notif.test.ts` | `mock/dbFailures.test.ts`, `mock/notifDelivery.test.ts` |
+| `DELETE /api/notif/device` | `no-mock/notif.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/trades/position/:ticker` | `no-mock/trades.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/trades/orders/pending` | `no-mock/trades.test.ts` | `mock/dbFailures.test.ts` |
+| `POST /api/trades/execute/market` | `no-mock/trades.test.ts`, `no-mock/orders.test.ts` | `mock/settlementFailures.test.ts`, `mock/dbFailures.test.ts` |
+| `POST /api/trades/execute/limit` | `no-mock/trades.test.ts`, `no-mock/orders.test.ts` | `mock/settlementFailures.test.ts`, `mock/dbFailures.test.ts` |
+| `POST /api/trades/orders/:id/cancel` | `no-mock/trades.test.ts` | `mock/dbFailures.test.ts` |
+| `GET /api/portfolio` | `no-mock/portfolio.test.ts` | `mock/priceFailures.test.ts`, `mock/dbFailures.test.ts` |
+
+The authenticated friend-events WebSocket is tested in `no-mock/friendEvents.test.ts`
+and `mock/friendEventsFailure.test.ts`. Opt-in `/__e2e/*` fixture endpoints are
+tested in `no-mock/e2e.test.ts`. Market and trade route suites use a controlled
+provider when testing database behavior; only `no-mock/market.test.ts` calls live Alpaca.
 
 **What the suites verify.** Test names follow the use case scenarios (e.g. `UC-08 8b: insufficient cash is rejected`).
 
@@ -724,9 +742,26 @@ Authenticated routes are called with a JWT signed with the backend's real secret
 
 #### 2.1.2. Commit Hash Where Tests Run
 
-Not recorded yet. Run the Market API test suites and record the tested commit here before submission.
+The current verification runs used a modified working tree, so the checked-out
+commit alone does not identify the tested sources. Record the final submitted
+commit after committing these changes and rerunning the suites.
 
-#### 2.1.3. How to Run Market API Tests
+#### 2.1.3. How to Run Backend Tests
+
+From `backend/`, run the complete mocked suite, the MySQL-backed no-mock suite,
+and NFR suite with:
+
+```powershell
+npm.cmd run test:api:mock -- --runInBand
+npm.cmd run test:api:nomock
+npm.cmd run test:nfr
+```
+
+The no-mock suite needs a migrated test database. Its live Market tests call
+Alpaca when credentials are available and show as skipped otherwise. Check the
+Jest summary for skipped tests before recording coverage.
+
+For individual Market API runs, use the following commands.
 
 Run mocked tests from the `backend` directory. They use deterministic provider responses and need no credentials, database, or internet:
 
@@ -734,27 +769,92 @@ Run mocked tests from the `backend` directory. They use deterministic provider r
 npm.cmd run test:market:api:mock
 ```
 
-Run no-mock integration tests from the `backend` directory. Put `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `backend/.env`; they contact Alpaca IEX and need internet access. They do not use MySQL. These tests consume live provider quota, so run them sparingly:
+Run database-backed no-mock integration tests from the `backend` directory after
+starting the test MySQL database and applying the Prisma schema. They use the
+real database and application services; tests that need deterministic prices
+stub only the external Alpaca boundary. The separate live Market suite requires
+working `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `backend/.env`, calls
+Alpaca IEX, and consumes provider quota:
 
 ```powershell
 npm.cmd run test:market:api:live
 ```
 
-The tests cover successful responses and unsupported symbols. The no-mock suite expects Alpaca to return usable data; authentication, network, or provider failures should make it fail rather than silently pass.
+When Alpaca credentials are absent, the live Market tests are explicitly
+reported as skipped. CI runs the live suite only when the repository secrets
+`ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` are configured.
 
 **Contract note:** Per NFR-3 and UC-05, `GET /api/market/stocks` returns `200` when provider refresh fails, returning each stock with its own `status` (`'ok'`, `'stale'`, or `'unavailable'`). Operations requiring fresh prices (trade execution and portfolio valuation) return `503` when prices cannot be retrieved.
 
 ### 2.2. GitHub Actions Configuration Location
 
-`~/.github/workflows/backend-tests.yml`
+`.github/workflows/backend.yml` (mocked tests, MySQL-backed no-mock tests, and NFR suite).
 
 ### 2.3. Jest Coverage Report Screenshots With Mocks
 
-_(Placeholder for Jest coverage screenshot with mocks enabled)_
+Mocked coverage is generated at `backend/coverage/mock/` by
+`npm.cmd run test:api:mock -- --runInBand`.
 
 ### 2.4. Jest Coverage Report Screenshots Without Mocks
 
-_(Placeholder for Jest coverage screenshot without mocks)_
+No-mock coverage is generated at `backend/coverage/no-mock/` by
+`npm.cmd run test:api:nomock`. The live Market suite requires working Alpaca
+credentials; the report records it as skipped when credentials are absent locally.
+
+### 2.5. Latest Backend Verification
+
+**Main/devmerge integration (2026-11-27):** on
+`integration/devmerge-main`, all **38 combined API suites passed: 646 tests,
+one TODO**, including the live Alpaca file. The run used the separate local
+`tradeoff_merge_validation` database; all seven existing migrations applied
+successfully, without changing the running Android E2E database. Combined
+coverage was **96% statements, 92.46% branches, 95.9% functions, 96.75% lines**.
+The separate mocked run passed **350 tests**, and NFR passed **8 tests**.
+
+Integration retains the background quote/history refresh (4 seconds / 60
+seconds), cache-driven WebSocket broadcasts, interactive trading chart and
+balance-state fix from main. It also retains refactored components, transaction
+snapshots, submission locking, session expiry handling and standard Android TLS
+trust from devmerge. Both UI screens share `MarketStream`; no second market
+polling/socket implementation is active. New failure mocks execute the refactored
+transaction callbacks; test setup does not inherit the developer's E2E mode.
+
+Android verification: **43 unit tests passed**, application and instrumentation
+APKs compiled, and the on-device TradeState recomposition regression passed.
+After configuring the ignored local OAuth client ID and signing in through Google,
+the first full run passed nine use-case classes (17 JUnit methods). Limit Order
+and Cancel Pending Order reached Portfolio before its real balance loaded; their
+shared navigation helper now waits for loaded cash, retaining the exact balance
+assertions. Browse visited all 100 cards, but its final account-evidence check
+stopped after the Google session expired. After a fresh real Google sign-in,
+all three reruns passed: Limit Order (1m 8s), Cancel Pending Order (1m 9s),
+and Browse Stocks (3m 19s), including its final read-only evidence checks.
+Every one of the **12 use-case classes / 20 JUnit methods** therefore has a
+passing local run. This evidence combines the first run and three corrected
+reruns; it is not a claim that the original full invocation was green.
+Initial per-class reports are saved under
+`frontend/app/build/reports/e2e-all/20261127-194049-049/`; the three passing
+reruns are under
+`frontend/app/build/reports/e2e-merge-retry/20261127-200249-262/`.
+
+**Earlier devmerge verification:**
+
+On 2026-11-27, the combined mocked and MySQL-backed no-mock API run passed
+**34 suites and 621 tests**, with one TODO. With the live Alpaca test file
+excluded because local credentials did not return usable quotes, combined
+coverage was **99.81% statements, 97.78% branches, 100% functions, and 99.8%
+lines**. This is not yet 100% coverage: remaining misses include branch paths
+in import interop, market rate-limit handling, worker lifecycle logic, friend
+event handling, and response handling. The V8 coverage provider was also
+evaluated; it reported 99.9% statements, 98.49% branches, 100% functions, and
+99.9% lines, so the existing Istanbul provider remains in use. The notification
+database-error test intentionally exercises a logged error; it now captures the
+expected log so it does not obscure the Jest output.
+
+These results are from the current modified working tree, not a committed SHA.
+CI now runs the mock and no-mock suites in a single coverage invocation after
+preparing MySQL, preventing the second Jest run from overwriting the first
+coverage report. The live Alpaca test remains dependent on valid credentials.
 
 ---
 

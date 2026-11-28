@@ -37,15 +37,8 @@ internal fun AppDestinations(
 
     val signOut: () -> Unit = {
         scope.launch {
-            if (NotificationRegistration.signOut(context)) {
-                navController.navigate(Routes.Settings)
-            } else {
-                android.widget.Toast.makeText(
-                    context,
-                    "Sign-out failed. Please try again.",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
-            }
+            NotificationRegistration.signOut(context)
+            navController.navigate(Routes.Settings)
         }
     }
 
@@ -116,14 +109,10 @@ internal fun AppDestinations(
             )
         }
 
-        composable(Routes.home) {
-            HomeScreen(navController)
-        }
     }
 }
 
 object Routes {
-    const val home = "home"
     const val Settings = "Settings"
     const val Login = "Login"
     const val Social = "Social"

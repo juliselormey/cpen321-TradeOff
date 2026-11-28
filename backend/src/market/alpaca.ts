@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { MarketProviderError, PricePoint, ProviderQuote, QuoteProvider } from './types';
 
+const BASE_URL = 'https://data.alpaca.markets/v2/stocks';
+const HISTORY_WINDOW_MS = 45 * 24 * 60 * 60 * 1000;
+
+const invalid = (message: string) => new MarketProviderError('PROVIDER_INVALID_DATA', message);
+const finiteOrZero = (n: number) => (Number.isFinite(n) ? n : 0);
+
 function object(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
@@ -12,8 +18,7 @@ function entries(value: unknown): Map<string, unknown> {
 }
 
 function timestamp(value: unknown): string | null {
-  const str = typeof value === 'string' ? value : '';
-  const ms = Date.parse(str);
+  const ms = Date.parse(typeof value === 'string' ? value : '');
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
@@ -28,38 +33,30 @@ export function parseAlpacaSnapshot(data: unknown): ProviderQuote {
   const bar = object(root.minuteBar ?? root.dailyBar);
   const price = positive(trade.p ?? bar.c);
   const time = timestamp(trade.t ?? bar.t);
-  if (!price || !time) {
-    throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an unsupported stock snapshot.');
-  }
+  if (!price || !time) throw invalid('Alpaca returned an unsupported stock snapshot.');
   const prevClose = positive(object(root.prevDailyBar).c);
-  const change = prevClose != null ? Number((price - prevClose).toFixed(4)) : null;
-  const percentageChange = prevClose != null ? Number(((price - prevClose) / prevClose * 100).toFixed(4)) : null;
-  return { price, change, percentageChange, quoteAsOf: time };
+  return {
+    price,
+    change: prevClose ? Number((price - prevClose).toFixed(4)) : null,
+    percentageChange: prevClose ? Number(((price - prevClose) / prevClose * 100).toFixed(4)) : null,
+    quoteAsOf: time,
+  };
 }
 
 export function parseAlpacaBars(data: unknown): PricePoint[] {
   const root = object(data);
-  if (!Object.hasOwn(root, 'bars')) {
-    throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an invalid historical response.');
-  }
-  if (root.bars === null || root.bars === undefined || (Array.isArray(root.bars) && root.bars.length === 0)) {
-    return [];
-  }
-  if (!Array.isArray(root.bars)) {
-    throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an invalid historical bar.');
-  }
+  if (!Object.hasOwn(root, 'bars')) throw invalid('Alpaca returned an invalid historical response.');
+  if (root.bars == null) return [];
+  if (!Array.isArray(root.bars)) throw invalid('Alpaca returned an invalid historical bar.');
   const points = new Map<string, PricePoint>();
   for (const item of root.bars) {
     const bar = object(item);
     const time = timestamp(bar.t);
-    const p = positive(bar.c);
-    if (!time || p == null) {
-      throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned an invalid historical bar.');
-    }
-    points.set(time, { timestamp: time, price: p });
+    const price = positive(bar.c);
+    if (!time || price == null) throw invalid('Alpaca returned an invalid historical bar.');
+    points.set(time, { timestamp: time, price });
   }
-  return [...points.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
-    .slice(-30);
+  return [...points.values()].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp)).slice(-30);
 }
 
 function failure(error: unknown): MarketProviderError {
@@ -70,17 +67,25 @@ function failure(error: unknown): MarketProviderError {
       return new MarketProviderError('PROVIDER_AUTH_ERROR', 'Alpaca rejected the credentials or IEX access.', 60_000);
     }
     if (status === 429) {
-      const headers = error.response?.headers;
-      const raw: unknown = headers?.['retry-after'];
-      const retry = typeof raw === 'string' ? raw : '';
-      const seconds = Number(retry);
-      const delay = retry && Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retry) - Date.now();
-      const reset = Number(headers?.['x-ratelimit-reset']) * 1_000 - Date.now();
-      const wait = Math.max(60_000, Number.isFinite(delay) ? delay : 0, Number.isFinite(reset) ? reset : 0);
+      const headers = (error.response?.headers ?? {}) as Record<string, unknown>;
+      const retryAfter = String(headers['retry-after'] ?? '');
+      const seconds = Number(retryAfter);
+      const delay = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - Date.now();
+      const reset = Number(headers['x-ratelimit-reset']) * 1_000 - Date.now();
+      const wait = Math.max(60_000, finiteOrZero(delay), finiteOrZero(reset));
       return new MarketProviderError('PROVIDER_RATE_LIMITED', 'Alpaca rate limit reached.', wait);
     }
   }
   return new MarketProviderError('PROVIDER_UNAVAILABLE', 'Alpaca market data is temporarily unavailable.', 8_000);
+}
+
+/** Per-ticker parse: any failure becomes that ticker's error instead of failing the batch. */
+function attempt<T>(parse: () => T): T | MarketProviderError {
+  try {
+    return parse();
+  } catch (error: unknown) {
+    return failure(error);
+  }
 }
 
 export class AlpacaProvider implements QuoteProvider {
@@ -92,156 +97,97 @@ export class AlpacaProvider implements QuoteProvider {
     private readonly now: () => number = Date.now,
   ) {}
 
-  async fetchQuote(symbol: string): Promise<ProviderQuote> {
+  /** The single place that talks to Alpaca: credentials, headers, timeout and error mapping. */
+  private async get(path: string, params: Record<string, unknown>): Promise<unknown> {
     const { key, secret } = this.credentials();
     if (!key || !secret) {
       throw new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
     }
     try {
       // eslint-disable-next-line security/detect-non-literal-uri
-      const res = await axios.get(`https://data.alpaca.markets/v2/stocks/${symbol}/snapshot`, {
-        params: { feed: 'iex' },
+      const res = await axios.get(`${BASE_URL}${path}`, {
+        params,
         headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
         timeout: 4_000,
         maxRedirects: 0,
       });
-      return parseAlpacaSnapshot(res.data);
+      return res.data;
     } catch (error: unknown) {
       throw failure(error);
     }
+  }
+
+  /** Empty input is a no-op; missing credentials become a per-ticker error; anything else propagates. */
+  private async batch<T>(
+    tickers: readonly string[],
+    load: () => Promise<Record<string, T | MarketProviderError>>,
+  ): Promise<Record<string, T | MarketProviderError>> {
+    if (tickers.length === 0) return {};
+    try {
+      return await load();
+    } catch (error: unknown) {
+      const err = failure(error);
+      if (err.code !== 'MARKET_NOT_CONFIGURED') throw err;
+      return Object.fromEntries(tickers.map(t => [t, err]));
+    }
+  }
+
+  private barParams(limit: number) {
+    const end = new Date(this.now());
+    end.setUTCHours(0, 0, 0, 0);
+    return {
+      timeframe: '1Day', feed: 'iex', limit, sort: 'desc', adjustment: 'raw',
+      start: new Date(end.getTime() - HISTORY_WINDOW_MS).toISOString(),
+      end: end.toISOString(),
+    };
+  }
+
+  async fetchQuote(symbol: string): Promise<ProviderQuote> {
+    return parseAlpacaSnapshot(await this.get(`/${symbol}/snapshot`, { feed: 'iex' }));
   }
 
   async fetchHistory(symbol: string): Promise<PricePoint[]> {
-    const { key, secret } = this.credentials();
-    if (!key || !secret) {
-      throw new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
-    }
-    const end = new Date(this.now());
-    end.setUTCHours(0, 0, 0, 0);
-    const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
-    try {
-      // eslint-disable-next-line security/detect-non-literal-uri
-      const res = await axios.get(`https://data.alpaca.markets/v2/stocks/${symbol}/bars`, {
-        params: {
-          timeframe: '1Day',
-          feed: 'iex',
-          start: start.toISOString(),
-          end: end.toISOString(),
-          limit: 30,
-          sort: 'desc',
-          adjustment: 'raw',
-        },
-        headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
-        timeout: 4_000,
-        maxRedirects: 0,
-      });
-      return parseAlpacaBars(res.data);
-    } catch (error: unknown) {
-      throw failure(error);
-    }
+    return parseAlpacaBars(await this.get(`/${symbol}/bars`, this.barParams(30)));
   }
 
-  async fetchQuotes(tickers: readonly string[]): Promise<Record<string, ProviderQuote | MarketProviderError>> {
-    const { key, secret } = this.credentials();
-    if (!key || !secret) {
-      const err = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
-      return Object.fromEntries(tickers.map(t => [t, err]));
-    }
-    if (tickers.length === 0) return {};
-    try {
-      const res = await axios.get('https://data.alpaca.markets/v2/stocks/snapshots', {
-        params: { symbols: tickers.join(','), feed: 'iex' },
-        headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
-        timeout: 4_000,
-        maxRedirects: 0,
-      });
-      const data = entries(res.data);
-      const result = new Map<string, ProviderQuote | MarketProviderError>();
-      for (const ticker of tickers) {
-        const item = data.get(ticker) ?? data.get(ticker.toUpperCase()) ?? data.get(ticker.toLowerCase());
-        if (!item) {
-          result.set(ticker, new MarketProviderError('PROVIDER_INVALID_DATA', `No snapshot returned for ${ticker}`));
-        } else {
-          try {
-            result.set(ticker, parseAlpacaSnapshot(item));
-          } catch (err: unknown) {
-            result.set(ticker, err instanceof MarketProviderError ? err : failure(err));
-          }
-        }
-      }
-      return Object.fromEntries(result);
-    } catch (error: unknown) {
-      throw failure(error);
-    }
+  fetchQuotes(tickers: readonly string[]) {
+    return this.batch<ProviderQuote>(tickers, async () => {
+      const data = entries(await this.get('/snapshots', { symbols: tickers.join(','), feed: 'iex' }));
+      return Object.fromEntries(tickers.map(ticker => [ticker, attempt(() => {
+        const item = data.get(ticker);
+        if (!item) throw invalid(`No snapshot returned for ${ticker}`);
+        return parseAlpacaSnapshot(item);
+      })]));
+    });
   }
 
-  async fetchHistories(tickers: readonly string[]): Promise<Record<string, PricePoint[] | MarketProviderError>> {
-    const { key, secret } = this.credentials();
-    if (!key || !secret) {
-      const err = new MarketProviderError('MARKET_NOT_CONFIGURED', 'Configure Alpaca credentials.', 60_000);
-      return Object.fromEntries(tickers.map(t => [t, err]));
-    }
-    if (tickers.length === 0) return {};
-    const end = new Date(this.now());
-    end.setUTCHours(0, 0, 0, 0);
-    const start = new Date(end.getTime() - 45 * 24 * 60 * 60 * 1000);
-    // A ticker with no entry here parses as "no bars" (empty history), same as before.
-    const barsBySymbol = new Map<string, unknown>();
-    let pageToken: string | null = null;
-    const seenTokens = new Set<string>();
-
-    try {
+  fetchHistories(tickers: readonly string[]) {
+    return this.batch<PricePoint[]>(tickers, async () => {
+      // A ticker with no entry parses as "no bars" (empty history).
+      const barsBySymbol = new Map<string, unknown>();
+      const seenTokens = new Set<string>();
+      let pageToken = '';
       do {
-        const params: Record<string, unknown> = {
+        const root = object(await this.get('/bars', {
           symbols: tickers.join(','),
-          timeframe: '1Day',
-          feed: 'iex',
-          start: start.toISOString(),
-          end: end.toISOString(),
-          limit: 1000,
-          sort: 'desc',
-          adjustment: 'raw',
-        };
-        if (pageToken) params.page_token = pageToken;
-        const res = await axios.get('https://data.alpaca.markets/v2/stocks/bars', {
-          params,
-          headers: { 'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret },
-          timeout: 4_000,
-          maxRedirects: 0,
-        });
-        const root = object(res.data);
+          ...this.barParams(1000),
+          ...(pageToken ? { page_token: pageToken } : {}),
+        }));
         const barsMap = entries(root.bars);
         for (const ticker of tickers) {
-          const raw = barsMap.get(ticker) ?? barsMap.get(ticker.toUpperCase());
-          if (raw !== undefined) {
-            if (Array.isArray(raw)) {
-              const previous = barsBySymbol.get(ticker);
-              const current: unknown[] = Array.isArray(previous) ? previous : [];
-              barsBySymbol.set(ticker, current.concat(raw));
-            } else {
-              barsBySymbol.set(ticker, raw);
-            }
-          }
+          const raw = barsMap.get(ticker);
+          if (raw === undefined) continue;
+          const previous = barsBySymbol.get(ticker);
+          barsBySymbol.set(ticker, Array.isArray(raw) ? [...(Array.isArray(previous) ? previous : []), ...raw] : raw);
         }
-        const nextToken = typeof root.next_page_token === 'string' && root.next_page_token ? root.next_page_token : null;
-        if (nextToken && seenTokens.has(nextToken)) {
-          throw new MarketProviderError('PROVIDER_INVALID_DATA', 'Alpaca returned a repeating pagination token.');
-        }
-        if (nextToken) seenTokens.add(nextToken);
-        pageToken = nextToken;
+        const next = typeof root.next_page_token === 'string' ? root.next_page_token : '';
+        if (seenTokens.has(next)) throw invalid('Alpaca returned a repeating pagination token.');
+        if (next) seenTokens.add(next);
+        pageToken = next;
       } while (pageToken);
 
-      const result = new Map<string, PricePoint[] | MarketProviderError>();
-      for (const ticker of tickers) {
-        try {
-          result.set(ticker, parseAlpacaBars({ bars: barsBySymbol.get(ticker) }));
-        } catch (err: unknown) {
-          result.set(ticker, err instanceof MarketProviderError ? err : failure(err));
-        }
-      }
-      return Object.fromEntries(result);
-    } catch (error: unknown) {
-      throw failure(error);
-    }
+      return Object.fromEntries(tickers.map(ticker =>
+        [ticker, attempt(() => parseAlpacaBars({ bars: barsBySymbol.get(ticker) }))]));
+    });
   }
 }

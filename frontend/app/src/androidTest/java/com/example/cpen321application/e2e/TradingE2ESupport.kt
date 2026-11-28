@@ -144,6 +144,8 @@ abstract class TradingE2ESupport {
         backToMarket()
         compose.onNode(hasText("Portfolio") and hasClickAction()).performClick()
         compose.waitUntil(30_000) { compose.onAllNodesWithTag("portfolio-list").fetchSemanticsNodes().isNotEmpty() }
+        // The real screen starts without a fabricated cash balance; wait for account data.
+        portfolioNode(hasTestTag("portfolio-cash") and !hasText("Unavailable"))
     }
     protected fun portfolioNode(matcher: SemanticsMatcher) {
         // Portfolio's LazyColumn exists before its asynchronous account response arrives.

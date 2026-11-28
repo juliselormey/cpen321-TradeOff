@@ -3,9 +3,16 @@ import jwt from "jsonwebtoken";
 import { createApp } from "../../src/app";
 import { db } from "../../src/prisma/db";
 import { requireEnv } from "../../src/config/env";
-import { processPendingLimitOrders, stopLimitOrderWorker } from "../../src/market/limitWorker";
-import { getServerPrice } from "../../src/market/settlement";
+import { processPendingLimitOrders, stopLimitOrderWorker } from "../../src/trading/limitWorker";
+import { getServerPrice } from "../../src/trading/settlement";
 import { Prisma } from "../../src/generated/prisma/client";
+import type * as StubProvider from "../helpers/stubprovider";
+
+const mockMarket = { price: 100, fail: false };
+jest.mock('../../src/market/alpaca', () => ({
+    AlpacaProvider: jest.requireActual<typeof StubProvider>("../helpers/stubprovider")
+        .createStubProviderClass(() => mockMarket),
+}));
 
 const app = createApp();
 const JWT_SECRET = requireEnv("JWT_SECRET");
@@ -62,6 +69,16 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
     /* 1. Market vs Limit Order Parameter Validation                              */
     /* -------------------------------------------------------------------------- */
     describe("Parameter Validation for Market & Limit Orders", () => {
+        test("POST /api/trades/execute/limit with more than 4 decimal places returns 400 Bad Request", async () => {
+            const res = await request(app)
+                .post("/api/trades/execute/limit")
+                .set("Authorization", `Bearer ${authToken}`)
+                .send({ ticker: "AAPL", side: "BUY", quantity: 1, limitPrice: 100.12345 });
+
+            expect(res.status).toBe(400);
+            expect(await db.order.count({ where: { userId: testUserId } })).toBe(0);
+        });
+
         test("POST /api/trades/execute/market with limitPrice returns 400 Bad Request", async () => {
             const res = await request(app)
                 .post("/api/trades/execute/market")
@@ -91,7 +108,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual({
-                error: "Limit price is required for limit orders and must be positive",
+                error: "Limit price is required for limit orders and must be positive with at most 4 decimal places",
             });
         });
 
@@ -109,7 +126,7 @@ describe("No-Mock Integration Tests: Market & Limit Orders System", () => {
 
             expect(res.status).toBe(400);
             expect(res.body).toEqual({
-                error: "Limit price is required for limit orders and must be positive",
+                error: "Limit price is required for limit orders and must be positive with at most 4 decimal places",
             });
         });
     });

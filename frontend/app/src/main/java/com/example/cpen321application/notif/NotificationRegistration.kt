@@ -107,7 +107,7 @@ object NotificationRegistration {
         }
     }
 
-    suspend fun signOut(context: Context): Boolean = mutex.withLock {
+    suspend fun signOut(context: Context): Unit = mutex.withLock {
         try {
             unregisterDevice(context)
         } finally {
@@ -115,7 +115,7 @@ object NotificationRegistration {
             NotificationManagerCompat.from(context).cancelAll()
         }
 
-        true
+        Unit
     }
 
     private suspend fun unregisterDevice(context: Context) {

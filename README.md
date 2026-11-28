@@ -116,11 +116,10 @@ New-Item -ItemType Directory -Force certs
 Generate the local certificate, the current directory still `cpen321-TradeOff/backend/`, with OpenSSL (If PowerShell cannot find `openssl`, replace `openssl` in that command with `& "C:\Program Files\Git\usr\bin\openssl.exe"` after confirming that file exists):
 ```powershell
 openssl req -x509 -newkey rsa:2048 -sha256 -nodes -keyout certs/key.pem -out certs/cert.pem -days 365 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2" -addext "basicConstraints=critical,CA:TRUE"
-Copy-Item certs/cert.pem ../frontend/app/src/main/res/raw/cert.pem
 ```
 
 > [!NOTE]
-> Ensure that the frontend must have the same public certificate as the backend. If it doesn't, you'll have to regenerate the certificate, requiring restarting the backend and rebuilding the app. The copied frontend certificate is a tracked file; keep your local certificate replacement out of unrelated commits.
+> This self-signed certificate is for local backend HTTPS and `curl.exe` probes. Android uses system certificate validation, so use a server with a publicly trusted certificate when connecting from the app. Do not copy this certificate into the frontend.
 
 > [!WARNING]
 > NEVER copy `key.pem` into the frontend. It's private. 
@@ -224,7 +223,7 @@ Once setup is complete:
 > Stop the backend with Ctrl+C when finished (simply closing the terminal may not be safe). Do not rerun database creation, regenerate certificates, or reinstall dependencies every time.
 
 > [!NOTE]
-> Rebuild and reinstall after changing `local.properties` or `cert.pem`. Restart the backend after changing `.env`. If switching from another backend, sign out and sign back in.
+> Rebuild and reinstall after changing `local.properties`. Restart the backend after changing `.env` or `cert.pem`. If switching from another backend, sign out and sign back in.
 
 ## Conclusion
 
@@ -264,9 +263,9 @@ npm.cmd test -- --runInBand --testPathPatterns=tests/mock
 > | --- | --- |
 > | Cannot connect to MySQL / port 3306 | Start the MySQL service and check `DATABASE_URL` and the database user's password. |
 > | MySQL reports `ER_CANNOT_RETRIEVE_RSA_KEY` | The database driver cannot complete RSA-based authentication with this server configuration. Configure a trusted database TLS connection or server public key with the driver before retrying; the current setup has not passed this check. |
-> | Certificate does not match `localhost` | Generate the local certificate using the command above, restart the backend, copy the new public certificate into Android, and rebuild. |
+> | Certificate does not match `localhost` | Ensure the request hostname matches the certificate's subject alternative names, and that Android connects to a server with a publicly trusted certificate chain. |
 > | Google sign-in fails | Check the debug SHA-1/package registration, test-user access, Google Play emulator, and matching **Web** client IDs. |
-> | Certificate / `Trust anchor` error | Copy the backend's current `cert.pem` to the frontend's `app/src/main/res/raw/cert.pem`, then rebuild/reinstall. |
+> | Certificate / `Trust anchor` error | Confirm Android trusts the server's certificate chain and that the request hostname matches the certificate. The app uses system validation and does not load a bundled certificate. |
 > | `MARKET_NOT_CONFIGURED` | Set both Alpaca variables in `backend/.env`, start from `backend/`, and restart the backend. |
 > | Alpaca rejects credentials | Check the matching key/secret pair and IEX access; update both values and restart after regenerating keys. |
 > | Portfolio shows an error | Confirm both URLs use `https://10.0.2.2:3000/`, the full backend is running, and `prisma migrate deploy` completed. Check the backend terminal for the exact error. |

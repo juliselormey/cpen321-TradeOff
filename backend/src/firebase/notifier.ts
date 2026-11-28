@@ -30,7 +30,7 @@ export async function notifyUser(
             where: { userId },
         });
 
-        await Promise.all(devices.map(async (device) => {
+        await Promise.all(devices.map(async (device: { installationId: string; userId: string; updatedAt: Date }) => {
             try {
                 await sendNotification(device.installationId, title, body, userId);
             } catch (error) {

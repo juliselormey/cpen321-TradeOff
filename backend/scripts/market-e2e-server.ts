@@ -1,3 +1,5 @@
+import { attachMarketEvents } from '../src/realtime/marketEvents';
+import { startMarketRefresh } from '../src/market/refreshWorker';
 /**
  * Deterministic HTTP fixture for the Android Market E2E suite.
  * Uses the production market router and cache, with fixed provider data.
@@ -49,18 +51,25 @@ const provider = {
 
 const app = express();
 app.get('/__e2e/health', (_req, res) => res.json({ ready: true, suite: 'market' }));
-app.use('/api/market', createMarketRouter(new MarketService(provider)));
+const market = new MarketService(provider);
+app.use('/api/market', createMarketRouter(market));
 
 const port = Number(process.env.MARKET_E2E_PORT ?? 3003);
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Deterministic Market E2E fixture listening on ${port} (${LIVE_SYMBOLS.length} symbols).`);
 });
+const closeMarketEvents = attachMarketEvents(server, market);
+const stopMarketRefresh = startMarketRefresh(market);
 process.on('SIGINT', () => {
+  stopMarketRefresh();
+  closeMarketEvents();
   server.close(() => {
     process.exitCode = 0;
   });
 });
 process.on('SIGTERM', () => {
+  stopMarketRefresh();
+  closeMarketEvents();
   server.close(() => {
     process.exitCode = 0;
   });

@@ -4,10 +4,14 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { marketService, MarketService } from '../market/service';
 
 /** Public market data only. Favorites and account data never enter this stream. */
-export function attachMarketEvents(server: Server, service: MarketService = marketService): () => void {
+export function attachMarketEvents(
+  server: Server,
+  service: Pick<MarketService, 'subscribe' | 'getCachedStocks'> = marketService,
+): () => void {
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   const alive = new Set<WebSocket>();
   let revision = 0;
+  let stopped = false;
   let pending: NodeJS.Immediate | undefined;
   const snapshot = (): string => JSON.stringify({
     type: 'market.snapshot', revision, checkedAt: new Date().toISOString(),
@@ -21,6 +25,7 @@ export function attachMarketEvents(server: Server, service: MarketService = mark
     catch { client.terminate(); }
   };
   const unsubscribe = service.subscribe(() => {
+    if (stopped) return;
     revision++;
     if (pending) return;
     pending = setImmediate(() => {
@@ -39,6 +44,7 @@ export function attachMarketEvents(server: Server, service: MarketService = mark
   heartbeat.unref();
   const onUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
     if (request.url?.split('?')[0] !== '/api/market/events') return;
+    if (stopped) { socket.destroy(); return; }
     sockets.handleUpgrade(request, socket, head, client => {
       alive.add(client);
       client.on('pong', () => alive.add(client));
@@ -49,6 +55,8 @@ export function attachMarketEvents(server: Server, service: MarketService = mark
   };
   server.on('upgrade', onUpgrade);
   return () => {
+    if (stopped) return;
+    stopped = true;
     unsubscribe();
     clearInterval(heartbeat);
     if (pending) clearImmediate(pending);

@@ -9,29 +9,32 @@ import { createHash } from 'node:crypto';
 export function createE2ERouter(): Router {
     const router = Router();
     if (process.env.E2E_ENABLED !== 'true') return router;
-    const database = new URL(process.env.DATABASE_URL ?? '').pathname.slice(1);
+    const database = new URL(process.env.DATABASE_URL!).pathname.slice(1);
     if (!/^tradeoff_e2e_[a-z0-9_]+$/.test(database)) {
         throw new Error('E2E_ENABLED requires a disposable tradeoff_e2e_<name> database.');
     }
     const fixturePrefix = (userId: string) => `e2e-leaderboard:${userId}:`;
-    const temporaryUsername = (userId: string) => `e2e_${createHash('sha256').update(userId).digest('hex').slice(0, 12)}_self`;
+    const usernameFor = (userId: string, suffix: string | number) =>
+        `e2e_${createHash('sha256').update(userId).digest('hex').slice(0, 12)}_${suffix}`;
+    const temporaryUsername = (userId: string) => usernameFor(userId, 'self');
     // This suite needs many independent participants. They are real database records,
     // never replacement API responses or replacement market prices.
     router.post('/leaderboard/setup', requireAuth, asyncHandler(async (req, res) => {
         const userId = req.userId!;
         const prefix = fixturePrefix(userId);
+        const participantCount = req.body?.empty === true ? 0 : 8;
         const users = await db.$transaction(async tx => {
             const participants: { id: string; username: string | null; displayName: string | null }[] = [];
             const caller = await tx.user.findUnique({ where: { id: userId }, select: { username: true } });
-            if (caller && caller.username === null) {
+            if (caller?.username === null) {
                 await tx.user.update({ where: { id: userId }, data: { username: temporaryUsername(userId) } });
             }
             await tx.user.deleteMany({ where: { googleSub: { startsWith: prefix } } });
             await tx.friendship.deleteMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] } });
-            for (let index = 0; index < (req.body?.empty === true ? 0 : 8); index++) {
+            for (let index = 0; index < participantCount; index++) {
                 const user = await tx.user.create({ data: {
                     googleSub: `${prefix}${index}`, email: `${userId}.${index}@leaderboard-e2e.invalid`,
-                    username: `e2e_${createHash('sha256').update(userId).digest('hex').slice(0, 12)}_${index}`,
+                    username: usernameFor(userId, index),
                     displayName: `E2E Trader ${index + 1}`,
                     account: { create: { cashBalance: 12000 - index * 1000,
                         startingBalance: index % 2 === 0 ? 20000 : 4000 } },
@@ -51,8 +54,9 @@ export function createE2ERouter(): Router {
         res.json({ ready: true, users });
     }));
     router.post('/leaderboard/cleanup', requireAuth, asyncHandler(async (req, res) => {
-        await db.user.deleteMany({ where: { googleSub: { startsWith: fixturePrefix(req.userId!) } } });
-        await db.user.updateMany({ where: { id: req.userId!, username: temporaryUsername(req.userId!) }, data: { username: null } });
+        const userId = req.userId!;
+        await db.user.deleteMany({ where: { googleSub: { startsWith: fixturePrefix(userId) } } });
+        await db.user.updateMany({ where: { id: userId, username: temporaryUsername(userId) }, data: { username: null } });
         res.json({ ready: true });
     }));
     router.get(['/account/snapshot', '/leaderboard/snapshot'], requireAuth, asyncHandler(async (req, res) => {
@@ -70,21 +74,14 @@ export function createE2ERouter(): Router {
         res.json({ accounts, positions, trades, orders, friendships });
     }));
     router.post('/account/reset', requireAuth, asyncHandler(async (req, res) => {
-        const userId = req.userId;
-        if (!userId) {
-            res.sendStatus(401);
-            return;
-        }
         // Never accept a user ID from the caller: reset only the authenticated account.
+        const userId = req.userId!;
+        const fresh = { cashBalance: 10000, startingBalance: 10000 };
         await db.$transaction(async tx => {
             await tx.order.deleteMany({ where: { userId } });
             await tx.trade.deleteMany({ where: { userId } });
             await tx.position.deleteMany({ where: { userId } });
-            await tx.account.upsert({
-                where: { userId },
-                create: { userId, cashBalance: STARTING_BALANCE.toNumber(), startingBalance: STARTING_BALANCE.toNumber() },
-                update: { cashBalance: STARTING_BALANCE.toNumber(), startingBalance: STARTING_BALANCE.toNumber() },
-            });
+            await tx.account.upsert({ where: { userId }, create: { userId, ...fresh }, update: fresh });
         });
         res.json({ ready: true });
     }));

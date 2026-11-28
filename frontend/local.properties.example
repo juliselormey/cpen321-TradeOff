@@ -4,11 +4,11 @@
 # macOS: /Users/YOUR_USERNAME/Library/Android/sdk
 sdk.dir=/path/to/Android/sdk
 
-# Standard emulator reaches the full local HTTPS backend at 10.0.2.2.
-# For a physical device use the computer's LAN IP instead.
-# Copy the backend public certificate into the app as described in README.
-API_BASE_URL=https://10.0.2.2:3000/
-MARKET_API_BASE_URL=https://10.0.2.2:3000/
+# Cloud uses HTTPS with a certificate trusted by Android's standard trust store.
+# Local development: set both URLs to http://10.0.2.2:3004/ and LOCAL_HTTP=true
+# in backend/.env (with PORT=3004). For a device, use the computer's LAN IP.
+API_BASE_URL=https://34.105.116.91/
+MARKET_API_BASE_URL=https://34.105.116.91/
 
 # Web application OAuth client ID, matching backend/.env; not a client secret.
 GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com

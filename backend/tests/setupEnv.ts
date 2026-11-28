@@ -1,4 +1,15 @@
-process.env.DATABASE_URL = "mysql://superuser:tradeoff@127.0.0.1:3306/tradeoff";
-process.env.JWT_SECRET = "0ea518d5b97e3c727dd90a2bae67abbdda9cee0edbdfe428a7187efc5c84da20";
-process.env.ALPACA_API_KEY_ID = "PKPOY4MKCAKQ4WUMY2YIR5VVOP";
-process.env.ALPACA_API_SECRET_KEY = "E39apmgq3x7F5ueH8BGJ6NRwhTbV4Lge154Xy4nJn3KY";
+import { randomBytes } from 'node:crypto';
+import { resolve } from 'node:path';
+import { config } from 'dotenv';
+
+config({ path: resolve(__dirname, '../.env.test'), quiet: true });
+process.env.NODE_ENV = 'test';
+// API/unit suites must not inherit the developer server's destructive E2E mode.
+// Fixture-router tests enable it explicitly around their own router creation.
+process.env.E2E_ENABLED = 'false';
+process.env.DATABASE_URL ??= 'mysql://test:test@127.0.0.1:3306/tradeoff_test';
+process.env.JWT_SECRET ??= randomBytes(32).toString('hex');
+process.env.GOOGLE_CLIENT_ID ??= 'test-google-client-id';
+process.env.E2E_USER_EMAIL ??= 'test-user@test.invalid';
+process.env.ALPACA_API_KEY_ID ??= '';
+process.env.ALPACA_API_SECRET_KEY ??= '';

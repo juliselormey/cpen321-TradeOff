@@ -4,8 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.example.cpen321application.notif.createNotificationChannel
 import com.example.cpen321application.notif.NotificationRegistration
+import com.example.cpen321application.notif.createNotificationChannel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

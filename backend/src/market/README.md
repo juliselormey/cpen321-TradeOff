@@ -6,8 +6,8 @@ and default favorites are catalog metadata. The authenticated favorites API
 stores each user's selections in MySQL. Signed-out users can browse the catalog
 and are prompted to sign in when they tap a star or open Favorites.
 
-The full backend serves `GET /api/users/me/favorites` and
-`PUT`/`DELETE /api/users/me/favorites/:ticker`. Apply the Prisma
+The full backend serves `GET /api/auth/me/favorites` and
+`PUT`/`DELETE /api/auth/me/favorites/:ticker`. Apply the Prisma
 `20261117000000_stock_favorites` migration and regenerate the Prisma client
 before running the updated backend. The Market-only development server
 serves public quotes and history.

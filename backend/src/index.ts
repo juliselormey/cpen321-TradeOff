@@ -8,7 +8,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { db } from './prisma/db';
-import { startLimitOrderWorker, stopLimitOrderWorker } from './market/limitWorker';
+import { startLimitOrderWorker, stopLimitOrderWorker } from './trading/limitWorker';
 
 const app = createApp();
 
@@ -31,8 +31,8 @@ const closeFriendEvents = attachFriendEvents(server);
 const closeMarketEvents = attachMarketEvents(server);
 let stopMarketRefresh: (() => void) | undefined;
 
-server.listen(env.port, localHttp ? '127.0.0.1' : '0.0.0.0', () => {
-    console.log("Server listening");
+server.listen(env.port, '0.0.0.0', () => {
+    console.log(`Server listening on 0.0.0.0:${env.port}`);
     startLimitOrderWorker();
     stopMarketRefresh = startMarketRefresh();
 });

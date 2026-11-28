@@ -122,9 +122,11 @@ MySQL or create the database itself. Do not force/reset an existing non-test dat
 For an existing database created with `prisma db push`, migration history may need
 baselining; use a new empty disposable database rather than applying destructive fixes.
 
-`LOCAL_HTTP=true` avoids local certificates and binds only to `127.0.0.1`.
+`LOCAL_HTTP=true` avoids local certificates. The server binds to `0.0.0.0`
+so an emulator or LAN device can connect; use it only on your trusted development network.
 Without that flag the normal backend uses HTTPS and needs TLS certificate files.
-Cloud deployments should use trusted HTTPS, not this local HTTP option.
+Cloud deployments should use trusted HTTPS, not this local HTTP option. Android
+uses its standard certificate trust store; no bundled custom certificate is required.
 
 ## 5. Configure/install Android once (and rebuild after URL changes)
 
@@ -143,6 +145,11 @@ database address. Both APIs must use the **same full backend**, not a Market-onl
 server. Build/install the debug app through Android Studio. For a physical USB
 device use `adb reverse tcp:3004 tcp:3004` and `http://127.0.0.1:3004/` for both
 URLs, then rebuild. Use the signing configuration/certificate registered with Google.
+
+`GOOGLE_CLIENT_ID` must be the Web OAuth client ID used by the backend. The
+refactored app no longer supplies a hard-coded fallback: if sign-in says to set
+this value, add it to `frontend/local.properties`, then rebuild **and reinstall**.
+Rebuilding alone cannot fill in a missing property.
 
 ## 6. Every test session: normal server, then a test script
 
@@ -249,6 +256,11 @@ Portfolio and extra Social tests reset the caller's trading data; Favorites
 preparation temporarily changes and then restores its saved set. See the cleanup
 and coverage limitations below. Renew Google login before a long run: the backend
 JWT lasts 15 minutes. HTTP 401 requires a fresh login, not a database restart.
+With the independent Market Buy and Portfolio methods, the all-tests run can
+outlast that session. Sign in immediately before starting; if it expires, sign
+in again and rerun the affected individual commands. Runners do not generate
+or silently refresh Google credentials. An expiry during Browse can interrupt
+its final read-only evidence check even after all cards were visited.
 A persistent real provider failure is not hidden; unsupported forced-failure
 branches remain documented rather than being reported as covered.
 

@@ -1,6 +1,6 @@
 import { MarketService, marketService } from '../../src/market/service';
 import { HISTORY_TTL_MS, REFRESH_INTERVAL_MS } from '../../src/market/catalog';
-import { getServerPrice } from '../../src/market/settlement';
+import { getServerPrice } from '../../src/trading/settlement';
 import { loadPrices, PriceUnavailableError, valuePortfolio } from '../../src/market/valuation';
 import { Prisma } from '../../src/generated/prisma/client';
 import { fixture, SYMBOL } from './helpers';

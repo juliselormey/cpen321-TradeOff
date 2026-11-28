@@ -28,6 +28,7 @@ class MarketStream(private val client: WebSocket.Factory, private val url: Strin
                     val snapshot = gson.fromJson(text, MarketSnapshot::class.java)
                     require(snapshot.type == "market.snapshot" && snapshot.stocks.isNotEmpty())
                     require(snapshot.stocks.any { it.ticker == "AAPL" })
+                    require(snapshot.stocks.all { !it.ticker.isNullOrBlank() && !it.status.isNullOrBlank() })
                     if (snapshot.revision >= latestRevision) {
                         latestRevision = snapshot.revision
                         trySend(snapshot)
@@ -38,6 +39,7 @@ class MarketStream(private val client: WebSocket.Factory, private val url: Strin
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                response?.close()
                 close(IOException("Market connection lost", t))
             }
 

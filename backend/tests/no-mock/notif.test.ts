@@ -346,4 +346,65 @@ describe("No-Mock Integration Tests: Notifications", () => {
             expect(device?.userId).toBe(testUserId);
         });
     });
+    /* -------------------------------------------------------------------------- */
+    /* 3. Input matrix and ownership                                              */
+    /* -------------------------------------------------------------------------- */
+    describe("Unmocked: installation ID validation and device lifecycle", () => {
+        const invalidIds: unknown[] = [
+            undefined, 5, ["cABCDEFGHIJKLMNOPQRSTU"], "xABCDEFGHIJKLMNOPQRSTU", "cshort", "cABCDEFGHIJKLMNOPQRST!",
+        ];
+
+        test.each(invalidIds)("PUT rejects invalid installation ID %j and stores nothing", async (id) => {
+            const res = await request(app).put("/api/notif/device")
+                .set("Authorization", `Bearer ${authToken}`).send({ installationId: id });
+            expect(res.status).toBe(400);
+            expect(res.body).toEqual({ error: "Invalid installation ID" });
+            expect(await db.notificationDevice.count({ where: { userId: testUserId } })).toBe(0);
+        });
+
+        test.each(invalidIds)("DELETE rejects invalid installation ID %j and keeps the registered device", async (id) => {
+            const installationId = "cABCDEFGHIJKLMNOPQRSTU";
+            await db.notificationDevice.create({ data: { installationId, userId: testUserId } });
+            const res = await request(app).delete("/api/notif/device")
+                .set("Authorization", `Bearer ${authToken}`).send({ installationId: id });
+            expect(res.status).toBe(400);
+            expect(await db.notificationDevice.count({ where: { installationId } })).toBe(1);
+        });
+
+        test("one user can register several devices and remove them independently", async () => {
+            const first = "cABCDEFGHIJKLMNOPQRSTU";
+            const second = "dABCDEFGHIJKLMNOPQRSTU";
+            for (const installationId of [first, second]) {
+                await request(app).put("/api/notif/device")
+                    .set("Authorization", `Bearer ${authToken}`).send({ installationId }).expect(204);
+            }
+            expect(await db.notificationDevice.count({ where: { userId: testUserId } })).toBe(2);
+            await request(app).delete("/api/notif/device")
+                .set("Authorization", `Bearer ${authToken}`).send({ installationId: first }).expect(204);
+            const left = await db.notificationDevice.findMany({ where: { userId: testUserId } });
+            expect(left.map((d) => d.installationId)).toEqual([second]);
+        });
+
+        test("expired and tampered tokens are rejected on both routes", async () => {
+            const installationId = "cABCDEFGHIJKLMNOPQRSTU";
+            const expired = jwt.sign({ sub: testUserId }, JWT_SECRET, { expiresIn: -10 });
+            const tampered = `${authToken.slice(0, -2)}xx`;
+            for (const token of [expired, tampered]) {
+                await request(app).put("/api/notif/device").set("Authorization", `Bearer ${token}`).send({ installationId }).expect(401);
+                await request(app).delete("/api/notif/device").set("Authorization", `Bearer ${token}`).send({ installationId }).expect(401);
+            }
+            expect(await db.notificationDevice.count({ where: { installationId } })).toBe(0);
+        });
+
+        test("deleting a user removes their registered devices", async () => {
+            const uniqueId = randomUUID();
+            const installationId = "cABCDEFGHIJKLMNOPQRSTU";
+            const doomed = await db.user.create({ data: {
+                googleSub: `test-notif-${uniqueId}`, email: `test-notif-${uniqueId}@example.com`, displayName: "Doomed",
+            } });
+            await db.notificationDevice.create({ data: { installationId, userId: doomed.id } });
+            await db.user.delete({ where: { id: doomed.id } });
+            expect(await db.notificationDevice.findUnique({ where: { installationId } })).toBeNull();
+        });
+    });
 });

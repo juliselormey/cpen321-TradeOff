@@ -27,8 +27,11 @@ class BrowseStocksE2ETest {
     }
 
     private fun accountSnapshot(): String {
+        val token = checkNotNull(SessionManager.getToken(compose.activity)) {
+            "Google session expired during Browse Stocks; sign in again and rerun this case."
+        }
         val request = Request.Builder().url(BuildConfig.API_BASE_URL.trimEnd('/') + "/__e2e/account/snapshot")
-            .header("Authorization", "Bearer " + requireNotNull(SessionManager.getToken(compose.activity))).build()
+            .header("Authorization", "Bearer $token").build()
         return ApiClient.createBackendHttpClient(compose.activity).newCall(request).execute().use {
             check(it.isSuccessful) { "Account evidence HTTP ${it.code}; enable E2E setup and check login." }
             requireNotNull(it.body).string()

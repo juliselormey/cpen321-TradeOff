@@ -1,7 +1,7 @@
 import { Prisma } from "../generated/prisma/client";
 import { db } from "../prisma/db";
-import { LIVE_SYMBOLS } from "./catalog";
-import { marketService } from "./service";
+import { hasErrorCode } from "../util/dbErrors";
+import { marketService } from "../market/service";
 
 export type Tx = Prisma.TransactionClient;
 type Order = Prisma.OrderGetPayload<Record<string, never>>;
@@ -16,40 +16,31 @@ export class OrderError extends Error {
 /**
  * Server-side price from Alpaca. Call this BEFORE opening a transaction.
  * Only fresh quotes (status "ok") are tradable: a stale quote means Alpaca refreshes are failing.
+ * Unknown symbols and provider failures both surface as "price unavailable".
  */
 export async function getServerPrice(ticker: string): Promise<Prisma.Decimal> {
-    if (!LIVE_SYMBOLS.includes(ticker)) throw new OrderError(400, "Unsupported ticker");
+    const stock = await marketService.getStock(ticker).catch(() => null);
+    if (stock?.status !== "ok" || !stock.currentPrice) throw new OrderError(503, `Price unavailable for ${ticker}`);
     try {
-        const stock = await marketService.getStock(ticker);
-        if (!stock.currentPrice || stock.status !== "ok") {
-            throw new OrderError(503, `Price unavailable for ${ticker}`);
-        }
-        return new Prisma.Decimal(stock.currentPrice);
-    } catch (err) {
-        if (err instanceof OrderError) throw err;
+        const price = new Prisma.Decimal(stock.currentPrice);
+        if (price.lte(0) || price.isNaN()) throw new OrderError(503, `Price unavailable for ${ticker}`);
+        return price;
+    } catch (_: unknown) {
         throw new OrderError(503, `Price unavailable for ${ticker}`);
     }
 }
 
 /** Runs a Serializable transaction, retrying write conflicts (Prisma P2034) so concurrent orders resolve cleanly. */
-export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 3): Promise<T> {
-    const run = async () =>
-        (await db.$transaction(work, {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        })) as T;
-    const retries = Math.max(1, attempts) - 1;
-    for (let attempt = 0; attempt < retries; attempt++) {
+export async function runSerializable<T>(work: (tx: Tx) => Promise<T>, attempts = 10): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
         try {
-            return await run();
+            return (await db.$transaction(work, {
+                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            })) as T;
         } catch (error) {
-            if (!isWriteConflict(error)) throw error;
+            if (attempt >= attempts || !hasErrorCode(error, "P2034")) throw error;
         }
     }
-    return run();
-}
-
-function isWriteConflict(error: unknown): boolean {
-    return typeof error === "object" && error !== null && "code" in error && error.code === "P2034";
 }
 
 export async function availableShares(tx: Tx, userId: string, ticker: string): Promise<Prisma.Decimal> {
@@ -60,9 +51,7 @@ export async function availableShares(tx: Tx, userId: string, ticker: string): P
             where: { userId, ticker, side: "SELL", status: "PENDING" },
         }),
     ]);
-    const owned = position?.quantity ?? ZERO;
-    const reserved = pending._sum.quantity ?? ZERO;
-    return owned.minus(reserved);
+    return (position?.quantity ?? ZERO).minus(pending._sum.quantity ?? ZERO);
 }
 
 /**
@@ -83,17 +72,15 @@ export async function fillOrder(tx: Tx, order: Order, price: Prisma.Decimal): Pr
     const position = await tx.position.findUnique({ where: posKey });
 
     if (side === "BUY") {
-        const limitPrice = order.limitPrice ?? price;
-        const hold = qty.mul(order.type === "LIMIT" ? limitPrice : price);
-        const refund = hold.minus(cost);
+        // Cash held at placement: limit orders hold at the limit, market orders (no limit) at the fill price.
+        const refund = qty.mul(order.limitPrice ?? price).minus(cost);
         if (!refund.isZero()) {
             await tx.account.update({ where: { userId }, data: { cashBalance: { increment: refund } } });
         }
 
         const owned = position?.quantity ?? ZERO;
-        const avg = position?.averageCost ?? ZERO;
         const newQty = owned.plus(qty);
-        const newAvg = owned.mul(avg).plus(cost).div(newQty);
+        const newAvg = owned.mul(position?.averageCost ?? ZERO).plus(cost).div(newQty);
         await tx.position.upsert({
             where: posKey,
             create: { userId, ticker, quantity: newQty, averageCost: newAvg },

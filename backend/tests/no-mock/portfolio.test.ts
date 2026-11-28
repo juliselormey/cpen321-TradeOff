@@ -5,9 +5,10 @@ import { loadApp } from '../helpers/loadApp';
 import { FAKE_DATE, T, bearer, expireCache } from '../helpers/testkit';
 import { createUser, db, getCash, giveShares, resetDb } from '../helpers/fixtures';
 
-const mockMarket = { price: 100, fail: false };
+
+var mockMarket = { price: 100, fail: false };
 jest.mock('../../src/market/alpaca', () =>
-  jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProvider(mockMarket));
+  ({ AlpacaProvider: jest.requireActual<typeof StubProvider>('../helpers/stubprovider').createStubProviderClass(() => mockMarket) }));
 
 let app: Express, A: string, B: string;
 
@@ -42,6 +43,8 @@ describe('Unmocked API: GET /api/portfolio', () => {
   });
   it('PF-N3 after buy then partial sell: holding reduced, two trades newest first (UC-14)', async () => {
     await buy(A, { quantity: 3 });
+    // Keep the timestamps distinct so this checks API ordering, not a database tie.
+    jest.setSystemTime(Date.now() + 1);
     await buy(A, { side: 'SELL', quantity: 1 });
     const res = await portfolio(A);
     expect(res.body.holdings[0].quantity).toBe(2);
@@ -75,5 +78,43 @@ describe('Unmocked API: GET /api/portfolio', () => {
     const after = (await portfolio(A)).body;
     expect(after.pendingOrders).toEqual([]);
     expect(after.totalValue).toBe(before);
+  });
+});
+
+describe('Unmocked API: GET /api/portfolio edge cases', () => {
+  it('PF-N8 requires authentication', async () => {
+    expect((await request(app).get('/api/portfolio')).status).toBe(401);
+  });
+  it('PF-N9 holding value, profit/loss and allocation follow the current price', async () => {
+    await giveShares(A, T, 2, 90);
+    const res = await portfolio(A);
+    expect(res.status).toBe(200);
+    expect(res.body.holdings[0]).toEqual(expect.objectContaining({ ticker: T, quantity: 2, averageCost: 90, price: 100, value: 200, profitLoss: 20 }));
+    expect(res.body.totalValue).toBe(10200);
+    const sum = res.body.allocation.reduce((total: number, a: { percent: number }) => total + a.percent, 0);
+    expect(sum).toBeCloseTo(100, 0);
+  });
+  it('PF-N10 only pending buy limits reserve cash; a pending sell limit reserves none', async () => {
+    await giveShares(A, T, 5, 90);
+    await limit(A, { side: 'sell', quantity: 2, limitPrice: 150 });
+    const res = await portfolio(A);
+    expect(res.body.pendingOrders).toHaveLength(1);
+    expect(res.body.reservedCash).toBe(0);
+    expect(res.body.totalValue).toBe(10500);
+  });
+  it('PF-N11 a price outage makes the portfolio unvaluable (503) until the provider recovers', async () => {
+    await giveShares(A, T, 2, 90);
+    mockMarket.fail = true; expireCache();
+    const down = await portfolio(A);
+    expect(down.status).toBe(503);
+    expect(down.body.error).toMatch(/unavailable/i);
+    mockMarket.fail = false; expireCache();
+    expect((await portfolio(A)).status).toBe(200);
+  });
+  it('PF-N12 an outage does not block a portfolio that holds only cash', async () => {
+    mockMarket.fail = true; expireCache();
+    const res = await portfolio(A);
+    expect(res.status).toBe(200);
+    expect(res.body.totalValue).toBe(10000);
   });
 });

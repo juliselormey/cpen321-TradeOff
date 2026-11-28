@@ -14,12 +14,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.ApiService
+import com.example.cpen321application.ui.market.data.MarketStream
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private class PortfolioServiceKey(private val service: ApiService) {
+    override fun equals(other: Any?) = other is PortfolioServiceKey && service === other.service
+    override fun hashCode() = System.identityHashCode(service)
+}
 
 @Composable
 fun PortfolioScreen(
@@ -30,11 +34,11 @@ fun PortfolioScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val service = remember(context, apiService) { apiService ?: ApiClient.create(context) }
-    val state = remember(context, service) {
+    val service = apiService ?: remember(context) { ApiClient.create(context) }
+    val state = remember(context, PortfolioServiceKey(service)) {
         PortfolioState({ com.example.cpen321application.util.SessionManager.isLoggedIn(context) }, service)
     }
-    PortfolioPolling(state)
+    PortfolioLiveUpdates(state)
     MaterialTheme {
         LazyColumn(
             modifier = Modifier.fillMaxSize().testTag("portfolio-list").background(MaterialTheme.colorScheme.background),
@@ -50,13 +54,15 @@ fun PortfolioScreen(
 }
 
 @Composable
-private fun PortfolioPolling(state: PortfolioState) {
+private fun PortfolioLiveUpdates(state: PortfolioState) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(lifecycle, state) {
+    val context = LocalContext.current.applicationContext
+    val stream = remember(context) {
+        MarketStream(ApiClient.createMarketEventsClient(context), ApiClient.marketEventsUrl())
+    }
+    LaunchedEffect(lifecycle, state, stream) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            launch {
-                while (isActive) { state.loadPortfolioData(); delay(8_000) }
-            }
+            state.observeMarket(stream)
         }
     }
 }

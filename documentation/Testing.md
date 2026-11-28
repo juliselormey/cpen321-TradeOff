@@ -6,6 +6,28 @@ The normal backend runs with `npm run dev`; then use one of the documented test 
 
 ## Commands for E2E suites
 
+Market, Trading, Portfolio and Leaderboard use the same `/api/market/events`
+stream while their screen is started. Portfolio and Leaderboard re-request
+their authenticated server valuations on each snapshot, replacing the former
+8-second and 15-second frontend polling loops. Public socket messages never
+contain account data. Rapid events cancel obsolete valuation requests; reconnects
+obtain a fresh snapshot and valuation. Disconnects hide unverified valuations.
+Trade's private account/order refresh remains separate from its live price stream.
+
+`LiveValuationTest` (Android unit suite) broadcasts a controlled price event to
+the production MarketStream/ViewModel, TradeState, PortfolioState and
+LeaderboardLoader consumers and checks agreement, reserved-cash preservation,
+disconnect/recovery, cancellation and absence of recurring valuation polling.
+This is a unit integration check with controlled transports, not an E2E claim
+that real Alpaca changed price during a test. Existing Portfolio/History and
+Leaderboard E2E commands below exercise the real server and UI.
+
+Verification for this live-valuation change: all **46 Android unit tests** pass,
+and the app/instrumentation APKs build. The first local Portfolio, History and
+Leaderboard E2E attempt stopped at the existing Google sign-in precondition
+(expired session); it is not recorded as a scenario pass. Real-server UI
+verification requires a fresh Google sign-in and rerunning those three classes.
+
 The **three selected main features** are Market, Trading and Portfolio: **10
 use-case tests** in total. Three of them also cover formal cases from section
 3.5: Browse Stocks, Place Market Buy and View Portfolio. Two further formal

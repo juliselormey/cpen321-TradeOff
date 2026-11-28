@@ -42,8 +42,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.cpen321application.ApiClient
 import com.example.cpen321application.util.SessionManager
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.text.NumberFormat
@@ -153,7 +151,8 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
     var byReturn by rememberSaveable { mutableStateOf(false) }
     var showAll by rememberSaveable { mutableStateOf(false) }
 
-    LeaderboardPolling(loader, lifecycle)
+    if (suppliedLoader == null) LeaderboardLiveUpdates(loader, lifecycle)
+    else LaunchedEffect(loader) { loader.refresh() }
     val ranked = rankFriends(entries, byReturn)
     Column(modifier.fillMaxWidth()) {
         Text("Friends leaderboard", color = MaterialTheme.colorScheme.onSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -197,14 +196,15 @@ internal fun FriendsLeaderboard(modifier: Modifier = Modifier, suppliedLoader: L
 }
 
 @Composable
-private fun LeaderboardPolling(loader: LeaderboardLoader, lifecycle: Lifecycle) {
-    LaunchedEffect(loader, lifecycle) {
+private fun LeaderboardLiveUpdates(loader: LeaderboardLoader, lifecycle: Lifecycle) {
+    val context = LocalContext.current.applicationContext
+    val stream = remember(context) {
+        com.example.cpen321application.ui.market.data.MarketStream(
+            ApiClient.createMarketEventsClient(context), ApiClient.marketEventsUrl())
+    }
+    LaunchedEffect(loader, lifecycle, stream) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            loader.refresh()
-            while (isActive) {
-                delay(15_000)
-                if (loader.state.value.error == null) loader.refresh()
-            }
+            loader.observeMarket(stream)
         }
     }
 }

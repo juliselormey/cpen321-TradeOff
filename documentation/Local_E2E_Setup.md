@@ -174,6 +174,13 @@ proxy setups must forward WebSocket upgrades for this path as well as the existi
 `/api/friends/events`. Local HTTP uses `ws://`; HTTPS uses `wss://` through the
 same base URL and certificate configuration. No additional server is required.
 
+Portfolio and Leaderboard also subscribe to `/api/market/events`: each new
+snapshot triggers an authenticated REST valuation using the same backend cache.
+Their former 8-second/15-second polling timers are removed. Initial connection,
+screen resume and reconnect receive a fresh snapshot; obsolete valuation requests
+are cancelled, and a disconnected stream hides unverified valuations. Use the same
+backend for both API URLs. Private account data is never added to public broadcasts.
+
 The **three selected main features** are Market, Trading and Portfolio: **10
 use-case tests** in total. Three of them also cover formal cases from section
 3.5: Browse Stocks, Place Market Buy and View Portfolio. Two further formal
